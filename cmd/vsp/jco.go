@@ -184,8 +184,7 @@ func runJcoSetup(cmd *cobra.Command, args []string) error {
 		if sysCfg != nil {
 			sys := sysCfg.Systems[systemFlag]
 
-			// Update JCo paths
-			sys.JcoLibsDir = absDestDir
+			// Update JCo paths (jco_libs_dir is CLI-only, not per-system)
 			if proxyJar != "" {
 				sys.JcoProxyJar = proxyJar
 			}
@@ -201,10 +200,13 @@ func runJcoSetup(cmd *cobra.Command, args []string) error {
 				fmt.Printf("  WARNING: Failed to save %s: %v\n", configPath, saveErr)
 			} else {
 				fmt.Printf("  Updated %s\n", configPath)
-				fmt.Printf("    jco_libs_dir:  %s\n", absDestDir)
 				if proxyJar != "" {
 					fmt.Printf("    jco_proxy_jar: %s\n", proxyJar)
 				}
+				fmt.Printf("\n  Note: jco_libs_dir is a global CLI setting.\n")
+				fmt.Printf("  Add to .env or pass as flag:\n")
+				fmt.Printf("    SAP_JCO_LIBS_DIR=%s\n", absDestDir)
+				fmt.Printf("    --jco-libs-dir %s\n", absDestDir)
 			}
 		}
 	} else {

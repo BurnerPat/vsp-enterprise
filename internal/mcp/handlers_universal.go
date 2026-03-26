@@ -15,7 +15,7 @@ import (
 
 // registerUniversalTool registers a single SAP tool that routes to all handlers.
 func (s *Server) registerUniversalTool() {
-	s.mcpServer.AddTool(mcp.NewTool("SAP",
+	s.addTool(mcp.NewTool("SAP",
 		mcp.WithDescription(`Universal SAP tool. Use SAP(action="help") for full documentation.
 
 Actions: read, edit, create, delete, search, query, grep, test, analyze, debug, system, help

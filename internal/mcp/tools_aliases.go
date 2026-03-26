@@ -48,7 +48,7 @@ func (s *Server) registerToolAliases(shouldRegister func(string) bool) {
 	/*
 	for alias, info := range aliases {
 		if shouldRegister(info.canonical) {
-			s.mcpServer.AddTool(mcp.NewTool(alias,
+			s.addTool(mcp.NewTool(alias,
 				mcp.WithDescription(info.desc),
 				// Aliases inherit all parameters from the canonical tool
 				// The handler is the same, so parameters work identically

@@ -87,7 +87,7 @@ func (s *Server) routeSourceAction(ctx context.Context, action, objectType, obje
 
 // registerGetSource registers the unified GetSource tool
 func (s *Server) registerGetSource() {
-	s.mcpServer.AddTool(mcp.NewTool("GetSource",
+	s.addTool(mcp.NewTool("GetSource",
 		mcp.WithDescription("Unified tool for reading ABAP source code across different object types. Replaces GetProgram, GetClass, GetInterface, GetFunction, GetInclude, GetFunctionGroup, GetClassInclude."),
 		mcp.WithString("object_type",
 			mcp.Required(),
@@ -117,7 +117,7 @@ func (s *Server) registerGetSource() {
 
 // registerWriteSource registers the unified WriteSource tool
 func (s *Server) registerWriteSource() {
-	s.mcpServer.AddTool(mcp.NewTool("WriteSource",
+	s.addTool(mcp.NewTool("WriteSource",
 		mcp.WithDescription("Unified tool for writing ABAP source code with automatic create/update detection. Supports PROG, CLAS, INTF, and RAP types (DDLS, BDEF, SRVD)."),
 		mcp.WithString("object_type",
 			mcp.Required(),
@@ -250,7 +250,7 @@ func (s *Server) handleWriteSource(ctx context.Context, request mcp.CallToolRequ
 
 // registerGrepObjects registers the unified GrepObjects tool
 func (s *Server) registerGrepObjects() {
-	s.mcpServer.AddTool(mcp.NewTool("GrepObjects",
+	s.addTool(mcp.NewTool("GrepObjects",
 		mcp.WithDescription("Unified tool for searching regex patterns in single or multiple ABAP objects. Replaces GrepObject."),
 		mcp.WithArray("object_urls",
 			mcp.Required(),
@@ -272,7 +272,7 @@ func (s *Server) registerGrepObjects() {
 
 // registerGrepPackages registers the unified GrepPackages tool
 func (s *Server) registerGrepPackages() {
-	s.mcpServer.AddTool(mcp.NewTool("GrepPackages",
+	s.addTool(mcp.NewTool("GrepPackages",
 		mcp.WithDescription("Unified tool for searching regex patterns across single or multiple packages with optional recursive subpackage search. Replaces GrepPackage."),
 		mcp.WithArray("packages",
 			mcp.Required(),
@@ -301,7 +301,7 @@ func (s *Server) registerGrepPackages() {
 
 // registerImportFromFile registers the ImportFromFile tool (alias for DeployFromFile)
 func (s *Server) registerImportFromFile() {
-	s.mcpServer.AddTool(mcp.NewTool("ImportFromFile",
+	s.addTool(mcp.NewTool("ImportFromFile",
 		mcp.WithDescription("Import ABAP object from local file into SAP system. Auto-detects object type from file extension, creates or updates, activates. Supports: programs, classes (with includes), interfaces, function groups/modules, CDS views (DDLS), behavior definitions (BDEF), service definitions (SRVD). For class includes (.clas.testclasses.abap, .clas.locals_def.abap, etc.), the parent class must exist."),
 		mcp.WithString("file_path",
 			mcp.Required(),
@@ -318,7 +318,7 @@ func (s *Server) registerImportFromFile() {
 
 // registerExportToFile registers the ExportToFile tool (alias for SaveToFile)
 func (s *Server) registerExportToFile() {
-	s.mcpServer.AddTool(mcp.NewTool("ExportToFile",
+	s.addTool(mcp.NewTool("ExportToFile",
 		mcp.WithDescription("Export ABAP object from SAP system to local file. Saves source code with appropriate file extension. Supports: programs, classes (with includes), interfaces, function groups/modules, CDS views (DDLS), behavior definitions (BDEF), service definitions (SRVD). For classes, use 'include' parameter to export specific includes (testclasses, definitions, implementations, macros)."),
 		mcp.WithString("object_type",
 			mcp.Required(),

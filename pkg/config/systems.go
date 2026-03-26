@@ -11,6 +11,7 @@ import (
 
 // SystemConfig represents a SAP system configuration.
 type SystemConfig struct {
+	Disabled bool   `json:"disabled,omitempty"` // Skip this system when loading
 	URL      string `json:"url"`
 	User     string `json:"user,omitempty"`
 	Password string `json:"password,omitempty"` // Not recommended, use env var
@@ -30,9 +31,16 @@ type SystemConfig struct {
 	MsServ         string `json:"msserv,omitempty"`
 	R3Name         string `json:"r3name,omitempty"`
 	Group          string `json:"group,omitempty"`
-	JcoLibsDir     string `json:"jco_libs_dir,omitempty"`
 	JcoProxyJar    string `json:"jco_proxy_jar,omitempty"`
 	JavaPath       string `json:"java_path,omitempty"`
+
+	// SNC/SSO configuration (via SAP UI Landscape)
+	SNC           bool   `json:"snc,omitempty"`            // Enable SNC single sign-on
+	SysID         string `json:"sysid,omitempty"`          // SAP System ID from landscape (3 chars)
+	LandscapeFile string `json:"landscape_file,omitempty"` // Explicit path to SAP UI Landscape XML
+
+	// Per-system output settings
+	Verbose bool `json:"verbose,omitempty"` // Enable verbose logging for this system
 
 	// Optional safety settings per system
 	ReadOnly        bool     `json:"read_only,omitempty"`
@@ -53,8 +61,8 @@ type SystemsConfig struct {
 // ConfigPaths returns the list of paths to search for systems config.
 func ConfigPaths() []string {
 	paths := []string{
-		".vsp.json",                   // Current directory (preferred)
-		".vsp/systems.json",           // Current directory .vsp folder
+		".vsp.json",         // Current directory (preferred)
+		".vsp/systems.json", // Current directory .vsp folder
 	}
 
 	// Add home directory paths
@@ -107,6 +115,10 @@ func (c *SystemsConfig) GetSystem(name string) (*SystemConfig, error) {
 			available = append(available, k)
 		}
 		return nil, fmt.Errorf("system '%s' not found. Available: %s", name, strings.Join(available, ", "))
+	}
+
+	if sys.Disabled {
+		return nil, fmt.Errorf("system '%s' is disabled", name)
 	}
 
 	// Resolve password from environment variable if not set
@@ -167,8 +179,10 @@ func loadMcpEnvVar(key string) string {
 // ListSystems returns a list of configured system names.
 func (c *SystemsConfig) ListSystems() []string {
 	systems := make([]string, 0, len(c.Systems))
-	for name := range c.Systems {
-		systems = append(systems, name)
+	for name, sys := range c.Systems {
+		if !sys.Disabled {
+			systems = append(systems, name)
+		}
 	}
 	return systems
 }
@@ -203,7 +217,6 @@ func ExampleConfig() string {
 				User:           "RFC_USER",
 				Client:         "001",
 				JcoProxyJar:    "/opt/vsp/jco-proxy.jar",
-				JcoLibsDir:     "/opt/sap/jco",
 			},
 		},
 	}

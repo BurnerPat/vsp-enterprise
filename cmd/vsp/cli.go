@@ -48,7 +48,6 @@ type systemParams struct {
 	MsServ         string
 	R3Name         string
 	Group          string
-	JcoLibsDir     string
 	JcoProxyJar    string
 	JavaPath       string
 }
@@ -105,7 +104,6 @@ func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 			MsServ:         sys.MsServ,
 			R3Name:         sys.R3Name,
 			Group:          sys.Group,
-			JcoLibsDir:     sys.JcoLibsDir,
 			JcoProxyJar:    sys.JcoProxyJar,
 			JavaPath:       sys.JavaPath,
 		}, nil

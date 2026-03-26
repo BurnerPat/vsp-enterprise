@@ -23,6 +23,12 @@ var (
 
 var cfg = &mcp.Config{}
 
+// Multi-system mode
+var (
+	multiSystem bool
+	configFile  string
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "vsp",
 	Short: "ABAP Development Tools for AI agents and DevOps",
@@ -107,6 +113,10 @@ func init() {
 	// Mode options
 	rootCmd.Flags().StringVar(&cfg.Mode, "mode", "focused", "Tool mode: focused (81 tools), expert (122 tools), or hyperfocused (single universal SAP tool)")
 	rootCmd.Flags().StringVar(&cfg.DisabledGroups, "disabled-groups", "", "Disable tool groups: 5/U=UI5, T=Tests, H=HANA, D=Debug (e.g., \"TH\" disables Tests and HANA)")
+
+	// Multi-system mode
+	rootCmd.Flags().BoolVar(&multiSystem, "multi-system", false, "Enable multi-system mode: route tool requests to systems from .vsp.json config")
+	rootCmd.Flags().StringVar(&configFile, "config", "", "Path to .vsp.json configuration file (auto-discovered if not set)")
 
 	// Feature configuration (safety network)
 	// Values: "auto" (default), "on", "off"
@@ -206,43 +216,47 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// Resolve configuration with priority: flags > env vars > defaults
 	resolveConfig(cmd)
 
-	// Resolve SNC/SSO configuration from SAP UI Landscape file
-	if cfg.SNC {
-		if cfg.SysID == "" {
-			return fmt.Errorf("--sysid is required when --snc is specified")
-		}
-		if cfg.Verbose {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] SNC mode: resolving system %q from SAP UI Landscape\n", cfg.SysID)
-			if cfg.LandscapeFile != "" {
-				fmt.Fprintf(os.Stderr, "[VERBOSE] Using landscape file: %s\n", cfg.LandscapeFile)
+	// In multi-system mode, skip single-system validation and cookie processing
+	// (each system validates independently during server creation)
+	if !multiSystem {
+		// Resolve SNC/SSO configuration from SAP UI Landscape file
+		if cfg.SNC {
+			if cfg.SysID == "" {
+				return fmt.Errorf("--sysid is required when --snc is specified")
 			}
-		}
-		jcoProps, err := adt.ResolveSNCJcoProperties(cfg.SysID, cfg.LandscapeFile, cfg.Client, cfg.Language)
-		if err != nil {
-			return fmt.Errorf("SNC configuration failed: %w", err)
-		}
-		cfg.JcoProperties = jcoProps
-		cfg.ConnectionMode = "rfc" // SNC requires RFC mode via JCo sidecar
-		if cfg.Verbose {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] SNC: resolved %d JCo properties for system %q\n", len(jcoProps), cfg.SysID)
-			for k, v := range jcoProps {
-				if k == "jco.client.snc_partnername" {
-					fmt.Fprintf(os.Stderr, "[VERBOSE]   %s = %s\n", k, v)
-				} else {
-					fmt.Fprintf(os.Stderr, "[VERBOSE]   %s = %s\n", k, v)
+			if cfg.Verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] SNC mode: resolving system %q from SAP UI Landscape\n", cfg.SysID)
+				if cfg.LandscapeFile != "" {
+					fmt.Fprintf(os.Stderr, "[VERBOSE] Using landscape file: %s\n", cfg.LandscapeFile)
+				}
+			}
+			jcoProps, err := adt.ResolveSNCJcoProperties(cfg.SysID, cfg.LandscapeFile, cfg.Client, cfg.Language)
+			if err != nil {
+				return fmt.Errorf("SNC configuration failed: %w", err)
+			}
+			cfg.JcoProperties = jcoProps
+			cfg.ConnectionMode = "rfc" // SNC requires RFC mode via JCo sidecar
+			if cfg.Verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] SNC: resolved %d JCo properties for system %q\n", len(jcoProps), cfg.SysID)
+				for k, v := range jcoProps {
+					if k == "jco.client.snc_partnername" {
+						fmt.Fprintf(os.Stderr, "[VERBOSE]   %s = %s\n", k, v)
+					} else {
+						fmt.Fprintf(os.Stderr, "[VERBOSE]   %s = %s\n", k, v)
+					}
 				}
 			}
 		}
-	}
 
-	// Validate configuration
-	if err := validateConfig(); err != nil {
-		return err
-	}
+		// Validate configuration
+		if err := validateConfig(); err != nil {
+			return err
+		}
 
-	// Process cookie authentication
-	if err := processCookieAuth(cmd); err != nil {
-		return err
+		// Process cookie authentication
+		if err := processCookieAuth(cmd); err != nil {
+			return err
+		}
 	}
 
 	// Set verbose log output for feature probing
@@ -312,25 +326,171 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load granular tool visibility from .vsp.json if present
-	if systemsCfg, configPath, err := config.LoadSystems(); err == nil && systemsCfg != nil {
-		if systemsCfg.Tools != nil {
-			cfg.ToolsConfig = systemsCfg.Tools
-			if cfg.Verbose {
-				enabled := 0
-				disabled := 0
-				for _, v := range systemsCfg.Tools {
-					if v {
-						enabled++
-					} else {
-						disabled++
-					}
-				}
-				fmt.Fprintf(os.Stderr, "[VERBOSE] Tool config loaded from %s: %d enabled, %d disabled\n", configPath, enabled, disabled)
+	var systemsCfg *config.SystemsConfig
+	var systemsConfigPath string
+	{
+		var err error
+		if configFile != "" {
+			systemsCfg, err = config.LoadSystemsFromFile(configFile)
+			if err != nil {
+				return fmt.Errorf("failed to load config from %s: %w", configFile, err)
+			}
+			systemsConfigPath = configFile
+		} else {
+			systemsCfg, systemsConfigPath, err = config.LoadSystems()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[WARN] Failed to load systems config: %v\n", err)
 			}
 		}
 	}
+	if systemsCfg != nil && systemsCfg.Tools != nil {
+		cfg.ToolsConfig = systemsCfg.Tools
+		if cfg.Verbose {
+			enabled := 0
+			disabled := 0
+			for _, v := range systemsCfg.Tools {
+				if v {
+					enabled++
+				} else {
+					disabled++
+				}
+			}
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Tool config loaded from %s: %d enabled, %d disabled\n", systemsConfigPath, enabled, disabled)
+		}
+	}
 
-	// Create and start MCP server
+	// Multi-system mode: create a multi-system server with per-system connections
+	if multiSystem {
+		if systemsCfg == nil {
+			return fmt.Errorf("--multi-system requires a .vsp.json configuration file. Use --config to specify path or create one with 'vsp config init'")
+		}
+		if len(systemsCfg.Systems) == 0 {
+			return fmt.Errorf("--multi-system: no systems defined in configuration file %s", systemsConfigPath)
+		}
+
+		// Resolve all systems from config
+		multiSystems := make(map[string]*mcp.SystemConfigResolved)
+		rfcSystemCount := 0
+		for sysID, sysDef := range systemsCfg.Systems {
+			if sysDef.Disabled {
+				if cfg.Verbose {
+					fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: skipping disabled system %q\n", sysID)
+				}
+				continue
+			}
+			sys, err := systemsCfg.GetSystem(sysID)
+			if err != nil {
+				return fmt.Errorf("--multi-system: failed to resolve system %q: %w", sysID, err)
+			}
+
+			resolved := &mcp.SystemConfigResolved{
+				BaseURL:            sys.URL,
+				Username:           sys.User,
+				Password:           sys.Password,
+				Client:             sys.Client,
+				Language:           sys.Language,
+				InsecureSkipVerify: sys.Insecure,
+				ReadOnly:           sys.ReadOnly,
+				AllowedPackages:    sys.AllowedPackages,
+				ConnectionMode:     sys.ConnectionMode,
+				AsHost:             sys.AsHost,
+				SysNr:              sys.SysNr,
+				MsHost:             sys.MsHost,
+				MsServ:             sys.MsServ,
+				R3Name:             sys.R3Name,
+				Group:              sys.Group,
+				JcoProxyJar:        sys.JcoProxyJar,
+				JavaPath:           sys.JavaPath,
+				SNC:                sys.SNC,
+				SysID:              sys.SysID,
+				LandscapeFile:      sys.LandscapeFile,
+				Verbose:            sys.Verbose,
+			}
+
+			// Resolve SNC/SSO for this system if enabled
+			if resolved.SNC {
+				if resolved.SysID == "" {
+					return fmt.Errorf("--multi-system: system %q has snc=true but no sysid configured", sysID)
+				}
+				jcoProps, err := adt.ResolveSNCJcoProperties(resolved.SysID, resolved.LandscapeFile, resolved.Client, resolved.Language)
+				if err != nil {
+					return fmt.Errorf("--multi-system: SNC resolution failed for system %q: %w", sysID, err)
+				}
+				resolved.JcoProperties = jcoProps
+				resolved.ConnectionMode = "rfc" // SNC requires RFC mode
+				if cfg.Verbose || resolved.Verbose {
+					fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: resolved SNC for %q (sysid: %s, %d JCo properties)\n",
+						sysID, resolved.SysID, len(jcoProps))
+				}
+			}
+
+			// Count RFC systems (explicit or via SNC)
+			if strings.EqualFold(resolved.ConnectionMode, "rfc") {
+				rfcSystemCount++
+			}
+
+			// Handle cookie auth from system config
+			if sys.CookieFile != "" {
+				cookies, err := adt.LoadCookiesFromFile(sys.CookieFile)
+				if err == nil && len(cookies) > 0 {
+					resolved.Cookies = cookies
+				}
+			}
+			if sys.CookieString != "" {
+				cookies := adt.ParseCookieString(sys.CookieString)
+				if len(cookies) > 0 {
+					resolved.Cookies = cookies
+				}
+			}
+
+			multiSystems[sysID] = resolved
+		}
+
+		// Enforce stdio transport when multiple systems use RFC mode.
+		// Multiple HTTP-based sidecars would compete for ports; stdio is required.
+		if rfcSystemCount > 1 {
+			explicitHTTP := false
+			if strings.EqualFold(cfg.SidecarTransport, "http") {
+				explicitHTTP = true
+			}
+			for sysID, resolved := range multiSystems {
+				if strings.EqualFold(resolved.ConnectionMode, "rfc") {
+					if strings.EqualFold(resolved.SidecarTransport, "http") {
+						explicitHTTP = true
+					}
+					if explicitHTTP {
+						return fmt.Errorf("--multi-system: multiple systems use RFC mode (%d systems) — jco-sidecar-transport must be \"stdio\" (not \"http\"). "+
+							"Each RFC system needs its own sidecar process, which is only supported via stdio transport. "+
+							"Remove any explicit --jco-sidecar-transport=http or sidecar_transport settings", rfcSystemCount)
+					}
+					resolved.SidecarTransport = "stdio"
+					multiSystems[sysID] = resolved
+				}
+			}
+			if cfg.Verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: %d RFC systems detected, enforcing stdio sidecar transport\n", rfcSystemCount)
+			}
+		}
+
+		cfg.MultiSystem = true
+		cfg.MultiSystems = multiSystems
+
+		if cfg.Verbose {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system mode: %d systems loaded from %s\n", len(multiSystems), systemsConfigPath)
+			for id := range multiSystems {
+				fmt.Fprintf(os.Stderr, "[VERBOSE]   - %s\n", id)
+			}
+		}
+
+		srv, err := mcp.NewMultiSystemServer(cfg)
+		if err != nil {
+			return fmt.Errorf("multi-system server creation failed: %w", err)
+		}
+		defer srv.Shutdown()
+		return srv.ServeStdio()
+	}
+
+	// Single-system mode: create and start MCP server
 	server := mcp.NewServer(cfg)
 	return server.ServeStdio()
 }
@@ -392,9 +552,6 @@ func resolveConfig(cmd *cobra.Command) {
 				}
 				if !cmd.Flags().Changed("group") && sys.Group != "" {
 					cfg.Group = sys.Group
-				}
-				if !cmd.Flags().Changed("jco-libs-dir") && sys.JcoLibsDir != "" {
-					cfg.JcoLibsDir = sys.JcoLibsDir
 				}
 				if !cmd.Flags().Changed("jco-proxy-jar") && sys.JcoProxyJar != "" {
 					cfg.JcoProxyJar = sys.JcoProxyJar

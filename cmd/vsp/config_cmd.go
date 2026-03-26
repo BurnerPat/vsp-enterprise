@@ -59,9 +59,9 @@ Copy and edit them to create your actual configuration.`,
 
 func runConfigInit(cmd *cobra.Command, args []string) error {
 	files := map[string]string{
-		".env.example":          envExample,
-		".vsp.json.example":     vspSystemsExample,
-		".mcp.json.example":     mcpJsonExample,
+		".env.example":      envExample,
+		".vsp.json.example": vspSystemsExample,
+		".mcp.json.example": mcpJsonExample,
 	}
 
 	created := 0
@@ -353,8 +353,6 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 				sys.Group = val
 			case "--jco-proxy-jar":
 				sys.JcoProxyJar = val
-			case "--jco-libs-dir":
-				sys.JcoLibsDir = val
 			case "--java-path":
 				sys.JavaPath = val
 			case "--insecure":
@@ -439,9 +437,6 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 		if v, ok := env["SAP_JCO_PROXY_JAR"].(string); ok && v != "" {
 			sys.JcoProxyJar = v
 		}
-		if v, ok := env["SAP_JCO_LIBS_DIR"].(string); ok && v != "" {
-			sys.JcoLibsDir = v
-		}
 		if v, ok := env["SAP_JAVA_PATH"].(string); ok && v != "" {
 			sys.JavaPath = v
 		}
@@ -524,9 +519,6 @@ func runVspToMcp(cmd *cobra.Command, args []string) error {
 			}
 			if sys.JcoProxyJar != "" {
 				serverArgs = append(serverArgs, "--jco-proxy-jar", sys.JcoProxyJar)
-			}
-			if sys.JcoLibsDir != "" {
-				serverArgs = append(serverArgs, "--jco-libs-dir", sys.JcoLibsDir)
 			}
 			if sys.JavaPath != "" {
 				serverArgs = append(serverArgs, "--java-path", sys.JavaPath)
@@ -1009,7 +1001,6 @@ var vspSystemsExample = func() string {
 				User:           "RFC_USER",
 				Client:         "001",
 				JcoProxyJar:    "/opt/vsp/jco-proxy.jar",
-				JcoLibsDir:     "/opt/sap/jco",
 			},
 		},
 	}
