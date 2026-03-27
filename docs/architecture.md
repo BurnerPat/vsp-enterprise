@@ -10,19 +10,19 @@ flowchart TB
         Other[Other MCP Clients]
     end
 
-    subgraph VSP["vsp - Go Binary"]
+    subgraph VSP["vsp — Go Binary"]
         direction TB
 
         subgraph Entry["Entry Points"]
             MCP[MCP Server<br/>JSON-RPC / stdio]
-            CLI[CLI Mode<br/>search · source · export · debug]
-            LUA[Lua Scripting<br/>REPL · Scripts]
+            CLI[CLI Mode<br/>config · systems · jco]
         end
 
-        subgraph Core["internal/mcp/server.go"]
+        subgraph Core["internal/mcp/"]
             direction LR
-            Focused[Focused Mode<br/>54 Tools]
-            Expert[Expert Mode<br/>99 Tools]
+            Hyper[Hyperfocused Mode<br/>1 Universal Tool]
+            Focused[Focused Mode<br/>~79 Tools]
+            Expert[Expert Mode<br/>~120 Tools]
         end
 
         subgraph Safety["Safety Layer"]
@@ -54,23 +54,29 @@ flowchart TB
             subgraph Extras["Extras"]
                 ui5[ui5.go<br/>UI5/BSP Apps]
                 features[features.go<br/>System Probing]
+                git[git.go<br/>abapGit Export]
+                reports[reports.go<br/>Report Execution]
             end
         end
 
         subgraph Transport["Transport Layer"]
             HTTP[http.go<br/>CSRF · Sessions · Auth]
             WS[WebSocket Client<br/>ZADT_VSP APC]
+            RFC[RFC Transport<br/>via JCo Sidecar]
+            STDIO[STDIO Transport<br/>JCo Sidecar Alt]
         end
 
         subgraph Packages["Supporting Packages"]
-            DSL[pkg/dsl/<br/>Fluent API · YAML Workflows]
-            Cache[pkg/cache/<br/>Memory · SQLite]
-            Script[pkg/scripting/<br/>Lua VM · Bindings]
+            Config[pkg/config/<br/>Multi-System Profiles]
+            CtxComp[pkg/ctxcomp/<br/>Context Compression]
         end
 
         subgraph Embedded["Embedded Assets"]
-            ABAP[embedded/abap/<br/>ZADT_VSP Source]
-            Deps[embedded/deps/<br/>abapGit ZIPs]
+            Deps[embedded/deps/<br/>jco-proxy.jar]
+        end
+
+        subgraph Sidecar["sidecar/jco-proxy/ — Java"]
+            JCo[JCo Proxy<br/>RFC Connectivity]
         end
     end
 
@@ -78,11 +84,11 @@ flowchart TB
         ADT[ADT REST API<br/>/sap/bc/adt/*]
         APC[ZADT_VSP<br/>WebSocket APC]
         HANA[HANA DB<br/>AMDP Debug]
+        RFCSAP[RFC Interface]
     end
 
     CC & CD & Other <-->|JSON-RPC / stdio| MCP
     CLI --> Core
-    LUA --> Core
     MCP --> Core
     Core --> Safety
     Safety --> ADTLib
@@ -90,8 +96,8 @@ flowchart TB
     HTTP <-->|HTTPS| ADT
     WS <-->|WebSocket| APC
     amdp <-->|WebSocket| HANA
-    DSL --> ADTLib
-    Script --> ADTLib
+    RFC <-->|HTTP/STDIO| JCo
+    JCo <-->|RFC| RFCSAP
 ```
 
 ## Request Flow
@@ -154,6 +160,10 @@ sequenceDiagram
 
 ## Tool Categories
 
+Focused mode exposes ~79 essential tools. Expert mode adds ~40 more granular/legacy tools (~120 total).
+Hyperfocused mode collapses everything into 1 universal SAP tool.
+Tool groups can be individually disabled via `--disabled-groups` flags or `.vsp.json` config.
+
 ```mermaid
 flowchart LR
     subgraph Search["Search (3)"]
@@ -205,6 +215,16 @@ flowchart LR
         DGV[GetVariables]
     end
 
+    subgraph AMDP["AMDP Debugger (7)"]
+        AL[AMDPListen]
+        AA[AMDPAttach]
+        AD[AMDPDetach]
+        AS[AMDPStep]
+        AGS[AMDPGetStack]
+        AGV[AMDPGetVariables]
+        ABP[AMDPBreakpoints]
+    end
+
     subgraph System["System (5)"]
         SI[GetSystemInfo]
         IC[GetInstalledComponents]
@@ -220,6 +240,14 @@ flowchart LR
         GTr[GetTrace]
         STS[GetSQLTraceState]
         LST[ListSQLTraces]
+    end
+
+    subgraph CTS["Transport (5)"]
+        CT[CreateTransport]
+        RT[ReleaseTransport]
+        LTr2[ListTransports]
+        GTr2[GetTransport]
+        ATT[AddToTransport]
     end
 
     subgraph Git["Git (2)"]
@@ -241,26 +269,34 @@ flowchart LR
     end
 ```
 
-## Dual Transport: HTTP + WebSocket
+## Triple Transport: HTTP + WebSocket + RFC
 
 ```mermaid
 flowchart LR
     subgraph VSP["vsp"]
         HTTP[HTTP Client<br/>pkg/adt/http.go]
         WS[WebSocket Client<br/>pkg/adt/websocket.go]
+        RFC[RFC Transport<br/>pkg/adt/rfc_transport.go<br/>pkg/adt/stdio_transport.go]
+    end
+
+    subgraph Sidecar["Java Sidecar"]
+        JCo[jco-proxy.jar<br/>SAP JCo Library]
     end
 
     subgraph SAP["SAP System"]
         ADT[ADT REST API<br/>/sap/bc/adt/*]
         APC[ZADT_VSP APC Handler<br/>/sap/bc/apc/ws/zadt_vsp]
+        RFCSAP[SAP RFC Interface<br/>SADT_REST_RFC_ENDPOINT]
     end
 
     HTTP -->|"CRUD · Search · Read<br/>Syntax · Activate · Debug"| ADT
     WS -->|"RFC Calls · Breakpoints<br/>Git Export · Reports<br/>AMDP Debug"| APC
+    RFC -->|"HTTP or STDIO"| JCo
+    JCo -->|"SAP JCo RFC"| RFCSAP
 
     subgraph WSServices["WebSocket Domains"]
         direction TB
-        RFC[rfc — Function Calls]
+        WSRFC[rfc — Function Calls]
         BRK[debug — Breakpoints]
         GIT[git — abapGit Export]
         RPT[report — Report Execution]
@@ -275,12 +311,21 @@ flowchart LR
 ```
 vibing-steampunk/
 ├── cmd/vsp/                    # CLI entry point (cobra/viper)
-│   └── main.go                 #   Flags, env vars, auth, server startup
+│   ├── main.go                 #   Flags, env vars, auth, MCP server startup
+│   ├── cli.go                  #   Multi-system profile management
+│   ├── config_cmd.go           #   config init/show/mcp-to-vsp/tools subcommands
+│   └── jco.go                  #   JCo sidecar setup/status commands
 │
-├── internal/mcp/               # MCP protocol layer
-│   └── server.go               #   99 tool handlers, mode-aware registration
+├── internal/mcp/               # MCP protocol layer (32 files)
+│   ├── server.go               #   MCP server core, client init, multi-system
+│   ├── tools_register.go       #   Mode-aware tool registration (~120 tools)
+│   ├── tools_focused.go        #   Focused mode whitelist (~79 tools)
+│   ├── tools_groups.go         #   Disableable tool groups (U/T/H/D/C/G/R/X)
+│   ├── tools_aliases.go        #   Short alias names (gs→GetSource, etc.)
+│   ├── multi_system.go         #   Multi-system connection management
+│   └── handlers_*.go           #   Per-domain tool handlers (20+ files)
 │
-├── pkg/adt/                    # ADT client library (core)
+├── pkg/adt/                    # ADT client library (core, ~54 files)
 │   ├── client.go               #   Read operations + search
 │   ├── crud.go                 #   Lock / create / update / delete
 │   ├── devtools.go             #   Syntax check, activate, unit tests, ATC
@@ -290,32 +335,47 @@ vibing-steampunk/
 │   ├── amdp_debugger.go        #   HANA/AMDP SQLScript debugger
 │   ├── ui5.go                  #   UI5/Fiori BSP management
 │   ├── cds.go                  #   CDS view dependency analysis
+│   ├── git.go                  #   abapGit export via WebSocket
+│   ├── reports.go              #   Report execution, variants, spool output
 │   ├── safety.go               #   Read-only, package/op filtering
 │   ├── features.go             #   System capability detection
 │   ├── http.go                 #   HTTP transport (CSRF, sessions, auth)
-│   └── xml.go                  #   ADT XML type definitions
+│   ├── transport.go            #   Transport interface abstraction
+│   ├── rfc_transport.go        #   RFC proxy transport (via JCo sidecar HTTP)
+│   ├── stdio_transport.go      #   RFC proxy transport (via JCo sidecar STDIO)
+│   ├── sidecar.go              #   JCo sidecar process lifecycle management
+│   ├── jco_discovery.go        #   JCo library detection (platform-specific)
+│   ├── browser_auth.go         #   Browser-based SSO (Kerberos/SAML/Keycloak)
+│   ├── landscape.go            #   SAP UI Landscape XML parsing (SNC/SSO)
+│   ├── recorder.go             #   Execution recording for time-travel debug
+│   ├── history.go              #   Tool call history tracking
+│   ├── websocket.go            #   WebSocket client (ZADT_VSP APC)
+│   ├── websocket_base.go       #   WebSocket base types
+│   ├── websocket_types.go      #   WebSocket protocol types
+│   ├── websocket_rfc.go        #   RFC-over-WebSocket operations
+│   ├── websocket_debug.go      #   Debug-over-WebSocket operations
+│   ├── xml.go                  #   ADT XML type definitions
+│   └── config.go               #   Client configuration with functional options
 │
-├── pkg/dsl/                    # Fluent API & workflow engine
-│   ├── search.go               #   Search builder
-│   ├── test_runner.go          #   Unit test orchestration
-│   ├── workflow.go             #   YAML workflow engine
-│   └── batch.go                #   Batch import/export, pipelines
+├── pkg/config/                 # Multi-system configuration
+│   └── systems.go              #   .vsp.json profile management, granular tool config
 │
-├── pkg/scripting/              # Lua scripting engine
-│   ├── lua.go                  #   Lua VM, REPL
-│   └── bindings.go             #   40+ ADT tool bindings
+├── pkg/ctxcomp/                # Context compression
+│   └── *.go                    #   Dependency analysis, contract extraction for AI
 │
-├── pkg/cache/                  # Caching infrastructure
-│   ├── memory.go               #   In-memory cache
-│   └── sqlite.go               #   SQLite persistent cache
+├── sidecar/jco-proxy/          # Java JCo proxy (Maven project)
+│   ├── pom.xml                 #   Maven build (SAP JCo dependency)
+│   └── src/main/               #   Java source: RFC↔HTTP/STDIO bridge
 │
-├── embedded/                   # Assets embedded in binary
-│   ├── abap/                   #   ZADT_VSP ABAP source files
-│   └── deps/                   #   abapGit ZIP packages
+├── embedded/                   # Assets embedded in Go binary
+│   └── deps/                   #   jco-proxy.jar (compiled sidecar)
+│
+├── abap/                       # ABAP source artifacts
+│   └── src/                    #   ZADT_VSP and related ABAP objects
 │
 └── docs/                       # Documentation
     ├── architecture.md         #   This file
-    ├── DSL.md                  #   DSL & workflow guide
+    ├── DSL.md                  #   DSL reference
     └── adr/                    #   Architecture Decision Records
 ```
 
@@ -328,13 +388,19 @@ flowchart TD
     Auth -->|Basic| Basic[Username + Password<br/>--user / --password]
     Auth -->|Cookie File| CFile[Netscape Format<br/>--cookie-file]
     Auth -->|Cookie String| CStr[Key=Value pairs<br/>--cookie-string]
+    Auth -->|Browser SSO| Browser[Chromium Automation<br/>--browser-auth<br/>Kerberos / SAML / Keycloak]
+    Auth -->|SNC| SNC[Secure Network Comm<br/>--snc + --sysid<br/>via JCo Sidecar]
 
     Basic --> CSRF[Fetch CSRF Token]
     CFile --> CSRF
     CStr --> CSRF
+    Browser --> CookieSave[Save Cookies to File]
+    CookieSave --> CSRF
 
     CSRF --> Session[Stateful Session<br/>Cookie Jar]
+    SNC --> JCo[JCo Sidecar<br/>RFC Transport]
     Session --> SAP[SAP ADT API]
+    JCo --> SAP
 ```
 
 ## Safety System
@@ -360,4 +426,41 @@ flowchart TD
 
     TR -->|Outside whitelist| Block6[BLOCKED]
     TR -->|In whitelist| OK[EXECUTE]
+```
+
+## Testing
+
+312 unit test functions across 34 test files. No SAP system required — all unit tests use mock HTTP transports.
+
+```
+go test ./...                                    # All unit tests
+go test -tags=integration ./pkg/adt/             # Integration tests (requires SAP)
+```
+
+## Design Decisions
+
+1. **Single Binary**: No runtime dependencies (except optional JCo sidecar for RFC mode)
+2. **Functional Options**: Flexible client configuration via `adt.WithXxx()` pattern
+3. **Stateful HTTP**: Required for CRUD operations (lock handles, CSRF tokens, session cookies)
+4. **Triple Transport**: HTTP for ADT REST, WebSocket for ZADT_VSP APC, RFC via JCo sidecar
+5. **Mode-Aware Tools**: Focused (default), Expert (all), Hyperfocused (single universal tool)
+6. **Granular Tool Control**: Groups can be disabled (`--disabled-groups`), individual tools via `.vsp.json`
+7. **Multi-System**: Connect to multiple SAP systems from one instance via profiles
+8. **Safety by Default**: Read-only mode, package/transport whitelists, operation filtering
+9. **Java Sidecar**: Embedded `jco-proxy.jar` for RFC connectivity without CGo
+
+## Build Targets
+
+Cross-compilation via Makefile and GoReleaser:
+
+| OS | Architectures |
+|----|---------------|
+| Linux | amd64, arm64, 386, arm |
+| macOS | amd64, arm64 (Apple Silicon) |
+| Windows | amd64, arm64, 386 |
+
+```
+make build          # Current platform
+make build-all      # Common targets (linux-amd64, darwin-arm64, windows-amd64)
+make build-all-all  # All 9 targets
 ```

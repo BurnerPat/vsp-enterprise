@@ -9,7 +9,7 @@
 >
 > **Want to review or test?** Start here: **[Reviewer Guide](docs/reviewer-guide.md)** — 8 hands-on tasks, no SAP needed.
 
-![Vibing ABAP Developer](./media/vibing-steampunk.png)
+![Vibing ABAP Developer](./docs/media/vibing-steampunk.png)
 
 ## 100 Stars!
 
