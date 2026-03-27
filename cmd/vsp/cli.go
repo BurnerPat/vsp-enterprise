@@ -13,9 +13,6 @@ import (
 
 var (
 	systemName string
-	outputFile string
-	objectType string
-	maxResults int
 )
 
 func init() {
@@ -23,9 +20,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&systemName, "system", "s", "", "System name from config (e.g., 'a4h')")
 
 	// Add CLI subcommands
-	rootCmd.AddCommand(exportCmd)
-	rootCmd.AddCommand(searchCmd)
-	rootCmd.AddCommand(sourceCmd)
 	rootCmd.AddCommand(systemsCmd)
 }
 
@@ -184,184 +178,6 @@ func getEnvOrDefault(key, defaultVal string) string {
 		return v
 	}
 	return defaultVal
-}
-
-// --- export command ---
-
-var exportCmd = &cobra.Command{
-	Use:   "export <packages...>",
-	Short: "Export packages to ZIP (abapGit format)",
-	Long: `Export one or more packages to a ZIP file in abapGit-compatible format.
-
-Examples:
-  vsp -s a4h export '$ZORK' '$ZLLM' -o packages.zip
-  vsp export '$TMP' --output my-package.zip
-  vsp -s dev export 'Z*' --subpackages`,
-	Args: cobra.MinimumNArgs(1),
-	RunE: runExport,
-}
-
-func init() {
-	exportCmd.Flags().StringVarP(&outputFile, "output", "o", "export.zip", "Output ZIP file path")
-	exportCmd.Flags().BoolP("subpackages", "r", true, "Include subpackages")
-}
-
-func runExport(cmd *cobra.Command, args []string) error {
-	params, err := resolveSystemParams(cmd)
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-	wsClient, err := getWSClient(ctx, params)
-	if err != nil {
-		return err
-	}
-	defer wsClient.Close()
-
-	includeSubpackages, _ := cmd.Flags().GetBool("subpackages")
-
-	fmt.Fprintf(os.Stderr, "Exporting packages: %s\n", strings.Join(args, ", "))
-
-	zipData, result, err := wsClient.GitExportToBytes(ctx, adt.GitExportParams{
-		Packages:           args,
-		IncludeSubpackages: includeSubpackages,
-	})
-	if err != nil {
-		return fmt.Errorf("export failed: %w", err)
-	}
-
-	if err := os.WriteFile(outputFile, zipData, 0644); err != nil {
-		return fmt.Errorf("failed to write ZIP file: %w", err)
-	}
-
-	fmt.Printf("Exported %d objects to %s (%d bytes)\n", result.ObjectCount, outputFile, len(zipData))
-	return nil
-}
-
-// --- search command ---
-
-var searchCmd = &cobra.Command{
-	Use:   "search <query>",
-	Short: "Search for ABAP objects",
-	Long: `Search for ABAP objects by name pattern.
-
-Examples:
-  vsp -s a4h search "ZCL_*"
-  vsp search "Z*ORDER*" --type CLAS --max 50`,
-	Args: cobra.ExactArgs(1),
-	RunE: runSearch,
-}
-
-func init() {
-	searchCmd.Flags().StringVarP(&objectType, "type", "t", "", "Filter by object type (CLAS, PROG, INTF, etc.)")
-	searchCmd.Flags().IntVarP(&maxResults, "max", "m", 100, "Maximum results")
-}
-
-func runSearch(cmd *cobra.Command, args []string) error {
-	params, err := resolveSystemParams(cmd)
-	if err != nil {
-		return err
-	}
-
-	client, err := getClient(params)
-	if err != nil {
-		return err
-	}
-	query := args[0]
-	ctx := context.Background()
-
-	results, err := client.SearchObject(ctx, query, maxResults)
-	if err != nil {
-		return fmt.Errorf("search failed: %w", err)
-	}
-
-	// Filter by type if specified
-	filtered := results
-	if objectType != "" {
-		filtered = make([]adt.SearchResult, 0)
-		for _, r := range results {
-			if strings.EqualFold(r.Type, objectType) || strings.HasPrefix(r.Type, objectType+"/") {
-				filtered = append(filtered, r)
-			}
-		}
-	}
-
-	// Output results
-	fmt.Printf("Found %d objects:\n", len(filtered))
-	for _, r := range filtered {
-		fmt.Printf("  %-10s %-40s %s\n", r.Type, r.Name, r.PackageName)
-	}
-
-	return nil
-}
-
-// --- source command ---
-
-var sourceCmd = &cobra.Command{
-	Use:   "source [type] [name]",
-	Short: "Get ABAP source code",
-	Long: `Retrieve source code for an ABAP object.
-
-Subcommands:
-  read     Read source code (same as 'vsp source <type> <name>')
-  write    Write source code from stdin
-  edit     Surgical string replacement
-  context  Source with compressed dependency contracts
-
-Examples:
-  vsp -s a4h source CLAS ZCL_MY_CLASS
-  vsp source PROG ZTEST_PROGRAM
-  vsp source read CLAS ZCL_MY_CLASS
-  vsp source write CLAS ZCL_FOO < file.abap
-  vsp source edit CLAS ZCL_FOO --old "old" --new "new"
-  vsp source context CLAS ZCL_FOO`,
-	Args: cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 2 {
-			return runSource(cmd, args)
-		}
-		return cmd.Help()
-	},
-}
-
-func init() {
-	sourceCmd.Flags().String("parent", "", "Function group name (required for FUNC type)")
-	sourceCmd.Flags().String("include", "", "Class include type: definitions, implementations, macros, testclasses (CLAS only)")
-	sourceCmd.Flags().String("method", "", "Method name to retrieve only that METHOD...ENDMETHOD block (CLAS only)")
-}
-
-func runSource(cmd *cobra.Command, args []string) error {
-	params, err := resolveSystemParams(cmd)
-	if err != nil {
-		return err
-	}
-
-	client, err := getClient(params)
-	if err != nil {
-		return err
-	}
-	objType := strings.ToUpper(args[0])
-	name := strings.ToUpper(args[1])
-
-	parent, _ := cmd.Flags().GetString("parent")
-	include, _ := cmd.Flags().GetString("include")
-	method, _ := cmd.Flags().GetString("method")
-
-	opts := &adt.GetSourceOptions{
-		Parent:  parent,
-		Include: include,
-		Method:  method,
-	}
-
-	ctx := context.Background()
-	source, err := client.GetSource(ctx, objType, name, opts)
-	if err != nil {
-		return fmt.Errorf("failed to get source: %w", err)
-	}
-
-	fmt.Print(source)
-	return nil
 }
 
 // --- systems command ---
