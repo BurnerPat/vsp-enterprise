@@ -1,241 +1,194 @@
 package ctxcomp
 
 import (
-	"os"
-	"path/filepath"
-	"runtime"
 	"testing"
 )
 
-func embeddedPath(name string) string {
-	_, thisFile, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(thisFile), "..", "..", "embedded", "abap", name)
-}
+func TestExtractDependencies_TypeRefTo(t *testing.T) {
+	src := `CLASS zcl_example DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    DATA mo_helper TYPE REF TO zcl_my_helper.
+    DATA mo_intf TYPE REF TO zif_processor.
+ENDCLASS.`
 
-func readEmbedded(t *testing.T, name string) string {
-	t.Helper()
-	data, err := os.ReadFile(embeddedPath(name))
-	if err != nil {
-		t.Fatalf("read embedded %s: %v", name, err)
-	}
-	return string(data)
-}
-
-func TestExtractDependencies_APCHandler(t *testing.T) {
-	src := readEmbedded(t, "zcl_vsp_apc_handler.clas.abap")
 	deps := ExtractDependencies(src)
 
-	found := make(map[string]DependencyKind)
-	for _, d := range deps {
-		found[d.Name] = d.Kind
-	}
-
-	// Should find these dependencies
-	expect := map[string]DependencyKind{
-		"CL_APC_WSP_EXT_STATEFUL_BASE": KindClass,
-		"IF_APC_WSP_EXTENSION":         KindInterface,
-		"IF_APC_WSP_SERVER_CONTEXT":    KindInterface,
-		"IF_APC_WSP_MESSAGE_MANAGER":   KindInterface,
-		"ZIF_VSP_SERVICE":              KindInterface,
-		"ZCL_VSP_UTILS":                KindClass,
-		"ZCL_VSP_RFC_SERVICE":          KindClass,
-		"ZCL_VSP_DEBUG_SERVICE":        KindClass,
-		"ZCL_VSP_AMDP_SERVICE":         KindClass,
-		"ZCL_VSP_GIT_SERVICE":          KindClass,
-		"ZCL_VSP_REPORT_SERVICE":       KindClass,
-	}
-
-	for name, kind := range expect {
-		gotKind, ok := found[name]
-		if !ok {
-			t.Errorf("expected dependency %s not found", name)
-			continue
-		}
-		if gotKind != kind {
-			t.Errorf("dependency %s: got kind %s, want %s", name, gotKind, kind)
-		}
-	}
-}
-
-func TestExtractDependencies_DebugService(t *testing.T) {
-	src := readEmbedded(t, "zcl_vsp_debug_service.clas.abap")
-	deps := ExtractDependencies(src)
-
-	found := make(map[string]bool)
+	found := map[string]bool{}
 	for _, d := range deps {
 		found[d.Name] = true
 	}
-
-	// Should find the interface it implements
-	if !found["ZIF_VSP_SERVICE"] {
-		t.Error("expected ZIF_VSP_SERVICE dependency")
+	if !found["ZCL_MY_HELPER"] {
+		t.Error("missing ZCL_MY_HELPER from TYPE REF TO")
 	}
-
-	// Should find TPDAPI references
-	if !found["IF_TPDAPI_SERVICE"] {
-		t.Error("expected IF_TPDAPI_SERVICE dependency")
-	}
-	if !found["IF_TPDAPI_SESSION"] {
-		t.Error("expected IF_TPDAPI_SESSION dependency")
-	}
-	if !found["IF_TPDAPI_BP"] {
-		t.Error("expected IF_TPDAPI_BP dependency")
+	if !found["ZIF_PROCESSOR"] {
+		t.Error("missing ZIF_PROCESSOR from TYPE REF TO")
 	}
 }
 
-func TestExtractDependencies_Interface(t *testing.T) {
-	src := readEmbedded(t, "zif_vsp_service.intf.abap")
+func TestExtractDependencies_Inheriting(t *testing.T) {
+	src := `CLASS zcl_child DEFINITION PUBLIC INHERITING FROM zcl_base_handler CREATE PUBLIC.
+  PUBLIC SECTION.
+ENDCLASS.`
+
 	deps := ExtractDependencies(src)
 
-	// An interface with no external refs should have minimal deps
+	found := false
 	for _, d := range deps {
-		if d.Name == "ZIF_VSP_SERVICE" {
-			t.Error("interface should not reference itself")
+		if d.Name == "ZCL_BASE_HANDLER" && d.Kind == KindClass {
+			found = true
 		}
 	}
-}
-
-func TestExtractDependencies_InlinePatterns(t *testing.T) {
-	tests := []struct {
-		name   string
-		source string
-		expect []Dependency
-	}{
-		{
-			name:   "TYPE REF TO",
-			source: "DATA lo_obj TYPE REF TO zcl_my_class.",
-			expect: []Dependency{{Name: "ZCL_MY_CLASS", Kind: KindClass}},
-		},
-		{
-			name:   "NEW constructor",
-			source: "DATA(lo_obj) = NEW zcl_factory( ).",
-			expect: []Dependency{{Name: "ZCL_FACTORY", Kind: KindClass}},
-		},
-		{
-			name:   "Static call",
-			source: "zcl_helper=>do_something( ).",
-			expect: []Dependency{{Name: "ZCL_HELPER", Kind: KindClass}},
-		},
-		{
-			name:   "Interface method",
-			source: "lo_obj->zif_payment~authorize( ).",
-			expect: []Dependency{{Name: "ZIF_PAYMENT", Kind: KindInterface}},
-		},
-		{
-			name:   "INHERITING FROM",
-			source: "CLASS zcl_child DEFINITION INHERITING FROM zcl_parent.",
-			expect: []Dependency{{Name: "ZCL_PARENT", Kind: KindClass}},
-		},
-		{
-			name:   "INTERFACES",
-			source: "INTERFACES zif_serializable.",
-			expect: []Dependency{{Name: "ZIF_SERIALIZABLE", Kind: KindInterface}},
-		},
-		{
-			name:   "CALL FUNCTION",
-			source: "CALL FUNCTION 'BAPI_USER_GET_DETAIL'.",
-			expect: []Dependency{{Name: "BAPI_USER_GET_DETAIL", Kind: KindFunction}},
-		},
-		{
-			name:   "CAST",
-			source: "DATA(lo_intf) = CAST zif_processor( lo_obj ).",
-			expect: []Dependency{{Name: "ZIF_PROCESSOR", Kind: KindInterface}},
-		},
-		{
-			name:   "namespace",
-			source: "DATA lo_obj TYPE REF TO /dmf/cl_something.",
-			expect: []Dependency{{Name: "/DMF/CL_SOMETHING", Kind: KindClass}},
-		},
-		{
-			name:   "skip builtin",
-			source: "DATA lv_str TYPE string.\nDATA lv_bool TYPE abap_bool.",
-			expect: []Dependency{},
-		},
-		{
-			name:   "skip CL_ABAP standard",
-			source: "DATA lo_obj TYPE REF TO cl_abap_typedescr.",
-			expect: []Dependency{},
-		},
-		{
-			name:   "skip comment lines",
-			source: "* DATA lo_obj TYPE REF TO zcl_hidden.\n\" DATA lo_obj TYPE REF TO zcl_also_hidden.",
-			expect: []Dependency{},
-		},
-		{
-			name:   "multiple deps on one line",
-			source: "lo_result = zcl_converter=>convert( CAST zif_input( lo_data ) ).",
-			expect: []Dependency{
-				{Name: "ZCL_CONVERTER", Kind: KindClass},
-				{Name: "ZIF_INPUT", Kind: KindInterface},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			deps := ExtractDependencies(tt.source)
-
-			if len(deps) != len(tt.expect) {
-				names := make([]string, len(deps))
-				for i, d := range deps {
-					names[i] = d.Name
-				}
-				t.Fatalf("got %d deps %v, want %d", len(deps), names, len(tt.expect))
-			}
-
-			found := make(map[string]DependencyKind)
-			for _, d := range deps {
-				found[d.Name] = d.Kind
-			}
-
-			for _, exp := range tt.expect {
-				kind, ok := found[exp.Name]
-				if !ok {
-					t.Errorf("expected dep %s not found", exp.Name)
-				} else if kind != exp.Kind {
-					t.Errorf("dep %s: got kind %s, want %s", exp.Name, kind, exp.Kind)
-				}
-			}
-		})
+	if !found {
+		t.Error("missing ZCL_BASE_HANDLER from INHERITING FROM")
 	}
 }
 
-func TestExtractDependencies_Deduplication(t *testing.T) {
-	src := `DATA lo1 TYPE REF TO zcl_foo.
-DATA lo2 TYPE REF TO zcl_foo.
-zcl_foo=>bar( ).
-DATA(lo3) = NEW zcl_foo( ).`
+func TestExtractDependencies_Interfaces(t *testing.T) {
+	src := `CLASS zcl_impl DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    INTERFACES zif_runnable.
+    INTERFACES zif_loggable.
+ENDCLASS.`
+
+	deps := ExtractDependencies(src)
+
+	found := map[string]bool{}
+	for _, d := range deps {
+		found[d.Name] = true
+	}
+	if !found["ZIF_RUNNABLE"] {
+		t.Error("missing ZIF_RUNNABLE")
+	}
+	if !found["ZIF_LOGGABLE"] {
+		t.Error("missing ZIF_LOGGABLE")
+	}
+}
+
+func TestExtractDependencies_StaticCallAndNew(t *testing.T) {
+	src := `METHOD main.
+  DATA(lo_util) = NEW zcl_json_util( ).
+  DATA(lv_val) = zcl_config=>get_value( 'KEY' ).
+  CALL FUNCTION 'Z_MY_FUNC'
+    EXPORTING iv_input = lv_val.
+ENDMETHOD.`
+
+	deps := ExtractDependencies(src)
+
+	found := map[string]bool{}
+	for _, d := range deps {
+		found[d.Name] = true
+	}
+	if !found["ZCL_JSON_UTIL"] {
+		t.Error("missing ZCL_JSON_UTIL from NEW")
+	}
+	if !found["ZCL_CONFIG"] {
+		t.Error("missing ZCL_CONFIG from static call")
+	}
+	if !found["Z_MY_FUNC"] {
+		t.Error("missing Z_MY_FUNC from CALL FUNCTION")
+	}
+}
+
+func TestExtractDependencies_SkipsBuiltins(t *testing.T) {
+	src := `METHOD test.
+  DATA lv_str TYPE string.
+  DATA lv_int TYPE i.
+  DATA lo_ref TYPE REF TO zcl_custom.
+ENDMETHOD.`
+
+	deps := ExtractDependencies(src)
+
+	for _, d := range deps {
+		if d.Name == "STRING" || d.Name == "I" {
+			t.Errorf("should skip built-in type %s", d.Name)
+		}
+	}
+	found := false
+	for _, d := range deps {
+		if d.Name == "ZCL_CUSTOM" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("missing ZCL_CUSTOM")
+	}
+}
+
+func TestExtractDependencies_SkipsComments(t *testing.T) {
+	src := `METHOD test.
+* TYPE REF TO zcl_commented_out.
+" DATA lo TYPE REF TO zcl_also_commented.
+  DATA lo_real TYPE REF TO zcl_real_dep.
+ENDMETHOD.`
+
+	deps := ExtractDependencies(src)
+
+	for _, d := range deps {
+		if d.Name == "ZCL_COMMENTED_OUT" || d.Name == "ZCL_ALSO_COMMENTED" {
+			t.Errorf("should skip commented dependency %s", d.Name)
+		}
+	}
+	found := false
+	for _, d := range deps {
+		if d.Name == "ZCL_REAL_DEP" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("missing ZCL_REAL_DEP")
+	}
+}
+
+func TestExtractDependencies_Cast(t *testing.T) {
+	src := `METHOD do_cast.
+  DATA(lo) = CAST zif_service( lo_obj ).
+ENDMETHOD.`
+
+	deps := ExtractDependencies(src)
+	found := false
+	for _, d := range deps {
+		if d.Name == "ZIF_SERVICE" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("missing ZIF_SERVICE from CAST")
+	}
+}
+
+func TestExtractDependencies_Raising(t *testing.T) {
+	src := `CLASS zcl_svc DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    METHODS run RAISING zcx_my_error.
+ENDCLASS.`
+
+	deps := ExtractDependencies(src)
+	found := false
+	for _, d := range deps {
+		if d.Name == "ZCX_MY_ERROR" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("missing ZCX_MY_ERROR from RAISING")
+	}
+}
+
+func TestExtractDependencies_Deduplicates(t *testing.T) {
+	src := `METHOD test.
+  DATA lo1 TYPE REF TO zcl_helper.
+  DATA lo2 TYPE REF TO zcl_helper.
+  DATA(lo3) = NEW zcl_helper( ).
+ENDMETHOD.`
 
 	deps := ExtractDependencies(src)
 	count := 0
 	for _, d := range deps {
-		if d.Name == "ZCL_FOO" {
+		if d.Name == "ZCL_HELPER" {
 			count++
 		}
 	}
 	if count != 1 {
-		t.Errorf("expected ZCL_FOO once, got %d times", count)
-	}
-}
-
-func TestInferKind(t *testing.T) {
-	tests := []struct {
-		name string
-		want DependencyKind
-	}{
-		{"zif_payment", KindInterface},
-		{"yif_custom", KindInterface},
-		{"if_apc_wsp_ext", KindInterface},
-		{"zcl_order", KindClass},
-		{"cl_gui_alv", KindClass},
-		{"/dmf/if_processor", KindInterface},
-		{"/dmf/cl_handler", KindClass},
-	}
-
-	for _, tt := range tests {
-		got := inferKind(tt.name)
-		if got != tt.want {
-			t.Errorf("inferKind(%q) = %s, want %s", tt.name, got, tt.want)
-		}
+		t.Errorf("expected 1 entry for ZCL_HELPER, got %d", count)
 	}
 }

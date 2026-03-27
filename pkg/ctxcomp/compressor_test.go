@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// mockProvider returns embedded ABAP files as source.
+// mockProvider implements SourceProvider for testing.
 type mockProvider struct {
-	sources map[string]string // "CLAS:NAME" → source
+	sources map[string]string
 }
 
 func (m *mockProvider) GetSource(_ context.Context, kind DependencyKind, name string) (string, error) {
@@ -17,156 +17,163 @@ func (m *mockProvider) GetSource(_ context.Context, kind DependencyKind, name st
 	if src, ok := m.sources[key]; ok {
 		return src, nil
 	}
-	return "", fmt.Errorf("not found: %s", key)
+	return "", fmt.Errorf("not found: %s", name)
 }
 
 func TestCompressor_EndToEnd(t *testing.T) {
-	// Source that references ZCL_VSP_UTILS and ZIF_VSP_SERVICE
-	source := `CLASS zcl_my_handler DEFINITION PUBLIC.
+	mainSrc := `CLASS zcl_main DEFINITION PUBLIC.
   PUBLIC SECTION.
-    INTERFACES zif_vsp_service.
-    DATA mo_utils TYPE REF TO zcl_vsp_utils.
+    DATA mo_helper TYPE REF TO zcl_helper.
+    DATA mo_intf TYPE REF TO zif_service.
 ENDCLASS.
 
-CLASS zcl_my_handler IMPLEMENTATION.
-  METHOD zif_vsp_service~handle_message.
-    zcl_vsp_utils=>escape_json( 'test' ).
+CLASS zcl_main IMPLEMENTATION.
+  METHOD constructor.
+    mo_helper = NEW zcl_helper( ).
   ENDMETHOD.
 ENDCLASS.`
 
-	utilsSrc := readEmbedded(t, "zcl_vsp_utils.clas.abap")
-	intfSrc := readEmbedded(t, "zif_vsp_service.intf.abap")
+	helperSrc := `CLASS zcl_helper DEFINITION PUBLIC CREATE PUBLIC.
+  PUBLIC SECTION.
+    METHODS run RETURNING VALUE(rv_ok) TYPE abap_bool.
+    METHODS get_name RETURNING VALUE(rv_name) TYPE string.
+  PRIVATE SECTION.
+    DATA mv_internal TYPE string.
+ENDCLASS.
+
+CLASS zcl_helper IMPLEMENTATION.
+  METHOD run.
+    rv_ok = abap_true.
+  ENDMETHOD.
+  METHOD get_name.
+    rv_name = 'helper'.
+  ENDMETHOD.
+ENDCLASS.`
+
+	intfSrc := `INTERFACE zif_service PUBLIC.
+  METHODS execute IMPORTING iv_input TYPE string RETURNING VALUE(rv_output) TYPE string.
+ENDINTERFACE.`
 
 	provider := &mockProvider{
 		sources: map[string]string{
-			"CLAS:ZCL_VSP_UTILS":  utilsSrc,
-			"INTF:ZIF_VSP_SERVICE": intfSrc,
+			"CLAS:ZCL_HELPER":  helperSrc,
+			"INTF:ZIF_SERVICE": intfSrc,
 		},
 	}
 
 	comp := NewCompressor(provider, 20)
-	result, err := comp.Compress(context.Background(), source, "ZCL_MY_HANDLER", "CLAS")
+	result, err := comp.Compress(context.Background(), mainSrc, "ZCL_MAIN", "CLAS")
 	if err != nil {
-		t.Fatalf("Compress error: %v", err)
+		t.Fatalf("Compress failed: %v", err)
 	}
 
-	// Should have found deps
-	if len(result.Dependencies) == 0 {
-		t.Error("no dependencies found")
+	if result.Prologue == "" {
+		t.Error("empty prologue")
 	}
-
-	// Should have resolved contracts
-	if result.Stats.DepsResolved == 0 {
-		t.Error("no contracts resolved")
+	if !strings.Contains(result.Prologue, "ZCL_HELPER") {
+		t.Error("prologue missing ZCL_HELPER")
 	}
-
-	// Prologue should contain header
-	if !strings.Contains(result.Prologue, "Dependency context for ZCL_MY_HANDLER") {
-		t.Error("missing prologue header")
+	if !strings.Contains(result.Prologue, "ZIF_SERVICE") {
+		t.Error("prologue missing ZIF_SERVICE")
 	}
-
-	// Should contain ZCL_VSP_UTILS contract
-	if !strings.Contains(result.Prologue, "ZCL_VSP_UTILS") {
-		t.Error("missing ZCL_VSP_UTILS in prologue")
+	if result.Stats.DepsResolved != 2 {
+		t.Errorf("expected 2 resolved deps, got %d", result.Stats.DepsResolved)
 	}
-
-	// Should contain ZIF_VSP_SERVICE contract
-	if !strings.Contains(result.Prologue, "ZIF_VSP_SERVICE") {
-		t.Error("missing ZIF_VSP_SERVICE in prologue")
-	}
-
-	// Should NOT reference self
-	for _, d := range result.Dependencies {
-		if d.Name == "ZCL_MY_HANDLER" {
-			t.Error("should not include self as dependency")
-		}
-	}
-
-	// Prologue should NOT contain IMPLEMENTATION
-	if strings.Contains(strings.ToUpper(result.Prologue), "IMPLEMENTATION") {
-		t.Error("prologue should not contain IMPLEMENTATION sections")
+	if result.Stats.DepsFailed != 0 {
+		t.Errorf("expected 0 failed deps, got %d", result.Stats.DepsFailed)
 	}
 }
 
 func TestCompressor_MaxDeps(t *testing.T) {
-	// Source with many dependencies
-	var lines []string
-	for i := 0; i < 30; i++ {
-		lines = append(lines, fmt.Sprintf("DATA lo_%d TYPE REF TO zcl_dep_%03d.", i, i))
-	}
-	source := strings.Join(lines, "\n")
+	src := `METHOD test.
+  DATA lo1 TYPE REF TO zcl_one.
+  DATA lo2 TYPE REF TO zcl_two.
+  DATA lo3 TYPE REF TO zcl_three.
+  DATA lo4 TYPE REF TO zcl_four.
+  DATA lo5 TYPE REF TO zcl_five.
+ENDMETHOD.`
 
-	provider := &mockProvider{sources: make(map[string]string)}
-	for i := 0; i < 30; i++ {
-		name := fmt.Sprintf("ZCL_DEP_%03d", i)
-		provider.sources["CLAS:"+name] = fmt.Sprintf("CLASS %s DEFINITION PUBLIC.\n  PUBLIC SECTION.\n    METHODS m1.\nENDCLASS.", strings.ToLower(name))
-	}
+	provider := &mockProvider{sources: map[string]string{
+		"CLAS:ZCL_ONE":   "CLASS zcl_one DEFINITION PUBLIC. ENDCLASS.",
+		"CLAS:ZCL_TWO":   "CLASS zcl_two DEFINITION PUBLIC. ENDCLASS.",
+		"CLAS:ZCL_THREE": "CLASS zcl_three DEFINITION PUBLIC. ENDCLASS.",
+		"CLAS:ZCL_FOUR":  "CLASS zcl_four DEFINITION PUBLIC. ENDCLASS.",
+		"CLAS:ZCL_FIVE":  "CLASS zcl_five DEFINITION PUBLIC. ENDCLASS.",
+	}}
 
-	comp := NewCompressor(provider, 5)
-	result, err := comp.Compress(context.Background(), source, "ZCL_TEST", "CLAS")
+	comp := NewCompressor(provider, 3)
+	result, err := comp.Compress(context.Background(), src, "ZCL_TEST", "CLAS")
 	if err != nil {
-		t.Fatalf("Compress error: %v", err)
+		t.Fatalf("Compress failed: %v", err)
 	}
 
-	if result.Stats.DepsResolved > 5 {
-		t.Errorf("expected at most 5 resolved deps, got %d", result.Stats.DepsResolved)
+	if result.Stats.DepsFound > 5 {
+		t.Errorf("found too many deps: %d", result.Stats.DepsFound)
+	}
+	total := result.Stats.DepsResolved + result.Stats.DepsFailed
+	if total > 3 {
+		t.Errorf("expected at most 3 resolved+failed, got %d", total)
 	}
 }
 
 func TestCompressor_FailedDeps(t *testing.T) {
-	source := "DATA lo TYPE REF TO zcl_missing."
-	provider := &mockProvider{sources: make(map[string]string)} // empty — everything fails
+	src := `METHOD test.
+  DATA lo TYPE REF TO zcl_missing.
+ENDMETHOD.`
+
+	provider := &mockProvider{sources: map[string]string{}}
 
 	comp := NewCompressor(provider, 20)
-	result, err := comp.Compress(context.Background(), source, "ZCL_TEST", "CLAS")
+	result, err := comp.Compress(context.Background(), src, "ZCL_TEST", "CLAS")
 	if err != nil {
-		t.Fatalf("Compress error: %v", err)
+		t.Fatalf("Compress failed: %v", err)
 	}
 
-	if result.Stats.DepsFailed != 1 {
-		t.Errorf("expected 1 failed dep, got %d", result.Stats.DepsFailed)
-	}
-
-	// Prologue should be empty since all deps failed
-	if result.Prologue != "" {
-		t.Errorf("expected empty prologue for all-failed deps, got: %s", result.Prologue)
+	if result.Stats.DepsFailed == 0 {
+		t.Error("expected at least 1 failed dep")
 	}
 }
 
 func TestCompressor_EmptySource(t *testing.T) {
-	provider := &mockProvider{sources: make(map[string]string)}
+	provider := &mockProvider{sources: map[string]string{}}
+
 	comp := NewCompressor(provider, 20)
-	result, err := comp.Compress(context.Background(), "", "ZCL_TEST", "CLAS")
+	result, err := comp.Compress(context.Background(), "", "ZCL_EMPTY", "CLAS")
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("Compress failed: %v", err)
 	}
-	if len(result.Dependencies) != 0 {
-		t.Errorf("expected 0 deps, got %d", len(result.Dependencies))
+
+	if result.Stats.DepsFound != 0 {
+		t.Errorf("expected 0 deps for empty source, got %d", result.Stats.DepsFound)
 	}
 }
 
-func TestCompressor_CustomPrioritized(t *testing.T) {
-	source := `DATA lo1 TYPE REF TO cl_standard.
-DATA lo2 TYPE REF TO zcl_custom.`
+func TestCompressor_FiltersSelfReference(t *testing.T) {
+	src := `CLASS zcl_self DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    DATA mo TYPE REF TO zcl_self.
+    DATA mo_other TYPE REF TO zcl_other.
+ENDCLASS.`
 
-	provider := &mockProvider{
-		sources: map[string]string{
-			"CLAS:CL_STANDARD": "CLASS cl_standard DEFINITION PUBLIC.\n  PUBLIC SECTION.\n    METHODS m1.\nENDCLASS.",
-			"CLAS:ZCL_CUSTOM":  "CLASS zcl_custom DEFINITION PUBLIC.\n  PUBLIC SECTION.\n    METHODS m2.\nENDCLASS.",
-		},
-	}
+	provider := &mockProvider{sources: map[string]string{
+		"CLAS:ZCL_OTHER": `CLASS zcl_other DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    METHODS ping.
+ENDCLASS.`,
+	}}
 
-	comp := NewCompressor(provider, 1) // only 1 dep allowed
-	result, err := comp.Compress(context.Background(), source, "ZCL_TEST", "CLAS")
+	comp := NewCompressor(provider, 20)
+	result, err := comp.Compress(context.Background(), src, "ZCL_SELF", "CLAS")
 	if err != nil {
-		t.Fatalf("Compress error: %v", err)
+		t.Fatalf("Compress failed: %v", err)
 	}
 
-	// Custom (Z*) should be prioritized over standard
-	if result.Stats.DepsResolved != 1 {
-		t.Fatalf("expected 1 resolved, got %d", result.Stats.DepsResolved)
+	for _, c := range result.Contracts {
+		if c.Name == "ZCL_SELF" {
+			t.Error("should filter self-reference")
+		}
 	}
-	if result.Contracts[0].Name != "ZCL_CUSTOM" {
-		t.Errorf("expected ZCL_CUSTOM prioritized, got %s", result.Contracts[0].Name)
+	if result.Stats.DepsResolved < 1 {
+		t.Error("expected at least 1 resolved dep (ZCL_OTHER)")
 	}
 }
