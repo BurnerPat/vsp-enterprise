@@ -10,11 +10,9 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v0.17.0
-	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
-	github.com/yuin/gopher-lua v1.1.1
-	gopkg.in/yaml.v3 v3.0.1
+	golang.org/x/sys v0.34.0
 )
 
 require (
@@ -36,6 +34,5 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 )

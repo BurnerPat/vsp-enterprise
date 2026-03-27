@@ -244,13 +244,6 @@ Git/abapGit:
   SAP(action="system", params={"type": "git_types"})
   SAP(action="system", params={"type": "git_export", "packages": "$TMP"})
 
-Install tools:
-  SAP(action="system", params={"type": "install_zadt_vsp"})
-  SAP(action="system", params={"type": "install_abapgit"})
-  SAP(action="system", params={"type": "install_dummy_test"})
-  SAP(action="system", params={"type": "list_dependencies"})
-  SAP(action="system", params={"type": "deploy_zip", "source": "abapgit-standalone", "package": "$ZGIT"})
-
 File operations:
   SAP(action="system", params={"type": "deploy_from_file", "file_path": "/path/to/file.prog.abap", "package_name": "$TMP"})
   SAP(action="system", params={"type": "save_to_file", "object_type": "CLAS", "object_name": "ZCL_TEST", "output_dir": "/tmp"})
@@ -270,7 +263,7 @@ Actions:
   test     - Run unit tests, ATC checks
   analyze  - Syntax check, call graph, code intelligence, profiler, dumps
   debug    - Breakpoints, stepping, variables, RFC calls, report execution
-  system   - System info, transports, git, install tools, file operations
+  system   - System info, transports, git, file operations
   help     - This help. Use SAP(action="help", target="<action>") for details.
 
 Quick examples:
