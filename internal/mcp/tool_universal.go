@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_universal.go implements the single-tool "universal" mode.
+// tool_universal.go implements the single-tool "universal" mode.
 // Instead of 122 individual tools, it registers a single SAP(action, target, params) tool.
 package mcp
 
@@ -34,7 +34,9 @@ Params: action-specific parameters as JSON object`),
 	), s.handleUniversalTool)
 }
 
-// handleUniversalTool dispatches universal SAP(action, target, params) calls to domain-specific route functions.
+// handleUniversalTool dispatches universal SAP(action, target, params) calls.
+// It tries metadata-driven dispatch first (toolDef.routes), then falls back to
+// legacy route*Action functions for tools that haven't been migrated yet.
 func (s *Server) handleUniversalTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	action, _ := request.Params.Arguments["action"].(string)
 	if action == "" {
@@ -57,39 +59,56 @@ func (s *Server) handleUniversalTool(ctx context.Context, request mcp.CallToolRe
 
 	// Parse target into type and name
 	objectType, objectName := parseTarget(target)
+	pType := getStringParam(params, "type")
 
-	// Chain through all route functions; return on first match
+	// --- Phase 1: Metadata-driven dispatch ---
+	// Iterate all toolDefs and match against their declared routes.
+	for _, td := range s.allToolDefs() {
+		for _, r := range td.routes {
+			if r.action != action {
+				continue
+			}
+			// Match on targetType (from SAP target string)
+			if r.targetType != "" && r.targetType != objectType {
+				continue
+			}
+			// Match on paramsType (from params.type)
+			if r.paramsType != "" && r.paramsType != pType {
+				continue
+			}
+			// Route matched — build args and call handler
+			args := params
+			if r.mapArgs != nil {
+				args = r.mapArgs(objectType, objectName, params)
+			}
+			result, err := td.handler(ctx, newRequest(args))
+			if err != nil {
+				return wrapErr(action, err), nil
+			}
+			return result, nil
+		}
+	}
+
+	// --- Phase 2: Legacy route functions (for unmigrated tools) ---
 	type routeFunc func(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error)
 
-	routes := []routeFunc{
+	legacyRoutes := []routeFunc{
 		s.routeSourceAction,
 		s.routeReadAction,
 		s.routeSearchAction,
 		s.routeGrepAction,
-		s.routeCodeIntelAction,
 		s.routeDevToolsAction,
 		s.routeATCAction,
 		s.routeCRUDAction,
 		s.routeClassIncludeAction,
 		s.routeWorkflowAction,
 		s.routeFileIOAction,
-		s.routeDebuggerAction,
 		s.routeDebuggerLegacyAction,
-		s.routeAMDPAction,
 		s.routeUI5Action,
-		s.routeTransportAction,
-		s.routeGitAction,
-		s.routeReportAction,
-		s.routeSystemAction,
-		s.routeDumpsAction,
-		s.routeTracesAction,
-		s.routeSQLTraceAction,
-		s.routeAnalysisAction,
-		s.routeContextAction,
 		s.routeServiceBindingAction,
 	}
 
-	for _, route := range routes {
+	for _, route := range legacyRoutes {
 		result, handled, err := route(ctx, action, objectType, objectName, params)
 		if handled {
 			if err != nil {

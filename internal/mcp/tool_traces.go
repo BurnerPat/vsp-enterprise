@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_traces.go contains handlers for ABAP profiler traces (ATRA).
+// tool_traces.go contains handlers for ABAP profiler traces (ATRA).
 package mcp
 
 import (
@@ -11,19 +11,25 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
-// routeTracesAction routes "analyze" with trace-related types.
-func (s *Server) routeTracesAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "analyze" {
-		return nil, false, nil
+// traceToolDefs returns tool definitions for ABAP profiler trace tools.
+func (s *Server) traceToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("ListTraces",
+			mcp.WithDescription("List ABAP runtime traces (profiler results) from the SAP system."),
+			mcp.WithString("user", mcp.Description("Filter by username")),
+			mcp.WithString("process_type", mcp.Description("Filter by process type")),
+			mcp.WithString("object_type", mcp.Description("Filter by object type")),
+			mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default: 100)")),
+		), handler: s.handleListTraces, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "list_traces"}}},
+
+		{tool: mcp.NewTool("GetTrace",
+			mcp.WithDescription("Get trace analysis (hitlist, statements, or database accesses) for a specific trace."),
+			mcp.WithString("trace_id", mcp.Required(), mcp.Description("Trace ID from ListTraces result")),
+			mcp.WithString("tool_type", mcp.Description("Analysis type: 'hitlist' (default), 'statements', 'dbAccesses'")),
+		), handler: s.handleGetTrace, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "get_trace"}}},
 	}
-	analysisType := getStringParam(params, "type")
-	switch analysisType {
-	case "list_traces":
-		return s.callHandler(ctx, s.handleListTraces, params)
-	case "get_trace":
-		return s.callHandler(ctx, s.handleGetTrace, params)
-	}
-	return nil, false, nil
 }
 
 // --- ABAP Profiler / Traces Handlers ---

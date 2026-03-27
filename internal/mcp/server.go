@@ -1,4 +1,4 @@
-﻿// Package mcp provides the MCP server implementation for ABAP ADT tools.
+// Package mcp provides the MCP server implementation for ABAP ADT tools.
 package mcp
 
 import (
@@ -523,23 +523,30 @@ func (s *Server) requireActiveAMDPSession() *mcp.CallToolResult {
 	return nil
 }
 
-// Tool handlers are in separate files:
-// - handlers_read.go: GetProgram, GetClass, GetTable, etc.
-// - handlers_system.go: GetSystemInfo, GetFeatures, etc.
-// - handlers_analysis.go: GetCallGraph, TraceExecution, etc.
-// - handlers_codeintel.go: FindDefinition, FindReferences, CodeCompletion, etc.
-// - handlers_devtools.go: SyntaxCheck, Activate, ATC, etc.
-// - handlers_crud.go: Lock, Create, Update, Delete, etc.
-// - handlers_debugger.go: SetBreakpoint, DebuggerListen, etc.
-// - handlers_amdp.go: AMDPDebugger* handlers
-// - handlers_ui5.go: UI5ListApps, UI5GetApp, etc.
-// - handlers_git.go: GitTypes, GitExport
-// - handlers_report.go: RunReport, GetVariants, etc.
-// - handlers_install.go: InstallZADTVSP, InstallAbapGit, etc.
-// - handlers_transport.go: ListTransports, GetTransport, etc.
+// Tool definitions and handlers are colocated in tool_*.go files:
+// - tool_read.go: readToolDefs + GetProgram, GetClass, GetTable, etc.
+// - tool_system.go: systemToolDefs + GetSystemInfo, GetFeatures, etc.
+// - tool_analysis.go: analysisToolDefs + GetCallGraph, TraceExecution, etc.
+// - tool_codeintel.go: codeIntelToolDefs + FindDefinition, FindReferences, etc.
+// - tool_devtools.go: devToolDefs + SyntaxCheck, Activate, ATC, etc.
+// - tool_crud.go: crudToolDefs + Lock, Create, Update, Delete, etc.
+// - tool_debugger.go: debuggerToolDefs + SetBreakpoint, DebuggerListen, etc.
+// - tool_amdp.go: amdpToolDefs + AMDPDebugger* handlers
+// - tool_ui5.go: ui5ToolDefs + UI5ListApps, UI5GetApp, etc.
+// - tool_git.go: gitToolDefs + GitTypes, GitExport
+// - tool_report.go: reportToolDefs + RunReport, GetVariants, etc.
+// - tool_transport.go: transportToolDefs + ListTransports, etc.
+// - tool_source.go: unifiedToolDefs + GetSource, WriteSource, grep/file defs
+// - tool_fileio.go: fileToolDefs + editToolDefs + DeployFromFile, EditSource, etc.
+// - tool_dumps.go: dumpToolDefs + ListDumps, GetDump
+// - tool_traces.go: traceToolDefs + ListTraces, GetTrace
+// - tool_sqltrace.go: sqlTraceToolDefs + GetSQLTraceState, ListSQLTraces
+// - tool_grep.go: grepToolDefs + GrepObject, GrepPackage
+// - tool_classinclude.go: classIncludeToolDefs + GetClassInclude, etc.
+// - tool_workflow.go: workflowToolDefs + WriteProgram, CreateClassWithTests, etc.
+// - tool_universal.go: SAP() universal tool dispatcher
+// - tool_help.go: help text generation
 //
-// Tool registration is in:
-// - tools_register.go: registerTools() and all register*Tools() methods
-// - tools_groups.go: toolGroups() - group definitions for --disabled-groups
-// - tools_focused.go: focusedToolSet() - focused mode whitelist
+// Tool registration infrastructure:
+// - tools_register.go: toolDef type, registerTools(), allToolDefs(), buildShouldRegister()
 // - tools_aliases.go: registerToolAliases() - short alias names

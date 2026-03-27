@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_git.go contains handlers for Git/abapGit operations via ZADT_VSP.
+// tool_git.go contains handlers for Git/abapGit operations via ZADT_VSP.
 package mcp
 
 import (
@@ -16,19 +16,22 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
-// routeGitAction routes "system" with git-related types.
-func (s *Server) routeGitAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "system" {
-		return nil, false, nil
+// gitToolDefs returns tool definitions for Git/abapGit integration tools.
+func (s *Server) gitToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("GitTypes",
+			mcp.WithDescription("Get list of supported abapGit object types. Returns 158 object types that can be exported/imported via abapGit. Requires abapGit to be installed on SAP system."),
+		), handler: s.handleGitTypes, readOnly: true, focused: true, groups: []string{"G"},
+			routes: []universalRoute{{action: "system", paramsType: "git_types"}}},
+		{tool: mcp.NewTool("GitExport",
+			mcp.WithDescription("Export ABAP objects as abapGit-compatible ZIP. Supports 158 object types. Saves ZIP file to output_dir (default: current directory). Use packages OR objects parameter."),
+			mcp.WithString("packages", mcp.Description("Comma-separated package names to export (e.g., '$ZRAY,$TMP'). Supports wildcards.")),
+			mcp.WithString("objects", mcp.Description("JSON array of objects: [{\"type\":\"CLAS\",\"name\":\"ZCL_TEST\"}]")),
+			mcp.WithBoolean("include_subpackages", mcp.Description("Include subpackages when exporting by package (default: true)")),
+			mcp.WithString("output_dir", mcp.Description("Output directory for ZIP file (default: current directory)")),
+		), handler: s.handleGitExport, readOnly: true, focused: true, groups: []string{"G"},
+			routes: []universalRoute{{action: "system", paramsType: "git_export"}}},
 	}
-	gitType := getStringParam(params, "type")
-	switch gitType {
-	case "git_types":
-		return s.callHandler(ctx, s.handleGitTypes, params)
-	case "git_export":
-		return s.callHandler(ctx, s.handleGitExport, params)
-	}
-	return nil, false, nil
 }
 
 // --- Git/abapGit Handlers ---

@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_servicebinding.go contains handlers for RAP service binding publish/unpublish.
+// tool_servicebinding.go contains handlers for RAP service binding publish/unpublish.
 package mcp
 
 import (

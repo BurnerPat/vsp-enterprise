@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_grep.go contains handlers for grep/search operations on ABAP objects.
+// tool_grep.go contains handlers for grep/search operations on ABAP objects.
 package mcp
 
 import (
@@ -10,6 +10,31 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// grepToolDefs returns tool definitions for grep/search tools.
+func (s *Server) grepToolDefs() []toolDef {
+	defs := []toolDef{
+		{tool: mcp.NewTool("GrepObject",
+			mcp.WithDescription("Search for regex pattern in a single ABAP object's source code. Returns matches with line numbers and optional context. Use for finding TODO comments, string literals, patterns, or code snippets before editing."),
+			mcp.WithString("object_url", mcp.Required(), mcp.Description("ADT URL of object (e.g., /sap/bc/adt/programs/programs/ZTEST)")),
+			mcp.WithString("pattern", mcp.Required(), mcp.Description("Regular expression pattern (Go regexp syntax). Examples: 'TODO', 'lv_\\\\w+', 'SELECT.*FROM'")),
+			mcp.WithBoolean("case_insensitive", mcp.Description("If true, perform case-insensitive matching. Default: false")),
+			mcp.WithNumber("context_lines", mcp.Description("Number of lines to show before/after each match (like grep -C). Default: 0")),
+		), handler: s.handleGrepObject, readOnly: true},
+
+		{tool: mcp.NewTool("GrepPackage",
+			mcp.WithDescription("Search for regex pattern across all source objects in an ABAP package. Returns matches grouped by object. Use for package-wide analysis, finding patterns across multiple programs/classes."),
+			mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name (e.g., $TMP, ZPACKAGE)")),
+			mcp.WithString("pattern", mcp.Required(), mcp.Description("Regular expression pattern (Go regexp syntax). Examples: 'TODO', 'lv_\\\\w+', 'SELECT.*FROM'")),
+			mcp.WithBoolean("case_insensitive", mcp.Description("If true, perform case-insensitive matching. Default: false")),
+			mcp.WithString("object_types", mcp.Description("Comma-separated object types to search (e.g., 'PROG/P,CLAS/OC'). Empty = search all source objects. Valid: PROG/P, CLAS/OC, INTF/OI, FUGR/F, FUGR/FF, PROG/I")),
+			mcp.WithNumber("max_results", mcp.Description("Maximum number of matching objects to return. 0 = unlimited. Default: 100")),
+		), handler: s.handleGrepPackage, readOnly: true},
+	}
+	// Append GrepObjects/GrepPackages from tool_source.go
+	defs = append(defs, s.grepSourceToolDefs()...)
+	return defs
+}
 
 // routeGrepAction routes "grep" action.
 func (s *Server) routeGrepAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {

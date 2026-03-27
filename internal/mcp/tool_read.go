@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_read.go contains handlers for read operations (GetProgram, GetClass, GetTable, etc.)
+// tool_read.go contains handlers for read operations (GetProgram, GetClass, GetTable, etc.)
 package mcp
 
 import (
@@ -10,6 +10,93 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
+
+// readToolDefs returns tool definitions for object read tools.
+func (s *Server) readToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("GetProgram",
+			mcp.WithDescription("Retrieve ABAP program source code"),
+			mcp.WithString("program_name", mcp.Required(), mcp.Description("Name of the ABAP program")),
+		), handler: s.handleGetProgram, readOnly: true},
+
+		{tool: mcp.NewTool("GetClass",
+			mcp.WithDescription("Retrieve ABAP class source code"),
+			mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
+		), handler: s.handleGetClass, readOnly: true},
+
+		{tool: mcp.NewTool("GetInterface",
+			mcp.WithDescription("Retrieve ABAP interface source code"),
+			mcp.WithString("interface_name", mcp.Required(), mcp.Description("Name of the ABAP interface")),
+		), handler: s.handleGetInterface, readOnly: true},
+
+		{tool: mcp.NewTool("GetFunction",
+			mcp.WithDescription("Retrieve ABAP Function Module source code"),
+			mcp.WithString("function_name", mcp.Required(), mcp.Description("Name of the function module")),
+			mcp.WithString("function_group", mcp.Required(), mcp.Description("Name of the function group")),
+		), handler: s.handleGetFunction, readOnly: true},
+
+		{tool: mcp.NewTool("GetFunctionGroup",
+			mcp.WithDescription("Retrieve ABAP Function Group source code"),
+			mcp.WithString("function_group", mcp.Required(), mcp.Description("Name of the function group")),
+		), handler: s.handleGetFunctionGroup, readOnly: true, focused: true},
+
+		{tool: mcp.NewTool("GetInclude",
+			mcp.WithDescription("Retrieve ABAP Include Source Code"),
+			mcp.WithString("include_name", mcp.Required(), mcp.Description("Name of the ABAP Include")),
+		), handler: s.handleGetInclude, readOnly: true},
+
+		{tool: mcp.NewTool("GetTable",
+			mcp.WithDescription("Retrieve ABAP table structure"),
+			mcp.WithString("table_name", mcp.Required(), mcp.Description("Name of the ABAP table")),
+		), handler: s.handleGetTable, readOnly: true, focused: true},
+
+		{tool: mcp.NewTool("GetTableContents",
+			mcp.WithDescription("Retrieve contents of an ABAP table. For simple queries use table_name + max_rows. For filtered queries use sql_query parameter with ABAP SQL syntax (use ASCENDING/DESCENDING, not ASC/DESC)."),
+			mcp.WithString("table_name", mcp.Required(), mcp.Description("Name of the ABAP table")),
+			mcp.WithNumber("max_rows", mcp.Description("Maximum number of rows to retrieve (default 100). Use this instead of SQL LIMIT clause")),
+			mcp.WithString("sql_query", mcp.Description("Optional ABAP SQL SELECT statement. Uses ABAP syntax: ASCENDING/DESCENDING work, ASC/DESC fail. Example: SELECT * FROM T000 WHERE MANDT = '001' ORDER BY MANDT DESCENDING")),
+		), handler: s.handleGetTableContents, readOnly: true, focused: true},
+
+		{tool: mcp.NewTool("RunQuery",
+			mcp.WithDescription("Execute a freestyle SQL query against the SAP database. IMPORTANT: Uses ABAP SQL syntax, NOT standard SQL. Use ASCENDING/DESCENDING instead of ASC/DESC. Use max_rows parameter instead of LIMIT. GROUP BY and WHERE work normally."),
+			mcp.WithString("sql_query", mcp.Required(), mcp.Description("ABAP SQL query. Example: SELECT carrid, COUNT(*) as cnt FROM sflight GROUP BY carrid ORDER BY cnt DESCENDING. Note: ASC/DESC keywords fail - use ASCENDING/DESCENDING")),
+			mcp.WithNumber("max_rows", mcp.Description("Maximum number of rows to retrieve (default 100). Use this instead of SQL LIMIT clause")),
+		), handler: s.handleRunQuery, readOnly: true, focused: true},
+
+		{tool: mcp.NewTool("GetCDSDependencies",
+			mcp.WithDescription("Retrieve CDS view FORWARD dependencies (tables/views this CDS reads FROM). Returns tree of base objects. Does NOT return reverse dependencies (where-used). Use with GetSource(DDLS) to read CDS source code."),
+			mcp.WithString("ddls_name", mcp.Required(), mcp.Description("CDS DDL source name (e.g., 'ZRAY_00_I_DOC_NODE_00'). Use SearchObject to find CDS views first.")),
+			mcp.WithString("dependency_level", mcp.Description("Level of dependency resolution: 'unit' (direct only) or 'hierarchy' (recursive). Default: 'hierarchy'")),
+			mcp.WithBoolean("with_associations", mcp.Description("Include modeled associations in dependency tree. Default: false")),
+			mcp.WithString("context_package", mcp.Description("Filter dependencies to specific package context")),
+		), handler: s.handleGetCDSDependencies, readOnly: true, focused: true},
+
+		{tool: mcp.NewTool("GetStructure",
+			mcp.WithDescription("Retrieve ABAP Structure"),
+			mcp.WithString("structure_name", mcp.Required(), mcp.Description("Name of the ABAP Structure")),
+		), handler: s.handleGetStructure, readOnly: true},
+
+		{tool: mcp.NewTool("GetPackage",
+			mcp.WithDescription("Retrieve ABAP package details"),
+			mcp.WithString("package_name", mcp.Required(), mcp.Description("Name of the ABAP package")),
+		), handler: s.handleGetPackage, readOnly: true, focused: true},
+
+		{tool: mcp.NewTool("GetMessages",
+			mcp.WithDescription("Get all messages from an ABAP message class (SE91). Returns message number, text for all messages in the class. Use SearchObject to find message classes first."),
+			mcp.WithString("message_class", mcp.Required(), mcp.Description("Name of the message class (e.g., 'ZRAY_00', 'SY')")),
+		), handler: s.handleGetMessages, readOnly: true, focused: true},
+
+		{tool: mcp.NewTool("GetTransaction",
+			mcp.WithDescription("Retrieve ABAP transaction details"),
+			mcp.WithString("transaction_name", mcp.Required(), mcp.Description("Name of the ABAP transaction")),
+		), handler: s.handleGetTransaction, readOnly: true},
+
+		{tool: mcp.NewTool("GetTypeInfo",
+			mcp.WithDescription("Retrieve ABAP type information"),
+			mcp.WithString("type_name", mcp.Required(), mcp.Description("Name of the ABAP type")),
+		), handler: s.handleGetTypeInfo, readOnly: true},
+	}
+}
 
 // routeReadAction routes "read" and "query" actions for object metadata and table contents.
 func (s *Server) routeReadAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
@@ -361,4 +448,3 @@ func (s *Server) handleGetTypeInfo(ctx context.Context, request mcp.CallToolRequ
 	result, _ := json.MarshalIndent(typeInfo, "", "  ")
 	return mcp.NewToolResultText(string(result)), nil
 }
-

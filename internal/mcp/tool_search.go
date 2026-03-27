@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_search.go contains handlers for object search operations.
+// tool_search.go contains handlers for object search operations.
 package mcp
 
 import (
@@ -9,6 +9,17 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// searchToolDefs returns tool definitions for object search tools.
+func (s *Server) searchToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("SearchObject",
+			mcp.WithDescription("Search for ABAP objects using quick search"),
+			mcp.WithString("query", mcp.Required(), mcp.Description("Search query string (use * wildcard for partial match)")),
+			mcp.WithNumber("maxResults", mcp.Description("Maximum number of results to return (default 100)")),
+		), handler: s.handleSearchObject, readOnly: true, focused: true},
+	}
+}
 
 // routeSearchAction routes "search" action.
 func (s *Server) routeSearchAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {

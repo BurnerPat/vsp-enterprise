@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_analysis.go contains handlers for code analysis infrastructure (call graphs, tracing).
+// tool_analysis.go contains handlers for code analysis infrastructure (call graphs, tracing).
 package mcp
 
 import (
@@ -11,29 +11,64 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
-// routeAnalysisAction routes "analyze" with call graph and structure types.
-func (s *Server) routeAnalysisAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "analyze" {
-		return nil, false, nil
+// analysisToolDefs returns tool definitions for code analysis tools.
+func (s *Server) analysisToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("GetCallGraph",
+			mcp.WithDescription("Get call hierarchy for methods/functions. Shows callers or callees of an ABAP object."),
+			mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT URI of the object (e.g., /sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=10,1)")),
+			mcp.WithString("direction", mcp.Description("Direction: 'callers' (who calls this) or 'callees' (what this calls). Default: callers")),
+			mcp.WithNumber("max_depth", mcp.Description("Maximum depth of call hierarchy (default: 3)")),
+			mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default: 100)")),
+		), handler: s.handleGetCallGraph, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "call_graph"}}},
+
+		{tool: mcp.NewTool("GetObjectStructure",
+			mcp.WithDescription("Get object explorer tree structure. Returns hierarchical view of object components."),
+			mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name (e.g., ZCL_TEST, ZPROGRAM)")),
+			mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default: 100)")),
+		), handler: s.handleGetObjectStructure, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "object_structure"}}},
+
+		{tool: mcp.NewTool("GetCallersOf",
+			mcp.WithDescription("Find all callers of an ABAP object (up traversal). Shows who calls this method/function. Simplified wrapper around GetCallGraph."),
+			mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT URI of the object (e.g., /sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=10,1)")),
+			mcp.WithNumber("max_depth", mcp.Description("Maximum depth of caller hierarchy (default: 5)")),
+		), handler: s.handleGetCallersOf, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "callers"}}},
+
+		{tool: mcp.NewTool("GetCalleesOf",
+			mcp.WithDescription("Find all callees of an ABAP object (down traversal). Shows what this method/function calls. Simplified wrapper around GetCallGraph."),
+			mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT URI of the object (e.g., /sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=10,1)")),
+			mcp.WithNumber("max_depth", mcp.Description("Maximum depth of callee hierarchy (default: 5)")),
+		), handler: s.handleGetCalleesOf, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "callees"}}},
+
+		{tool: mcp.NewTool("AnalyzeCallGraph",
+			mcp.WithDescription("Analyze call graph for an object. Returns statistics: total nodes, edges, max depth, nodes by type. Use for understanding code complexity and dependencies."),
+			mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT URI of the object to analyze")),
+			mcp.WithString("direction", mcp.Description("Direction: 'callers' or 'callees' (default: callees)")),
+			mcp.WithNumber("max_depth", mcp.Description("Maximum depth to analyze (default: 5)")),
+		), handler: s.handleAnalyzeCallGraph, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "analyze_call_graph"}}},
+
+		{tool: mcp.NewTool("CompareCallGraphs",
+			mcp.WithDescription("Compare static call graph with actual execution trace. Identifies: common paths, untested paths (static only), and dynamic calls (actual only). Use for test coverage analysis and RCA."),
+			mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT URI of the root object")),
+			mcp.WithString("trace_data", mcp.Required(), mcp.Description("JSON array of trace edges from execution (format: [{caller_name, callee_name}, ...])")),
+		), handler: s.handleCompareCallGraphs, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "compare_call_graphs"}}},
+
+		{tool: mcp.NewTool("TraceExecution",
+			mcp.WithDescription("COMPOSITE RCA TOOL: Performs traced execution analysis. 1) Builds static call graph from object, 2) Optionally runs unit tests, 3) Collects trace data, 4) Extracts actual call edges, 5) Compares static vs actual for root cause analysis."),
+			mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT URI of the starting object for static call graph")),
+			mcp.WithNumber("max_depth", mcp.Description("Maximum depth for call graph traversal (default: 5)")),
+			mcp.WithBoolean("run_tests", mcp.Description("Run unit tests before collecting trace (default: false)")),
+			mcp.WithString("test_object_uri", mcp.Description("Object URI for tests to run (defaults to object_uri)")),
+			mcp.WithString("trace_user", mcp.Description("Filter traces by user (defaults to current user)")),
+		), handler: s.handleTraceExecution, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "trace_execution"}}},
 	}
-	analysisType := getStringParam(params, "type")
-	switch analysisType {
-	case "call_graph":
-		return s.callHandler(ctx, s.handleGetCallGraph, params)
-	case "object_structure":
-		return s.callHandler(ctx, s.handleGetObjectStructure, params)
-	case "callers":
-		return s.callHandler(ctx, s.handleGetCallersOf, params)
-	case "callees":
-		return s.callHandler(ctx, s.handleGetCalleesOf, params)
-	case "analyze_call_graph":
-		return s.callHandler(ctx, s.handleAnalyzeCallGraph, params)
-	case "compare_call_graphs":
-		return s.callHandler(ctx, s.handleCompareCallGraphs, params)
-	case "trace_execution":
-		return s.callHandler(ctx, s.handleTraceExecution, params)
-	}
-	return nil, false, nil
 }
 
 // --- Code Analysis Infrastructure Handlers ---

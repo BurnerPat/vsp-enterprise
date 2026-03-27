@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_report.go contains handlers for report execution and text elements.
+// tool_report.go contains handlers for report execution and text elements.
 package mcp
 
 import (
@@ -13,26 +13,55 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
-// routeReportAction routes "debug" with report-related sub-actions.
-func (s *Server) routeReportAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "debug" {
-		return nil, false, nil
+// reportToolDefs returns tool definitions for report execution tools.
+func (s *Server) reportToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("RunReport",
+			mcp.WithDescription("Execute an ABAP selection-screen report with parameters or variant. Runs as background job and returns spool output. Requires ZADT_VSP WebSocket handler deployed."),
+			mcp.WithString("report", mcp.Required(), mcp.Description("Report program name (e.g., 'RFITEMGL', 'ZREPORT_TEST')")),
+			mcp.WithString("variant", mcp.Description("Variant name to use for selection screen (optional)")),
+			mcp.WithString("params", mcp.Description("JSON object with selection screen parameters (e.g., '{\"P_BUKRS\":\"1000\",\"S_KUNNR\":{\"SIGN\":\"I\",\"OPTION\":\"EQ\",\"LOW\":\"0000001000\"}}'). Keys are parameter names.")),
+		), handler: s.handleRunReport, focused: true, groups: []string{"R", "X"},
+			routes: []universalRoute{{action: "debug", targetType: "RUN_REPORT"}}},
+
+		{tool: mcp.NewTool("RunReportAsync",
+			mcp.WithDescription("Start report execution in background. Returns task_id immediately. Use GetAsyncResult to poll for completion. Useful for long-running reports that would timeout."),
+			mcp.WithString("report", mcp.Required(), mcp.Description("Report program name")),
+			mcp.WithString("variant", mcp.Description("Variant name (optional)")),
+			mcp.WithString("params", mcp.Description("JSON object with selection screen parameters")),
+		), handler: s.handleRunReportAsync, focused: true,
+			routes: []universalRoute{{action: "debug", targetType: "RUN_REPORT_ASYNC"}}},
+
+		{tool: mcp.NewTool("GetAsyncResult",
+			mcp.WithDescription("Get result of an async task by ID. Returns status (running/completed/error) and result when done."),
+			mcp.WithString("task_id", mcp.Required(), mcp.Description("Task ID from RunReportAsync")),
+			mcp.WithBoolean("wait", mcp.Description("If true, block until task completes (max 60s). Default: false (poll)")),
+		), handler: s.handleGetAsyncResult, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "debug", targetType: "GET_ASYNC_RESULT"}}},
+
+		{tool: mcp.NewTool("GetVariants",
+			mcp.WithDescription("Get list of available variants for a report program. Returns variant names and whether they are protected."),
+			mcp.WithString("report", mcp.Required(), mcp.Description("Report program name")),
+		), handler: s.handleGetVariants, readOnly: true, focused: true, groups: []string{"R"},
+			routes: []universalRoute{{action: "debug", targetType: "GET_VARIANTS"}}},
+
+		{tool: mcp.NewTool("GetTextElements",
+			mcp.WithDescription("Get program text elements (selection texts and text symbols). Selection texts describe parameters (P_BUKRS='Company Code'), text symbols are TEXT-001 etc."),
+			mcp.WithString("program", mcp.Required(), mcp.Description("Program name")),
+			mcp.WithString("language", mcp.Description("Language key (e.g., 'E' for English, 'D' for German). Default: system language.")),
+		), handler: s.handleGetTextElements, readOnly: true, focused: true, groups: []string{"R"},
+			routes: []universalRoute{{action: "debug", targetType: "GET_TEXT_ELEMENTS"}}},
+
+		{tool: mcp.NewTool("SetTextElements",
+			mcp.WithDescription("Set program text elements (selection texts, text symbols, and heading texts). Use for adding descriptions to selection screen parameters, text symbols, and list/column headings."),
+			mcp.WithString("program", mcp.Required(), mcp.Description("Program name")),
+			mcp.WithString("language", mcp.Description("Language key (e.g., 'E' for English, 'D' for German). Default: system language.")),
+			mcp.WithString("selection_texts", mcp.Description("JSON object of selection texts (e.g., '{\"P_BUKRS\":\"Company Code\",\"S_KUNNR\":\"Customer Range\"}')")),
+			mcp.WithString("text_symbols", mcp.Description("JSON object of text symbols (e.g., '{\"001\":\"Header Text\",\"002\":\"Footer\"}')")),
+			mcp.WithString("heading_texts", mcp.Description("JSON object of heading texts for list/column headings (e.g., '{\"001\":\"Report Title\",\"002\":\"Column Header\"}')")),
+		), handler: s.handleSetTextElements, focused: true, groups: []string{"R"},
+			routes: []universalRoute{{action: "debug", targetType: "SET_TEXT_ELEMENTS"}}},
 	}
-	switch objectType {
-	case "RUN_REPORT":
-		return s.callHandler(ctx, s.handleRunReport, params)
-	case "RUN_REPORT_ASYNC":
-		return s.callHandler(ctx, s.handleRunReportAsync, params)
-	case "GET_ASYNC_RESULT":
-		return s.callHandler(ctx, s.handleGetAsyncResult, params)
-	case "GET_VARIANTS":
-		return s.callHandler(ctx, s.handleGetVariants, params)
-	case "GET_TEXT_ELEMENTS":
-		return s.callHandler(ctx, s.handleGetTextElements, params)
-	case "SET_TEXT_ELEMENTS":
-		return s.callHandler(ctx, s.handleSetTextElements, params)
-	}
-	return nil, false, nil
 }
 
 // --- Report Execution Handlers ---

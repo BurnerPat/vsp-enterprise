@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_atc.go contains handlers for ATC (ABAP Test Cockpit) operations.
+// tool_atc.go contains handlers for ATC (ABAP Test Cockpit) operations.
 package mcp
 
 import (

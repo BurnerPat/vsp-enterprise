@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_debugger_legacy.go contains handlers for legacy REST-based debugging.
+// tool_debugger_legacy.go contains handlers for legacy REST-based debugging.
 // These use REST API which works for Listen/Attach/Step but not for breakpoints.
 package mcp
 

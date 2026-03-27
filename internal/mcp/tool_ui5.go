@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_ui5.go contains handlers for UI5/Fiori BSP management.
+// tool_ui5.go contains handlers for UI5/Fiori BSP management.
 package mcp
 
 import (
@@ -9,6 +9,56 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// ui5ToolDefs returns tool definitions for UI5/Fiori BSP management tools.
+func (s *Server) ui5ToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("UI5ListApps",
+			mcp.WithDescription("List UI5/Fiori BSP applications. Use query parameter for filtering with wildcards (*)."),
+			mcp.WithString("query", mcp.Description("Search query (supports * wildcard, e.g., 'Z*' for custom apps)")),
+			mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default: 100)")),
+		), handler: s.handleUI5ListApps, readOnly: true, focused: true, groups: []string{"5"}},
+
+		{tool: mcp.NewTool("UI5GetApp",
+			mcp.WithDescription("Get details of a UI5/Fiori BSP application including file structure."),
+			mcp.WithString("app_name", mcp.Required(), mcp.Description("Name of the UI5 application")),
+		), handler: s.handleUI5GetApp, readOnly: true, focused: true, groups: []string{"5"}},
+
+		{tool: mcp.NewTool("UI5GetFileContent",
+			mcp.WithDescription("Get content of a specific file within a UI5/Fiori BSP application."),
+			mcp.WithString("app_name", mcp.Required(), mcp.Description("Name of the UI5 application")),
+			mcp.WithString("file_path", mcp.Required(), mcp.Description("Path to the file within the app (e.g., '/webapp/manifest.json')")),
+		), handler: s.handleUI5GetFileContent, readOnly: true, focused: true, groups: []string{"5"}},
+
+		{tool: mcp.NewTool("UI5UploadFile",
+			mcp.WithDescription("Upload a file to a UI5/Fiori BSP application."),
+			mcp.WithString("app_name", mcp.Required(), mcp.Description("Name of the UI5 application")),
+			mcp.WithString("file_path", mcp.Required(), mcp.Description("Path for the file within the app (e.g., '/webapp/Component.js')")),
+			mcp.WithString("content", mcp.Required(), mcp.Description("File content to upload")),
+			mcp.WithString("content_type", mcp.Description("Content type (e.g., 'application/javascript', 'application/json')")),
+		), handler: s.handleUI5UploadFile},
+
+		{tool: mcp.NewTool("UI5DeleteFile",
+			mcp.WithDescription("Delete a file from a UI5/Fiori BSP application."),
+			mcp.WithString("app_name", mcp.Required(), mcp.Description("Name of the UI5 application")),
+			mcp.WithString("file_path", mcp.Required(), mcp.Description("Path to the file to delete (e.g., '/webapp/test.js')")),
+		), handler: s.handleUI5DeleteFile},
+
+		{tool: mcp.NewTool("UI5CreateApp",
+			mcp.WithDescription("Create a new UI5/Fiori BSP application."),
+			mcp.WithString("app_name", mcp.Required(), mcp.Description("Name for the new UI5 application")),
+			mcp.WithString("description", mcp.Description("Description of the application")),
+			mcp.WithString("package", mcp.Required(), mcp.Description("Package name (e.g., '$TMP' for local, 'ZFIORI' for transportable)")),
+			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+		), handler: s.handleUI5CreateApp},
+
+		{tool: mcp.NewTool("UI5DeleteApp",
+			mcp.WithDescription("Delete a UI5/Fiori BSP application."),
+			mcp.WithString("app_name", mcp.Required(), mcp.Description("Name of the UI5 application to delete")),
+			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+		), handler: s.handleUI5DeleteApp},
+	}
+}
 
 // routeUI5Action routes UI5/Fiori BSP operations.
 func (s *Server) routeUI5Action(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {

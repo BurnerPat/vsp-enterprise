@@ -1,6 +1,6 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
 // tools_register.go contains the tool registration loop and the toolDef type.
-// Individual tool definitions live in their respective handlers_*.go files.
+// Individual tool definitions live alongside their handlers in tool_*.go files.
 package mcp
 
 import (
@@ -10,11 +10,33 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// toolDef is a declarative tool definition pairing a schema with its handler.
+// paramMapper transforms universal-mode params into handler-specific params.
+// objectType and objectName come from parseTarget("TYPE NAME").
+type paramMapper func(objectType, objectName string, params map[string]any) map[string]any
+
+// universalRoute describes how a tool is accessible via the single SAP(action, target, params) tool.
+// A tool can have multiple routes (e.g., accessible via different action/target combinations).
+type universalRoute struct {
+	action     string      // universal-mode action: "read", "edit", "create", "delete", "search", "query", "grep", "test", "analyze", "debug", "system"
+	targetType string      // match objectType from target (e.g., "PROG", "INFO"). Empty = don't match on targetType.
+	paramsType string      // match params["type"] (e.g., "list_transports"). Empty = don't match on params.type.
+	mapArgs    paramMapper // optional: transform params before calling handler. nil = pass through.
+}
+
+// toolDef is a self-contained, declarative tool definition.
+// All metadata lives here — no separate focused/group maps needed.
 type toolDef struct {
 	tool     mcp.Tool
 	handler  server.ToolHandlerFunc
-	alwaysOn bool // if true, registered regardless of mode/groups/config
+	alwaysOn bool     // if true, registered regardless of mode/groups/config
+	readOnly bool     // tool only reads data, never modifies the SAP system
+	focused  bool     // included in "focused" mode (default mode)
+	groups   []string // group codes for --disabled-groups (e.g., "D", "H", "X")
+
+	// Universal mode routing (optional).
+	// Describes how this tool is reachable via SAP(action, target, params).
+	// If empty, the tool is only available as an individual named tool.
+	routes []universalRoute
 }
 
 // registerTools registers ADT tools with the MCP server based on mode, disabled groups, and granular config.
@@ -25,10 +47,11 @@ func (s *Server) registerTools(mode string, disabledGroups string, toolsConfig m
 		return
 	}
 
-	shouldRegister := buildShouldRegister(mode, disabledGroups, toolsConfig)
+	defs := s.allToolDefs()
+	shouldRegister := buildShouldRegister(mode, disabledGroups, toolsConfig, defs)
 
-	// Collect all tool definitions and register those that pass the filter
-	for _, td := range s.allToolDefs() {
+	// Register tools that pass the filter
+	for _, td := range defs {
 		if td.alwaysOn || shouldRegister(td.tool.Name) {
 			s.addTool(td.tool, td.handler)
 		}
@@ -38,15 +61,35 @@ func (s *Server) registerTools(mode string, disabledGroups string, toolsConfig m
 	s.registerToolAliases(shouldRegister)
 }
 
-// buildShouldRegister creates a filter function based on mode, disabled groups, and granular config.
-func buildShouldRegister(mode string, disabledGroups string, toolsConfig map[string]bool) func(string) bool {
-	groups := toolGroups()
-	focusedTools := focusedToolSet()
+// buildShouldRegister creates a filter function.
+// Focused set and group membership are derived from toolDef metadata.
+func buildShouldRegister(mode string, disabledGroups string, toolsConfig map[string]bool, defs []toolDef) func(string) bool {
+	// Derive focused set from metadata
+	focusedTools := make(map[string]bool)
+	for _, td := range defs {
+		if td.focused || td.alwaysOn {
+			focusedTools[td.tool.Name] = true
+		}
+	}
 
+	// Derive group membership from metadata
+	groupTools := make(map[string]map[string]bool) // group code → tool names
+	for _, td := range defs {
+		for _, g := range td.groups {
+			if groupTools[g] == nil {
+				groupTools[g] = make(map[string]bool)
+			}
+			groupTools[g][td.tool.Name] = true
+		}
+	}
+	// "U" alias for "5" (UI5)
+	groupTools["U"] = groupTools["5"]
+
+	// Build disabled set from --disabled-groups flag
 	disabledTools := make(map[string]bool)
 	for _, code := range strings.ToUpper(disabledGroups) {
-		if tools, ok := groups[string(code)]; ok {
-			for _, tool := range tools {
+		if tools, ok := groupTools[string(code)]; ok {
+			for tool := range tools {
 				disabledTools[tool] = true
 			}
 		}
@@ -75,7 +118,9 @@ func (s *Server) allToolDefs() []toolDef {
 	defs = append(defs, s.readToolDefs()...)
 	defs = append(defs, s.systemToolDefs()...)
 	defs = append(defs, s.analysisToolDefs()...)
-	defs = append(defs, s.diagnosticsToolDefs()...)
+	defs = append(defs, s.dumpToolDefs()...)
+	defs = append(defs, s.traceToolDefs()...)
+	defs = append(defs, s.sqlTraceToolDefs()...)
 	defs = append(defs, s.debuggerToolDefs()...)
 	defs = append(defs, s.searchToolDefs()...)
 	defs = append(defs, s.devToolDefs()...)

@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_context.go contains the GetContext handler for dependency context compression.
+// tool_context.go contains the GetContext handler for dependency context compression.
 package mcp
 
 import (
@@ -9,17 +9,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/oisee/vibing-steampunk/pkg/ctxcomp"
 )
-
-// routeContextAction routes "analyze" with type=context.
-func (s *Server) routeContextAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "analyze" {
-		return nil, false, nil
-	}
-	if getStringParam(params, "type") == "context" {
-		return s.callHandler(ctx, s.handleGetContext, params)
-	}
-	return nil, false, nil
-}
 
 // adtSourceAdapter adapts adt.Client to the ctxcomp.ADTSourceFetcher interface.
 type adtSourceAdapter struct {

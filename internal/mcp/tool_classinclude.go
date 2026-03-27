@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_classinclude.go contains handlers for class include operations (testclasses, locals_def, etc.).
+// tool_classinclude.go contains handlers for class include operations (testclasses, locals_def, etc.).
 package mcp
 
 import (
@@ -9,6 +9,45 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
+
+// classIncludeToolDefs returns tool definitions for class include operations.
+func (s *Server) classIncludeToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("GetClassInclude",
+			mcp.WithDescription("Retrieve source code of a class include (definitions, implementations, macros, testclasses)"),
+			mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
+			mcp.WithString("include_type", mcp.Required(), mcp.Description("Include type: main, definitions, implementations, macros, testclasses")),
+		), handler: s.handleGetClassInclude, readOnly: true},
+
+		{tool: mcp.NewTool("CreateTestInclude",
+			mcp.WithDescription("Create the test classes include for a class (required before writing test code)"),
+			mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
+			mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from LockObject (lock the parent class first)")),
+			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+		), handler: s.handleCreateTestInclude},
+
+		{tool: mcp.NewTool("UpdateClassInclude",
+			mcp.WithDescription("Update source code of a class include (requires lock on parent class)"),
+			mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
+			mcp.WithString("include_type", mcp.Required(), mcp.Description("Include type: main, definitions, implementations, macros, testclasses")),
+			mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code to write")),
+			mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from LockObject (lock the parent class first)")),
+			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+		), handler: s.handleUpdateClassInclude},
+
+		{tool: mcp.NewTool("PublishServiceBinding",
+			mcp.WithDescription("Publish a service binding to make it available as OData service"),
+			mcp.WithString("service_name", mcp.Required(), mcp.Description("Service binding name (e.g., ZTRAVEL_SB)")),
+			mcp.WithString("service_version", mcp.Description("Service version (default: 0001)")),
+		), handler: s.handlePublishServiceBinding},
+
+		{tool: mcp.NewTool("UnpublishServiceBinding",
+			mcp.WithDescription("Unpublish a service binding"),
+			mcp.WithString("service_name", mcp.Required(), mcp.Description("Service binding name (e.g., ZTRAVEL_SB)")),
+			mcp.WithString("service_version", mcp.Description("Service version (default: 0001)")),
+		), handler: s.handleUnpublishServiceBinding},
+	}
+}
 
 // routeClassIncludeAction routes class include operations.
 func (s *Server) routeClassIncludeAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {

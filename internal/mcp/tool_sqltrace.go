@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_sqltrace.go contains handlers for SQL trace (ST05).
+// tool_sqltrace.go contains handlers for SQL trace (ST05).
 package mcp
 
 import (
@@ -10,19 +10,21 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// routeSQLTraceAction routes "analyze" with SQL trace types.
-func (s *Server) routeSQLTraceAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "analyze" {
-		return nil, false, nil
+// sqlTraceToolDefs returns tool definitions for SQL trace (ST05) tools.
+func (s *Server) sqlTraceToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("GetSQLTraceState",
+			mcp.WithDescription("Check if SQL trace (ST05) is currently active."),
+		), handler: s.handleGetSQLTraceState, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "sql_trace_state"}}},
+
+		{tool: mcp.NewTool("ListSQLTraces",
+			mcp.WithDescription("List SQL trace files from ST05."),
+			mcp.WithString("user", mcp.Description("Filter by username")),
+			mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default: 100)")),
+		), handler: s.handleListSQLTraces, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "list_sql_traces"}}},
 	}
-	analysisType := getStringParam(params, "type")
-	switch analysisType {
-	case "sql_trace_state":
-		return s.callHandler(ctx, s.handleGetSQLTraceState, params)
-	case "list_sql_traces":
-		return s.callHandler(ctx, s.handleListSQLTraces, params)
-	}
-	return nil, false, nil
 }
 
 // --- SQL Trace (ST05) Handlers ---

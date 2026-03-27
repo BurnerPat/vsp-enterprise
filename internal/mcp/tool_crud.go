@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_crud.go contains handlers for CRUD operations (lock, unlock, create, update, delete).
+// tool_crud.go contains handlers for CRUD operations (lock, unlock, create, update, delete).
 package mcp
 
 import (
@@ -11,6 +11,106 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
+
+// crudToolDefs returns tool definitions for CRUD operations.
+func (s *Server) crudToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("LockObject",
+			mcp.WithDescription("Acquire an edit lock on an ABAP object"),
+			mcp.WithString("object_url", mcp.Required(), mcp.Description("ADT URL of the object (e.g., /sap/bc/adt/programs/programs/ZTEST)")),
+			mcp.WithString("access_mode", mcp.Description("Access mode: MODIFY (default) or READ")),
+		), handler: s.handleLockObject, focused: true},
+
+		{tool: mcp.NewTool("UnlockObject",
+			mcp.WithDescription("Release an edit lock on an ABAP object"),
+			mcp.WithString("object_url", mcp.Required(), mcp.Description("ADT URL of the object (e.g., /sap/bc/adt/programs/programs/ZTEST)")),
+			mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from LockObject")),
+		), handler: s.handleUnlockObject, focused: true},
+
+		{tool: mcp.NewTool("UpdateSource",
+			mcp.WithDescription("Write source code to an ABAP object (requires lock)"),
+			mcp.WithString("object_url", mcp.Required(), mcp.Description("ADT URL of the object (e.g., /sap/bc/adt/programs/programs/ZTEST)")),
+			mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code to write")),
+			mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from LockObject")),
+			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+		), handler: s.handleUpdateSource},
+
+		{tool: mcp.NewTool("CreateObject",
+			mcp.WithDescription("Create a new ABAP object. Supports: PROG/P (program), CLAS/OC (class), INTF/OI (interface), PROG/I (include), FUGR/F (function group), FUGR/FF (function module), DEVC/K (package), DDLS/DF (CDS view), BDEF/BDO (behavior definition), SRVD/SRV (service definition), SRVB/SVB (service binding)"),
+			mcp.WithString("object_type", mcp.Required(), mcp.Description("Object type: PROG/P, CLAS/OC, INTF/OI, PROG/I, FUGR/F, FUGR/FF, DEVC/K, DDLS/DF, BDEF/BDO, SRVD/SRV, SRVB/SVB")),
+			mcp.WithString("name", mcp.Required(), mcp.Description("Object name (e.g., ZTEST_PROGRAM)")),
+			mcp.WithString("description", mcp.Required(), mcp.Description("Object description")),
+			mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name (e.g., $TMP for local, ZPACKAGE for transportable)")),
+			mcp.WithString("transport", mcp.Description("Transport request number (required for non-local packages)")),
+			mcp.WithString("parent_name", mcp.Description("Parent name (required for function modules - the function group name)")),
+			mcp.WithString("service_definition", mcp.Description("For SRVB: the service definition name to bind")),
+			mcp.WithString("binding_version", mcp.Description("For SRVB: OData version 'V2' or 'V4' (default: V2)")),
+			mcp.WithString("binding_category", mcp.Description("For SRVB: '0' for Web API, '1' for UI (default: 0)")),
+		), handler: s.handleCreateObject},
+
+		{tool: mcp.NewTool("CreatePackage",
+			mcp.WithDescription("Create a new ABAP package. Local packages ($*) work by default. Transportable packages require --enable-transports flag and transport parameter."),
+			mcp.WithString("name", mcp.Required(), mcp.Description("Package name (e.g., $ZTEST for local, ZPRODUCTION for transportable)")),
+			mcp.WithString("description", mcp.Required(), mcp.Description("Package description")),
+			mcp.WithString("parent", mcp.Description("Parent package name (optional, e.g., $TMP, ZPROD). If not specified, creates a root-level package.")),
+			mcp.WithString("transport", mcp.Description("Transport request number (required for transportable packages, e.g., 'A4HK900114')")),
+			mcp.WithString("software_component", mcp.Description("Software component name (required for transportable packages, e.g., 'HOME', 'ZLOCAL'). Use GetInstalledComponents to list available components.")),
+		), handler: s.handleCreatePackage, focused: true},
+
+		{tool: mcp.NewTool("CreateTable",
+			mcp.WithDescription("Create a DDIC transparent table from a simple JSON definition. Handles full workflow: create → set source → activate. Supports common ABAP types: CHAR, NUMC, INT4, DEC, STRING, TIMESTAMPL, UUID, etc."),
+			mcp.WithString("name", mcp.Required(), mcp.Description("Table name (uppercase, max 30 chars, must start with Z/Y)")),
+			mcp.WithString("description", mcp.Required(), mcp.Description("Short description of the table")),
+			mcp.WithString("package", mcp.Description("Target package (default: $TMP)")),
+			mcp.WithString("fields", mcp.Required(), mcp.Description("JSON array of fields: [{\"name\":\"ID\",\"type\":\"CHAR32\",\"key\":true},{\"name\":\"VALUE\",\"type\":\"STRING\"}]. Types: CHAR/CHARnn, NUMC/NUMCnn, INT4, DEC, STRING, TIMESTAMPL, UUID, DATS, TIMS, or data element name.")),
+			mcp.WithString("transport", mcp.Description("Transport request number (optional for $TMP)")),
+			mcp.WithString("delivery_class", mcp.Description("Delivery class: A=Application (default), C=Customizing, L=Temporary")),
+		), handler: s.handleCreateTable, focused: true},
+
+		{tool: mcp.NewTool("CompareSource",
+			mcp.WithDescription("Compare source code of two objects and return unified diff. Supports all object types from GetSource."),
+			mcp.WithString("type1", mcp.Required(), mcp.Description("Object type of first object: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, BDEF, SRVD")),
+			mcp.WithString("name1", mcp.Required(), mcp.Description("Name of first object")),
+			mcp.WithString("type2", mcp.Required(), mcp.Description("Object type of second object (can be same or different)")),
+			mcp.WithString("name2", mcp.Required(), mcp.Description("Name of second object")),
+			mcp.WithString("include1", mcp.Description("Class include type for first object if CLAS: definitions, implementations, macros, testclasses")),
+			mcp.WithString("include2", mcp.Description("Class include type for second object if CLAS")),
+			mcp.WithString("parent1", mcp.Description("Function group for first object if FUNC")),
+			mcp.WithString("parent2", mcp.Description("Function group for second object if FUNC")),
+		), handler: s.handleCompareSource, readOnly: true, focused: true},
+
+		{tool: mcp.NewTool("CloneObject",
+			mcp.WithDescription("Copy an ABAP object to a new name. Replaces object name in source. Supports PROG, CLAS, INTF."),
+			mcp.WithString("object_type", mcp.Required(), mcp.Description("Object type: PROG, CLAS, INTF")),
+			mcp.WithString("source_name", mcp.Required(), mcp.Description("Name of object to copy")),
+			mcp.WithString("target_name", mcp.Required(), mcp.Description("Name for the new object")),
+			mcp.WithString("package", mcp.Required(), mcp.Description("Target package (e.g., $TMP)")),
+		), handler: s.handleCloneObject, focused: true},
+
+		{tool: mcp.NewTool("GetClassInfo",
+			mcp.WithDescription("Get class metadata without full source: methods, attributes, interfaces, superclass, abstract/final status."),
+			mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
+		), handler: s.handleGetClassInfo, readOnly: true, focused: true},
+
+		{tool: mcp.NewTool("DeleteObject",
+			mcp.WithDescription("Delete an ABAP object (requires lock)"),
+			mcp.WithString("object_url", mcp.Required(), mcp.Description("ADT URL of the object (e.g., /sap/bc/adt/programs/programs/ZTEST)")),
+			mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from LockObject")),
+			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+		), handler: s.handleDeleteObject},
+
+		{tool: mcp.NewTool("GetUserTransports",
+			mcp.WithDescription("Get all transport requests for a user (requires --enable-transports flag). Returns both workbench and customizing requests grouped by target system."),
+			mcp.WithString("user_name", mcp.Required(), mcp.Description("SAP user name (will be converted to uppercase)")),
+		), handler: s.handleGetUserTransports, readOnly: true},
+
+		{tool: mcp.NewTool("GetTransportInfo",
+			mcp.WithDescription("Get transport information for an ABAP object (requires --enable-transports flag). Returns available transports and lock status."),
+			mcp.WithString("object_url", mcp.Required(), mcp.Description("ADT URL of the object (e.g., /sap/bc/adt/programs/programs/ZTEST)")),
+			mcp.WithString("dev_class", mcp.Required(), mcp.Description("Development class/package of the object")),
+		), handler: s.handleGetTransportInfo, readOnly: true},
+	}
+}
 
 // routeCRUDAction routes "edit" for LOCK/UNLOCK/UPDATE_SOURCE, "create" for OBJECT/DEVC/TABL/CLONE, "delete" for OBJECT.
 func (s *Server) routeCRUDAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {

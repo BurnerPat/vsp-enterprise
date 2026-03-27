@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_codeintel.go contains handlers for code intelligence operations
+// tool_codeintel.go contains handlers for code intelligence operations
 // (find definition, references, completion, pretty print, type hierarchy, etc.).
 package mcp
 
@@ -13,35 +13,63 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
-// routeCodeIntelAction routes "analyze" action for code intelligence operations.
-func (s *Server) routeCodeIntelAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "analyze" {
-		return nil, false, nil
+// codeIntelToolDefs returns tool definitions for code intelligence tools.
+func (s *Server) codeIntelToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("FindDefinition",
+			mcp.WithDescription("Navigate to the definition of a symbol at a given position in source code"),
+			mcp.WithString("source_url", mcp.Required(), mcp.Description("ADT URL of the source file (e.g., /sap/bc/adt/programs/programs/ZTEST/source/main)")),
+			mcp.WithString("source", mcp.Required(), mcp.Description("Full source code of the file")),
+			mcp.WithNumber("line", mcp.Required(), mcp.Description("Line number (1-based)")),
+			mcp.WithNumber("start_column", mcp.Required(), mcp.Description("Start column of the symbol (1-based)")),
+			mcp.WithNumber("end_column", mcp.Required(), mcp.Description("End column of the symbol (1-based)")),
+			mcp.WithBoolean("implementation", mcp.Description("Navigate to implementation instead of definition (default: false)")),
+			mcp.WithString("main_program", mcp.Description("Main program for includes (optional)")),
+		), handler: s.handleFindDefinition, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "definition"}}},
+
+		{tool: mcp.NewTool("FindReferences",
+			mcp.WithDescription("Find all references to an ABAP object or symbol"),
+			mcp.WithString("object_url", mcp.Required(), mcp.Description("ADT URL of the object (e.g., /sap/bc/adt/oo/classes/ZCL_TEST)")),
+			mcp.WithNumber("line", mcp.Description("Line number for position-based reference search (1-based, optional)")),
+			mcp.WithNumber("column", mcp.Description("Column number for position-based reference search (1-based, optional)")),
+		), handler: s.handleFindReferences, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "references"}}},
+
+		{tool: mcp.NewTool("GetContext",
+			mcp.WithDescription("Analyze ABAP source dependencies and return compressed public API contracts (prologue). Produces a compact summary of all referenced classes, interfaces, and function modules — showing only their public signatures. Use this to understand the surrounding codebase context before editing."),
+			mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, CLAS, INTF, FUNC, FUGR")),
+			mcp.WithString("name", mcp.Required(), mcp.Description("Object name (e.g., ZCL_ORDER_PROCESSOR)")),
+			mcp.WithString("source", mcp.Description("Source code to analyze (if omitted, fetched from SAP)")),
+			mcp.WithNumber("max_deps", mcp.Description("Maximum dependencies to resolve (default: 20)")),
+		), handler: s.handleGetContext, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "context"}}},
+
+		{tool: mcp.NewTool("CodeCompletion",
+			mcp.WithDescription("Get code completion suggestions at a position in source code"),
+			mcp.WithString("source_url", mcp.Required(), mcp.Description("ADT URL of the source file (e.g., /sap/bc/adt/programs/programs/ZTEST/source/main)")),
+			mcp.WithString("source", mcp.Required(), mcp.Description("Full source code of the file")),
+			mcp.WithNumber("line", mcp.Required(), mcp.Description("Line number (1-based)")),
+			mcp.WithNumber("column", mcp.Required(), mcp.Description("Column number (1-based)")),
+		), handler: s.handleCodeCompletion, readOnly: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "completion"}}},
+
+		{tool: mcp.NewTool("GetTypeHierarchy",
+			mcp.WithDescription("Get the type hierarchy (supertypes or subtypes) for a class/interface"),
+			mcp.WithString("source_url", mcp.Required(), mcp.Description("ADT URL of the source file")),
+			mcp.WithString("source", mcp.Required(), mcp.Description("Full source code of the file")),
+			mcp.WithNumber("line", mcp.Required(), mcp.Description("Line number (1-based)")),
+			mcp.WithNumber("column", mcp.Required(), mcp.Description("Column number (1-based)")),
+			mcp.WithBoolean("super_types", mcp.Description("Get supertypes instead of subtypes (default: false = subtypes)")),
+		), handler: s.handleGetTypeHierarchy, readOnly: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "type_hierarchy"}}},
+
+		{tool: mcp.NewTool("GetClassComponents",
+			mcp.WithDescription("Get the structure of a class - lists all methods, attributes, events, and other components with their visibility and properties"),
+			mcp.WithString("class_url", mcp.Required(), mcp.Description("ADT URL of the class (e.g., /sap/bc/adt/oo/classes/ZCL_TEST)")),
+		), handler: s.handleGetClassComponents, readOnly: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "class_components"}}},
 	}
-	analysisType := getStringParam(params, "type")
-	switch analysisType {
-	case "definition":
-		return s.callHandler(ctx, s.handleFindDefinition, params)
-	case "references":
-		return s.callHandler(ctx, s.handleFindReferences, params)
-	case "completion":
-		return s.callHandler(ctx, s.handleCodeCompletion, params)
-	case "pretty_print":
-		return s.callHandler(ctx, s.handlePrettyPrint, params)
-	case "get_pretty_printer_settings":
-		return s.callHandler(ctx, s.handleGetPrettyPrinterSettings, params)
-	case "set_pretty_printer_settings":
-		return s.callHandler(ctx, s.handleSetPrettyPrinterSettings, params)
-	case "type_hierarchy":
-		return s.callHandler(ctx, s.handleGetTypeHierarchy, params)
-	case "class_components":
-		return s.callHandler(ctx, s.handleGetClassComponents, params)
-	case "inactive_objects":
-		return s.callHandler(ctx, s.handleGetInactiveObjects, params)
-	case "abap_help":
-		return s.callHandler(ctx, s.handleGetAbapHelp, params)
-	}
-	return nil, false, nil
 }
 
 // --- Code Intelligence Handlers ---

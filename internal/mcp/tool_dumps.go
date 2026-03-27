@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_dumps.go contains handlers for runtime errors (short dumps / RABAX).
+// tool_dumps.go contains handlers for runtime errors (short dumps / RABAX).
 package mcp
 
 import (
@@ -11,19 +11,27 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
-// routeDumpsAction routes "analyze" with dump-related types.
-func (s *Server) routeDumpsAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "analyze" {
-		return nil, false, nil
+// dumpToolDefs returns tool definitions for runtime error (short dump) tools.
+func (s *Server) dumpToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("ListDumps",
+			mcp.WithDescription("List runtime errors (short dumps) from the SAP system. Filter by user, exception type, program, date range."),
+			mcp.WithString("user", mcp.Description("Filter by username")),
+			mcp.WithString("exception_type", mcp.Description("Filter by exception type (e.g., CX_SY_ZERODIVIDE)")),
+			mcp.WithString("program", mcp.Description("Filter by program name")),
+			mcp.WithString("package", mcp.Description("Filter by package")),
+			mcp.WithString("date_from", mcp.Description("Start date (YYYYMMDD format)")),
+			mcp.WithString("date_to", mcp.Description("End date (YYYYMMDD format)")),
+			mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default: 100)")),
+		), handler: s.handleListDumps, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "list_dumps"}}},
+
+		{tool: mcp.NewTool("GetDump",
+			mcp.WithDescription("Get full details of a specific runtime error (short dump) including stack trace."),
+			mcp.WithString("dump_id", mcp.Required(), mcp.Description("Dump ID from ListDumps result")),
+		), handler: s.handleGetDump, readOnly: true, focused: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "get_dump"}}},
 	}
-	analysisType := getStringParam(params, "type")
-	switch analysisType {
-	case "list_dumps":
-		return s.callHandler(ctx, s.handleListDumps, params)
-	case "get_dump":
-		return s.callHandler(ctx, s.handleGetDump, params)
-	}
-	return nil, false, nil
 }
 
 // --- Runtime Errors / Short Dumps Handlers ---

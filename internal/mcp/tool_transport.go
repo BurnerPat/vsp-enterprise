@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_transport.go contains handlers for transport management operations.
+// tool_transport.go contains handlers for transport management operations.
 package mcp
 
 import (
@@ -12,31 +12,44 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
-// routeTransportAction routes "system" with transport-related types.
-func (s *Server) routeTransportAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "system" {
-		return nil, false, nil
+// transportToolDefs returns tool definitions for CTS/Transport management tools.
+func (s *Server) transportToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("ListTransports",
+			mcp.WithDescription("List transport requests. Returns modifiable transports for a user. Requires --enable-transports OR --allow-transportable-edits flag."),
+			mcp.WithString("user", mcp.Description("Username to list transports for (default: current user, '*' for all users)")),
+		), handler: s.handleListTransports, readOnly: true, focused: true, groups: []string{"C"},
+			routes: []universalRoute{{action: "system", paramsType: "list_transports"}}},
+
+		{tool: mcp.NewTool("GetTransport",
+			mcp.WithDescription("Get detailed transport information including objects and tasks. Requires --enable-transports OR --allow-transportable-edits flag."),
+			mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number (e.g., 'A4HK900094')")),
+		), handler: s.handleGetTransport, readOnly: true, focused: true, groups: []string{"C"},
+			routes: []universalRoute{{action: "system", paramsType: "get_transport"}}},
+
+		{tool: mcp.NewTool("CreateTransport",
+			mcp.WithDescription("Create a new transport request. Requires --enable-transports flag and not --transport-read-only."),
+			mcp.WithString("description", mcp.Required(), mcp.Description("Transport description")),
+			mcp.WithString("package", mcp.Required(), mcp.Description("Target package (DEVCLASS)")),
+			mcp.WithString("transport_layer", mcp.Description("Transport layer (optional)")),
+			mcp.WithString("type", mcp.Description("Type: 'workbench' (default) or 'customizing'")),
+		), handler: s.handleCreateTransport, groups: []string{"C"},
+			routes: []universalRoute{{action: "system", paramsType: "create_transport"}}},
+
+		{tool: mcp.NewTool("ReleaseTransport",
+			mcp.WithDescription("Release a transport request. This action is IRREVERSIBLE. Requires --enable-transports flag and not --transport-read-only."),
+			mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number")),
+			mcp.WithBoolean("ignore_locks", mcp.Description("Release even with locked objects (default: false)")),
+			mcp.WithBoolean("skip_atc", mcp.Description("Skip ATC quality checks (default: false)")),
+		), handler: s.handleReleaseTransport, groups: []string{"C"},
+			routes: []universalRoute{{action: "system", paramsType: "release_transport"}}},
+
+		{tool: mcp.NewTool("DeleteTransport",
+			mcp.WithDescription("Delete a transport request. Only modifiable transports can be deleted. Requires --enable-transports flag and not --transport-read-only."),
+			mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number")),
+		), handler: s.handleDeleteTransport, groups: []string{"C"},
+			routes: []universalRoute{{action: "system", paramsType: "delete_transport"}}},
 	}
-	transportType := getStringParam(params, "type")
-	switch transportType {
-	case "list_transports":
-		return s.callHandler(ctx, s.handleListTransports, params)
-	case "get_transport":
-		return s.callHandler(ctx, s.handleGetTransport, params)
-	case "create_transport":
-		return s.callHandler(ctx, s.handleCreateTransport, params)
-	case "release_transport":
-		return s.callHandler(ctx, s.handleReleaseTransport, params)
-	case "delete_transport":
-		return s.callHandler(ctx, s.handleDeleteTransport, params)
-	case "get_user_transports":
-		return s.callHandler(ctx, s.handleGetUserTransports, params)
-	case "get_transport_info":
-		return s.callHandler(ctx, s.handleGetTransportInfo, params)
-	case "execute_abap":
-		return s.callHandler(ctx, s.handleExecuteABAP, params)
-	}
-	return nil, false, nil
 }
 
 // --- Transport Management Handlers ---

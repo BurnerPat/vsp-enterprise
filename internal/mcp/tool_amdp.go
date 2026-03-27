@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_amdp.go contains handlers for AMDP (HANA) SQLScript debugging.
+// tool_amdp.go contains handlers for AMDP (HANA) SQLScript debugging.
 package mcp
 
 import (
@@ -11,28 +11,48 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
-// routeAMDPAction routes "debug" AMDP sub-actions.
-func (s *Server) routeAMDPAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "debug" {
-		return nil, false, nil
+// amdpToolDefs returns tool definitions for AMDP/HANA debugger tools.
+func (s *Server) amdpToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("AMDPDebuggerStart",
+			mcp.WithDescription("Start an AMDP (HANA SQLScript) debug session with persistent goroutine. Creates a background goroutine that maintains the HTTP session cookies. Use AMDPDebuggerStep/AMDPGetVariables to interact, AMDPDebuggerStop to terminate."),
+			mcp.WithString("user", mcp.Description("User to debug (defaults to current user)")),
+		), handler: s.handleAMDPDebuggerStart, focused: true, groups: []string{"H", "X"},
+			routes: []universalRoute{{action: "debug", targetType: "AMDP_START"}}},
+
+		{tool: mcp.NewTool("AMDPDebuggerResume",
+			mcp.WithDescription("Get current AMDP debug session status. In goroutine model, this returns the current state without blocking. The session manager goroutine handles events internally."),
+		), handler: s.handleAMDPDebuggerResume, readOnly: true, focused: true, groups: []string{"H", "X"},
+			routes: []universalRoute{{action: "debug", targetType: "AMDP_RESUME"}}},
+
+		{tool: mcp.NewTool("AMDPDebuggerStop",
+			mcp.WithDescription("Stop the AMDP debug session and terminate the background goroutine. Cleans up the HTTP session on SAP server."),
+		), handler: s.handleAMDPDebuggerStop, focused: true, groups: []string{"H", "X"},
+			routes: []universalRoute{{action: "debug", targetType: "AMDP_STOP"}}},
+
+		{tool: mcp.NewTool("AMDPDebuggerStep",
+			mcp.WithDescription("Perform a step operation in the AMDP debugger. Communicates via channel to the session manager goroutine."),
+			mcp.WithString("step_type", mcp.Required(), mcp.Description("Step type: 'stepInto', 'stepOver', 'stepReturn', 'stepContinue'")),
+		), handler: s.handleAMDPDebuggerStep, focused: true, groups: []string{"H", "X"},
+			routes: []universalRoute{{action: "debug", targetType: "AMDP_STEP"}}},
+
+		{tool: mcp.NewTool("AMDPGetVariables",
+			mcp.WithDescription("Get variable values during AMDP debugging. Communicates via channel to the session manager goroutine. Returns scalar, table, and array types."),
+		), handler: s.handleAMDPGetVariables, readOnly: true, focused: true, groups: []string{"H", "X"},
+			routes: []universalRoute{{action: "debug", targetType: "AMDP_GET_VARIABLES"}}},
+
+		{tool: mcp.NewTool("AMDPSetBreakpoint",
+			mcp.WithDescription("Set a breakpoint in AMDP (SQLScript) code. Requires an active AMDP debug session. Specify the procedure name and line number."),
+			mcp.WithString("proc_name", mcp.Required(), mcp.Description("AMDP procedure name (e.g., 'ZCL_TEST=>METHOD_NAME')")),
+			mcp.WithNumber("line", mcp.Required(), mcp.Description("Line number in the SQLScript code")),
+		), handler: s.handleAMDPSetBreakpoint, focused: true, groups: []string{"H", "X"},
+			routes: []universalRoute{{action: "debug", targetType: "AMDP_SET_BREAKPOINT"}}},
+
+		{tool: mcp.NewTool("AMDPGetBreakpoints",
+			mcp.WithDescription("Get all breakpoints registered in the current AMDP debug session. Useful for verifying breakpoints are set correctly."),
+		), handler: s.handleAMDPGetBreakpoints, readOnly: true, focused: true, groups: []string{"H", "X"},
+			routes: []universalRoute{{action: "debug", targetType: "AMDP_GET_BREAKPOINTS"}}},
 	}
-	switch objectType {
-	case "AMDP_START":
-		return s.callHandler(ctx, s.handleAMDPDebuggerStart, params)
-	case "AMDP_RESUME":
-		return s.callHandler(ctx, s.handleAMDPDebuggerResume, params)
-	case "AMDP_STOP":
-		return s.callHandler(ctx, s.handleAMDPDebuggerStop, params)
-	case "AMDP_STEP":
-		return s.callHandler(ctx, s.handleAMDPDebuggerStep, params)
-	case "AMDP_GET_VARIABLES":
-		return s.callHandler(ctx, s.handleAMDPGetVariables, params)
-	case "AMDP_SET_BREAKPOINT":
-		return s.callHandler(ctx, s.handleAMDPSetBreakpoint, params)
-	case "AMDP_GET_BREAKPOINTS":
-		return s.callHandler(ctx, s.handleAMDPGetBreakpoints, params)
-	}
-	return nil, false, nil
 }
 
 // --- AMDP (HANA) Debugger Handlers ---

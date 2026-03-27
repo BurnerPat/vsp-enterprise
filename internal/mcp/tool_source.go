@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_source.go contains handlers for source code operations
+// tool_source.go contains handlers for source code operations
 // (GetSource, WriteSource, GrepObjects, GrepPackages, ImportFromFile, ExportToFile).
 package mcp
 
@@ -89,6 +89,7 @@ func (s *Server) routeSourceAction(ctx context.Context, action, objectType, obje
 func (s *Server) unifiedToolDefs() []toolDef {
 	return []toolDef{
 		{
+			readOnly: true, focused: true,
 			tool: mcp.NewTool("GetSource",
 				mcp.WithDescription("Unified tool for reading ABAP source code across different object types. Replaces GetProgram, GetClass, GetInterface, GetFunction, GetInclude, GetFunctionGroup, GetClassInclude."),
 				mcp.WithString("object_type",
@@ -119,6 +120,7 @@ func (s *Server) unifiedToolDefs() []toolDef {
 		},
 
 		{
+			focused: true,
 			tool: mcp.NewTool("WriteSource",
 				mcp.WithDescription("Unified tool for writing ABAP source code with automatic create/update detection. Supports PROG, CLAS, INTF, and RAP types (DDLS, BDEF, SRVD)."),
 				mcp.WithString("object_type",
@@ -257,6 +259,7 @@ func (s *Server) handleWriteSource(ctx context.Context, request mcp.CallToolRequ
 func (s *Server) grepSourceToolDefs() []toolDef {
 	return []toolDef{
 		{
+			readOnly: true, focused: true,
 			tool: mcp.NewTool("GrepObjects",
 				mcp.WithDescription("Unified tool for searching regex patterns in single or multiple ABAP objects. Replaces GrepObject."),
 				mcp.WithArray("object_urls",
@@ -278,6 +281,7 @@ func (s *Server) grepSourceToolDefs() []toolDef {
 			handler: s.handleGrepObjects,
 		},
 		{
+			readOnly: true, focused: true,
 			tool: mcp.NewTool("GrepPackages",
 				mcp.WithDescription("Unified tool for searching regex patterns across single or multiple packages with optional recursive subpackage search. Replaces GrepPackage."),
 				mcp.WithArray("packages",
@@ -312,6 +316,7 @@ func (s *Server) grepSourceToolDefs() []toolDef {
 func (s *Server) fileSourceToolDefs() []toolDef {
 	return []toolDef{
 		{
+			focused: true,
 			tool: mcp.NewTool("ImportFromFile",
 				mcp.WithDescription("Import ABAP object from local file into SAP system. Auto-detects object type from file extension, creates or updates, activates. Supports: programs, classes (with includes), interfaces, function groups/modules, CDS views (DDLS), behavior definitions (BDEF), service definitions (SRVD). For class includes (.clas.testclasses.abap, .clas.locals_def.abap, etc.), the parent class must exist."),
 				mcp.WithString("file_path",
@@ -328,6 +333,7 @@ func (s *Server) fileSourceToolDefs() []toolDef {
 			handler: s.handleDeployFromFile, // Reuse existing handler
 		},
 		{
+			readOnly: true, focused: true,
 			tool: mcp.NewTool("ExportToFile",
 				mcp.WithDescription("Export ABAP object from SAP system to local file. Saves source code with appropriate file extension. Supports: programs, classes (with includes), interfaces, function groups/modules, CDS views (DDLS), behavior definitions (BDEF), service definitions (SRVD). For classes, use 'include' parameter to export specific includes (testclasses, definitions, implementations, macros)."),
 				mcp.WithString("object_type",

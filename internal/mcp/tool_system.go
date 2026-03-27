@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_system.go contains handlers for system information operations.
+// tool_system.go contains handlers for system information operations.
 package mcp
 
 import (
@@ -12,22 +12,36 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
-// routeSystemAction routes "system" info/components/connection/features.
-func (s *Server) routeSystemAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "system" {
-		return nil, false, nil
+// systemToolDefs returns tool definitions for system information tools.
+// All system tools are marked alwaysOn — they cannot be disabled via mode, groups, or config.
+func (s *Server) systemToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("GetSystemInfo",
+			mcp.WithDescription("Get SAP system information (system ID, release, kernel, database)"),
+		), handler: s.handleGetSystemInfo, alwaysOn: true, readOnly: true,
+			routes: []universalRoute{{action: "system", targetType: "INFO"}}},
+
+		{tool: mcp.NewTool("GetInstalledComponents",
+			mcp.WithDescription("List installed software components with version information"),
+		), handler: s.handleGetInstalledComponents, alwaysOn: true, readOnly: true,
+			routes: []universalRoute{{action: "system", targetType: "COMPONENTS"}}},
+
+		{tool: mcp.NewTool("GetConnectionInfo",
+			mcp.WithDescription("Get current MCP connection info: user, URL, client. Useful for debugging and understanding current session context."),
+		), handler: s.handleGetConnectionInfo, alwaysOn: true, readOnly: true,
+			routes: []universalRoute{{action: "system", targetType: "CONNECTION"}}},
+
+		{tool: mcp.NewTool("GetFeatures",
+			mcp.WithDescription("Probe SAP system for available features. Returns status of optional capabilities like abapGit, RAP/OData, AMDP debugging, UI5/BSP, and CTS transports. Use this to understand what features are available before attempting to use them."),
+		), handler: s.handleGetFeatures, alwaysOn: true, readOnly: true,
+			routes: []universalRoute{{action: "system", targetType: "FEATURES"}}},
+
+		{tool: mcp.NewTool("GetAbapHelp",
+			mcp.WithDescription("Get ABAP keyword documentation. Returns URL to SAP Help Portal and search query. If ZADT_VSP is installed, also returns real documentation from SAP system."),
+			mcp.WithString("keyword", mcp.Required(), mcp.Description("ABAP keyword (e.g., SELECT, LOOP, DATA, METHOD, READ TABLE)")),
+		), handler: s.handleGetAbapHelp, alwaysOn: true, readOnly: true,
+			routes: []universalRoute{{action: "analyze", paramsType: "abap_help"}}},
 	}
-	switch objectType {
-	case "INFO":
-		return s.callHandler(ctx, s.handleGetSystemInfo, params)
-	case "COMPONENTS":
-		return s.callHandler(ctx, s.handleGetInstalledComponents, params)
-	case "CONNECTION":
-		return s.callHandler(ctx, s.handleGetConnectionInfo, params)
-	case "FEATURES":
-		return s.callHandler(ctx, s.handleGetFeatures, params)
-	}
-	return nil, false, nil
 }
 
 // --- System Information Handlers ---

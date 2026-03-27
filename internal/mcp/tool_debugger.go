@@ -1,5 +1,5 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// handlers_debugger.go contains handlers for WebSocket-based debugging (via ZADT_VSP).
+// tool_debugger.go contains handlers for WebSocket-based debugging (via ZADT_VSP).
 package mcp
 
 import (
@@ -12,24 +12,86 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
-// routeDebuggerAction routes "debug" sub-actions for the WebSocket-based debugger.
-func (s *Server) routeDebuggerAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "debug" {
-		return nil, false, nil
+// debuggerToolDefs returns tool definitions for ABAP debugger tools.
+func (s *Server) debuggerToolDefs() []toolDef {
+	return []toolDef{
+		{tool: mcp.NewTool("SetBreakpoint",
+			mcp.WithDescription("Set a breakpoint in ABAP code. Supports three types: 'line' (specific location), 'statement' (ABAP keyword), 'exception' (exception class). For class methods, use 'method' parameter for include-relative line numbers. Uses WebSocket connection to ZADT_VSP."),
+			mcp.WithString("kind", mcp.Description("Breakpoint type: 'line' (default), 'statement', or 'exception'")),
+			mcp.WithString("program", mcp.Description("Program name for line breakpoints (e.g., 'ZADT_DBG_PROG' or 'ZCL_MY_CLASS')")),
+			mcp.WithString("method", mcp.Description("Method name for class breakpoints. When specified, line number is relative to method start (line 1 = first line of METHOD implementation). Enables accurate breakpoints in class methods.")),
+			mcp.WithNumber("line", mcp.Description("Line number for line breakpoints. Without 'method': pool-absolute line. With 'method': relative to method start.")),
+			mcp.WithString("statement", mcp.Description("ABAP statement for statement breakpoints (e.g., 'CALL FUNCTION', 'SELECT', 'LOOP', 'CALL METHOD')")),
+			mcp.WithString("exception", mcp.Description("Exception class for exception breakpoints (e.g., 'CX_SY_ZERODIVIDE', 'CX_SY_OPEN_SQL_DB')")),
+		), handler: s.handleSetBreakpoint, focused: true, groups: []string{"X"},
+			routes: []universalRoute{{action: "debug", targetType: "SET_BREAKPOINT"}}},
+
+		{tool: mcp.NewTool("GetBreakpoints",
+			mcp.WithDescription("Get all breakpoints registered in the current debug session. Uses WebSocket connection to ZADT_VSP."),
+		), handler: s.handleGetBreakpoints, readOnly: true, focused: true, groups: []string{"X"},
+			routes: []universalRoute{{action: "debug", targetType: "GET_BREAKPOINTS"}}},
+
+		{tool: mcp.NewTool("DeleteBreakpoint",
+			mcp.WithDescription("Delete a breakpoint by ID. Uses WebSocket connection to ZADT_VSP."),
+			mcp.WithString("breakpoint_id", mcp.Required(), mcp.Description("ID of the breakpoint to delete")),
+		), handler: s.handleDeleteBreakpoint, focused: true, groups: []string{"X"},
+			routes: []universalRoute{{action: "debug", targetType: "DELETE_BREAKPOINT"}}},
+
+		{tool: mcp.NewTool("CallRFC",
+			mcp.WithDescription("Call a function module via WebSocket (ZADT_VSP). Useful for triggering ABAP code execution to hit breakpoints. Parameters are passed as key-value pairs."),
+			mcp.WithString("function", mcp.Required(), mcp.Description("Function module name (e.g., 'RFC_PING', 'BAPI_USER_GET_DETAIL')")),
+			mcp.WithString("params", mcp.Description("JSON object with function parameters (e.g., '{\"IV_PARAM\":\"value\"}')")),
+		), handler: s.handleCallRFC, focused: true,
+			routes: []universalRoute{{action: "debug", targetType: "CALL_RFC"}}},
+
+		{tool: mcp.NewTool("MoveObject",
+			mcp.WithDescription("Move an ABAP object to a different package. Uses ZADT_VSP WebSocket to call TR_TADIR_INTERFACE. Requires ZADT_VSP deployed."),
+			mcp.WithString("object_type", mcp.Required(), mcp.Description("Object type: CLAS, PROG, INTF, FUGR, TABL, etc.")),
+			mcp.WithString("object_name", mcp.Required(), mcp.Description("Name of the object to move (e.g., 'ZCL_TEST')")),
+			mcp.WithString("new_package", mcp.Required(), mcp.Description("Target package (e.g., '$ZRAY', 'ZPACKAGE')")),
+		), handler: s.handleMoveObject, focused: true,
+			routes: []universalRoute{{action: "debug", targetType: "MOVE"}}},
+
+		{tool: mcp.NewTool("DebuggerListen",
+			mcp.WithDescription("Start a debug listener that waits for a debuggee to hit a breakpoint. This is a BLOCKING call that uses long-polling. Returns when a debuggee is caught, timeout occurs, or a conflict is detected."),
+			mcp.WithString("user", mcp.Description("User to listen for (defaults to current user)")),
+			mcp.WithNumber("timeout", mcp.Description("Timeout in seconds (default: 60, max: 240)")),
+		), handler: s.handleDebuggerListen, readOnly: true, focused: true, groups: []string{"D", "X"}},
+
+		{tool: mcp.NewTool("DebuggerAttach",
+			mcp.WithDescription("Attach to a debuggee that has hit a breakpoint. Use the debuggee_id from DebuggerListen result."),
+			mcp.WithString("debuggee_id", mcp.Required(), mcp.Description("ID of the debuggee (from DebuggerListen result)")),
+			mcp.WithString("user", mcp.Description("User for debugging (defaults to current user)")),
+		), handler: s.handleDebuggerAttach, focused: true, groups: []string{"D", "X"}},
+
+		{tool: mcp.NewTool("DebuggerDetach",
+			mcp.WithDescription("Detach from the current debug session and release the debuggee."),
+		), handler: s.handleDebuggerDetach, focused: true, groups: []string{"D", "X"}},
+
+		{tool: mcp.NewTool("DebuggerStep",
+			mcp.WithDescription("Perform a step operation in the debugger."),
+			mcp.WithString("step_type", mcp.Required(), mcp.Description("Step type: 'stepInto', 'stepOver', 'stepReturn', 'stepContinue', 'stepRunToLine', 'stepJumpToLine'")),
+			mcp.WithString("uri", mcp.Description("Target URI for stepRunToLine/stepJumpToLine (e.g., '/sap/bc/adt/programs/programs/ZTEST/source/main#start=42')")),
+		), handler: s.handleDebuggerStep, focused: true, groups: []string{"D", "X"}},
+
+		{tool: mcp.NewTool("DebuggerGetStack",
+			mcp.WithDescription("Get the current call stack during a debug session."),
+		), handler: s.handleDebuggerGetStack, readOnly: true, focused: true, groups: []string{"D", "X"}},
+
+		{tool: mcp.NewTool("DebuggerGetVariables",
+			mcp.WithDescription("Get variable values during a debug session. Use '@ROOT' to get top-level variables, or specific variable IDs to get their values."),
+			mcp.WithArray("variable_ids",
+				mcp.Description("Variable IDs to retrieve (e.g., ['@ROOT'] for top-level, or specific IDs like ['LV_COUNT', 'LS_DATA'])"),
+				mcp.Items(map[string]interface{}{"type": "string"}),
+			),
+		), handler: s.handleDebuggerGetVariables, readOnly: true, focused: true, groups: []string{"D", "X"}},
+
+		{tool: mcp.NewTool("DebuggerSetVariable",
+			mcp.WithDescription("Set a variable value during a debug session. Requires an active debug session (after DebuggerAttach)."),
+			mcp.WithString("variable_name", mcp.Required(), mcp.Description("Variable name (e.g., 'GV_SPEED', 'LV_COUNT', 'LS_DATA-FIELD')")),
+			mcp.WithString("value", mcp.Required(), mcp.Description("New value as string (e.g., '70', 'Hello', 'X')")),
+		), handler: s.handleDebuggerSetVariable, focused: true, groups: []string{"D", "X"}},
 	}
-	switch objectType {
-	case "SET_BREAKPOINT":
-		return s.callHandler(ctx, s.handleSetBreakpoint, params)
-	case "GET_BREAKPOINTS":
-		return s.callHandler(ctx, s.handleGetBreakpoints, params)
-	case "DELETE_BREAKPOINT":
-		return s.callHandler(ctx, s.handleDeleteBreakpoint, params)
-	case "CALL_RFC":
-		return s.callHandler(ctx, s.handleCallRFC, params)
-	case "MOVE":
-		return s.callHandler(ctx, s.handleMoveObject, params)
-	}
-	return nil, false, nil
 }
 
 // --- Debugger Session Handlers (WebSocket-based via ZADT_VSP) ---
