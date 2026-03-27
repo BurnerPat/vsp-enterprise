@@ -6,10 +6,10 @@ import (
 
 func TestIsToolEnabled(t *testing.T) {
 	tests := []struct {
-		name      string
-		tools     map[string]bool
-		toolName  string
-		want      bool
+		name     string
+		tools    map[string]bool
+		toolName string
+		want     bool
 	}{
 		{
 			name:     "nil tools map - enabled by default",
@@ -162,6 +162,45 @@ func TestDefaultDisabledTools(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("Expected %q in DefaultDisabledTools(), not found", tool)
+		}
+	}
+}
+
+func TestDisabledSystem(t *testing.T) {
+	cfg := &SystemsConfig{
+		Systems: map[string]SystemConfig{
+			"dev":  {URL: "http://dev:50000", User: "DEV"},
+			"prod": {URL: "http://prod:50000", User: "PROD", Disabled: true},
+			"qa":   {URL: "http://qa:50000", User: "QA"},
+		},
+	}
+
+	// GetSystem should reject disabled systems
+	_, err := cfg.GetSystem("prod")
+	if err == nil {
+		t.Fatal("GetSystem should return error for disabled system")
+	}
+	if err.Error() != "system 'prod' is disabled" {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// GetSystem should still return enabled systems
+	sys, err := cfg.GetSystem("dev")
+	if err != nil {
+		t.Fatalf("GetSystem('dev') unexpected error: %v", err)
+	}
+	if sys.User != "DEV" {
+		t.Errorf("expected user DEV, got %s", sys.User)
+	}
+
+	// ListSystems should exclude disabled systems
+	list := cfg.ListSystems()
+	if len(list) != 2 {
+		t.Errorf("ListSystems() returned %d systems, want 2", len(list))
+	}
+	for _, name := range list {
+		if name == "prod" {
+			t.Error("ListSystems() should not include disabled system 'prod'")
 		}
 	}
 }

@@ -59,9 +59,9 @@ Copy and edit them to create your actual configuration.`,
 
 func runConfigInit(cmd *cobra.Command, args []string) error {
 	files := map[string]string{
-		".env.example":          envExample,
-		".vsp.json.example":     vspSystemsExample,
-		".mcp.json.example":     mcpJsonExample,
+		".env.example":      envExample,
+		".vsp.json.example": vspSystemsExample,
+		".mcp.json.example": mcpJsonExample,
 	}
 
 	created := 0
@@ -337,6 +337,24 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 				sys.CookieFile = val
 			case "--cookie-string":
 				sys.CookieString = val
+			case "--connection-mode":
+				sys.ConnectionMode = val
+			case "--ashost":
+				sys.AsHost = val
+			case "--sysnr":
+				sys.SysNr = val
+			case "--mshost":
+				sys.MsHost = val
+			case "--msserv":
+				sys.MsServ = val
+			case "--r3name":
+				sys.R3Name = val
+			case "--group":
+				sys.Group = val
+			case "--jco-proxy-jar":
+				sys.JcoProxyJar = val
+			case "--java-path":
+				sys.JavaPath = val
 			case "--insecure":
 				sys.Insecure = true
 				continue // insecure is a flag, not key-value
@@ -394,6 +412,34 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 		if cookieStr, ok := env["SAP_COOKIE_STRING"].(string); ok && cookieStr != "" {
 			sys.CookieString = cookieStr
 		}
+		// RFC settings
+		if v, ok := env["SAP_CONNECTION_MODE"].(string); ok && v != "" {
+			sys.ConnectionMode = v
+		}
+		if v, ok := env["SAP_ASHOST"].(string); ok && v != "" {
+			sys.AsHost = v
+		}
+		if v, ok := env["SAP_SYSNR"].(string); ok && v != "" {
+			sys.SysNr = v
+		}
+		if v, ok := env["SAP_MSHOST"].(string); ok && v != "" {
+			sys.MsHost = v
+		}
+		if v, ok := env["SAP_MSSERV"].(string); ok && v != "" {
+			sys.MsServ = v
+		}
+		if v, ok := env["SAP_R3NAME"].(string); ok && v != "" {
+			sys.R3Name = v
+		}
+		if v, ok := env["SAP_GROUP"].(string); ok && v != "" {
+			sys.Group = v
+		}
+		if v, ok := env["SAP_JCO_PROXY_JAR"].(string); ok && v != "" {
+			sys.JcoProxyJar = v
+		}
+		if v, ok := env["SAP_JAVA_PATH"].(string); ok && v != "" {
+			sys.JavaPath = v
+		}
 	}
 
 	return sys
@@ -448,8 +494,37 @@ func runVspToMcp(cmd *cobra.Command, args []string) error {
 			serverName = "vsp-" + name
 		}
 
-		serverArgs := []string{
-			"--url", sys.URL,
+		var serverArgs []string
+
+		// RFC or HTTP mode
+		if strings.EqualFold(sys.ConnectionMode, "rfc") {
+			serverArgs = append(serverArgs, "--connection-mode", "rfc")
+			if sys.AsHost != "" {
+				serverArgs = append(serverArgs, "--ashost", sys.AsHost)
+			}
+			if sys.SysNr != "" {
+				serverArgs = append(serverArgs, "--sysnr", sys.SysNr)
+			}
+			if sys.MsHost != "" {
+				serverArgs = append(serverArgs, "--mshost", sys.MsHost)
+			}
+			if sys.MsServ != "" {
+				serverArgs = append(serverArgs, "--msserv", sys.MsServ)
+			}
+			if sys.R3Name != "" {
+				serverArgs = append(serverArgs, "--r3name", sys.R3Name)
+			}
+			if sys.Group != "" {
+				serverArgs = append(serverArgs, "--group", sys.Group)
+			}
+			if sys.JcoProxyJar != "" {
+				serverArgs = append(serverArgs, "--jco-proxy-jar", sys.JcoProxyJar)
+			}
+			if sys.JavaPath != "" {
+				serverArgs = append(serverArgs, "--java-path", sys.JavaPath)
+			}
+		} else {
+			serverArgs = append(serverArgs, "--url", sys.URL)
 		}
 
 		// Cookie auth or user/password auth
@@ -527,12 +602,12 @@ Use 'vsp config tools list' to see current visibility.`,
 }
 
 var configToolsInitCmd = &cobra.Command{
-	Use:   "init [--mode focused|expert]",
+	Use:   "init [--mode focused|expert|hyperfocused]",
 	Short: "Initialize tools configuration with defaults",
 	Long: `Create or update the "tools" section in .vsp.json.
 
 Lists ALL available tools with their visibility status based on:
-- Current mode (focused/expert)
+- Current mode (focused/expert/hyperfocused)
 - Disabled groups
 - Known non-working tools (debuggers, etc.)
 
@@ -561,7 +636,7 @@ var configToolsDisableCmd = &cobra.Command{
 }
 
 func init() {
-	configToolsInitCmd.Flags().String("mode", "focused", "Mode to use for defaults (focused/expert)")
+	configToolsInitCmd.Flags().String("mode", "focused", "Mode to use for defaults (focused/expert/hyperfocused)")
 }
 
 func runConfigToolsInit(cmd *cobra.Command, args []string) error {
@@ -880,6 +955,20 @@ SAP_MODE=focused
 # SAP_FEATURE_AMDP=auto
 # SAP_FEATURE_UI5=auto
 # SAP_FEATURE_TRANSPORT=auto
+
+# RFC Connection Mode (alternative to HTTP, requires JCo)
+# SAP_CONNECTION_MODE=rfc
+# SAP_ASHOST=sap-app.example.com    # Direct connection (use with SAP_SYSNR)
+# SAP_SYSNR=00
+# --- OR load balanced ---
+# SAP_MSHOST=sap-ms.example.com     # Message server (use with MSSERV, R3NAME, GROUP)
+# SAP_MSSERV=3600
+# SAP_R3NAME=A4H
+# SAP_GROUP=PUBLIC
+#
+# SAP_JCO_PROXY_JAR=/path/to/jco-proxy.jar
+# SAP_JCO_LIBS_DIR=/path/to/jco/libs
+# SAP_JAVA_PATH=java
 `
 
 var vspSystemsExample = func() string {
@@ -904,6 +993,14 @@ var vspSystemsExample = func() string {
 				Client:          "100",
 				ReadOnly:        true,
 				AllowedPackages: []string{"Z*", "Y*"},
+			},
+			"rfc-direct": {
+				ConnectionMode: "rfc",
+				AsHost:         "sap-app.example.com",
+				SysNr:          "00",
+				User:           "RFC_USER",
+				Client:         "001",
+				JcoProxyJar:    "/opt/vsp/jco-proxy.jar",
 			},
 		},
 	}

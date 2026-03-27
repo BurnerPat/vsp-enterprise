@@ -11,6 +11,7 @@ import (
 
 // SystemConfig represents a SAP system configuration.
 type SystemConfig struct {
+	Disabled bool   `json:"disabled,omitempty"` // Skip this system when loading
 	URL      string `json:"url"`
 	User     string `json:"user,omitempty"`
 	Password string `json:"password,omitempty"` // Not recommended, use env var
@@ -21,6 +22,25 @@ type SystemConfig struct {
 	// Cookie authentication (alternative to user/password)
 	CookieFile   string `json:"cookie_file,omitempty"`   // Path to Netscape-format cookie file
 	CookieString string `json:"cookie_string,omitempty"` // Inline cookie string
+
+	// RFC connection settings (alternative to URL-based HTTP)
+	ConnectionMode string `json:"connection_mode,omitempty"` // "http" (default) or "rfc"
+	AsHost         string `json:"ashost,omitempty"`
+	SysNr          string `json:"sysnr,omitempty"`
+	MsHost         string `json:"mshost,omitempty"`
+	MsServ         string `json:"msserv,omitempty"`
+	R3Name         string `json:"r3name,omitempty"`
+	Group          string `json:"group,omitempty"`
+	JcoProxyJar    string `json:"jco_proxy_jar,omitempty"`
+	JavaPath       string `json:"java_path,omitempty"`
+
+	// SNC/SSO configuration (via SAP UI Landscape)
+	SNC           bool   `json:"snc,omitempty"`            // Enable SNC single sign-on
+	SysID         string `json:"sysid,omitempty"`          // SAP System ID from landscape (3 chars)
+	LandscapeFile string `json:"landscape_file,omitempty"` // Explicit path to SAP UI Landscape XML
+
+	// Per-system output settings
+	Verbose bool `json:"verbose,omitempty"` // Enable verbose logging for this system
 
 	// Optional safety settings per system
 	ReadOnly        bool     `json:"read_only,omitempty"`
@@ -41,8 +61,8 @@ type SystemsConfig struct {
 // ConfigPaths returns the list of paths to search for systems config.
 func ConfigPaths() []string {
 	paths := []string{
-		".vsp.json",                   // Current directory (preferred)
-		".vsp/systems.json",           // Current directory .vsp folder
+		".vsp.json",         // Current directory (preferred)
+		".vsp/systems.json", // Current directory .vsp folder
 	}
 
 	// Add home directory paths
@@ -97,11 +117,23 @@ func (c *SystemsConfig) GetSystem(name string) (*SystemConfig, error) {
 		return nil, fmt.Errorf("system '%s' not found. Available: %s", name, strings.Join(available, ", "))
 	}
 
+	if sys.Disabled {
+		return nil, fmt.Errorf("system '%s' is disabled", name)
+	}
+
 	// Resolve password from environment variable if not set
 	if sys.Password == "" {
 		// Try VSP_<SYSTEM>_PASSWORD (e.g., VSP_A4H_PASSWORD)
 		envKey := fmt.Sprintf("VSP_%s_PASSWORD", strings.ToUpper(name))
 		if pwd := os.Getenv(envKey); pwd != "" {
+			sys.Password = pwd
+		}
+	}
+
+	// Fallback: resolve password from .mcp.json env block
+	if sys.Password == "" {
+		envKey := fmt.Sprintf("VSP_%s_PASSWORD", strings.ToUpper(name))
+		if pwd := loadMcpEnvVar(envKey); pwd != "" {
 			sys.Password = pwd
 		}
 	}
@@ -117,11 +149,40 @@ func (c *SystemsConfig) GetSystem(name string) (*SystemConfig, error) {
 	return &sys, nil
 }
 
+// mcpConfig represents the structure of .mcp.json for env var extraction.
+type mcpConfig struct {
+	McpServers map[string]struct {
+		Env map[string]string `json:"env"`
+	} `json:"mcpServers"`
+}
+
+// loadMcpEnvVar searches .mcp.json env blocks for a given variable name.
+func loadMcpEnvVar(key string) string {
+	for _, path := range []string{".mcp.json"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var cfg mcpConfig
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			continue
+		}
+		for _, server := range cfg.McpServers {
+			if val, ok := server.Env[key]; ok {
+				return val
+			}
+		}
+	}
+	return ""
+}
+
 // ListSystems returns a list of configured system names.
 func (c *SystemsConfig) ListSystems() []string {
 	systems := make([]string, 0, len(c.Systems))
-	for name := range c.Systems {
-		systems = append(systems, name)
+	for name, sys := range c.Systems {
+		if !sys.Disabled {
+			systems = append(systems, name)
+		}
 	}
 	return systems
 }
@@ -148,6 +209,14 @@ func ExampleConfig() string {
 				Client:          "100",
 				ReadOnly:        true,
 				AllowedPackages: []string{"Z*", "Y*"},
+			},
+			"rfc-direct": {
+				ConnectionMode: "rfc",
+				AsHost:         "sap-app.example.com",
+				SysNr:          "00",
+				User:           "RFC_USER",
+				Client:         "001",
+				JcoProxyJar:    "/opt/vsp/jco-proxy.jar",
 			},
 		},
 	}

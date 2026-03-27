@@ -11,7 +11,7 @@ import (
 
 // Client is the main ADT API client.
 type Client struct {
-	transport *Transport
+	transport Requester
 	config    *Config
 }
 
@@ -25,8 +25,8 @@ func NewClient(baseURL, username, password string, opts ...Option) *Client {
 }
 
 // NewClientWithTransport creates a new client with a custom transport.
-// This is useful for testing.
-func NewClientWithTransport(cfg *Config, transport *Transport) *Client {
+// This is useful for testing and for RFC mode (RfcTransport).
+func NewClientWithTransport(cfg *Config, transport Requester) *Client {
 	return &Client{
 		transport: transport,
 		config:    cfg,
@@ -51,6 +51,40 @@ func (c *Client) checkTransportableEdit(transport, opName string) error {
 // Safety returns the safety configuration for checking transport operations.
 func (c *Client) Safety() *SafetyConfig {
 	return &c.config.Safety
+}
+
+// AllowPackageTemporarily adds a package to the allowed list for the duration of
+// an install/bootstrap operation. Returns a cleanup function that removes it.
+// This is used by install tools (InstallZADTVSP, InstallAbapGit) which are
+// self-contained bootstrap operations that should not be blocked by
+// SAP_ALLOWED_PACKAGES restrictions.
+func (c *Client) AllowPackageTemporarily(pkg string) func() {
+	// If no package restrictions are configured, nothing to do
+	if len(c.config.Safety.AllowedPackages) == 0 {
+		return func() {}
+	}
+
+	// If already allowed, nothing to do
+	if c.config.Safety.IsPackageAllowed(pkg) {
+		return func() {}
+	}
+
+	// Add to allowed packages
+	c.config.Safety.AllowedPackages = append(c.config.Safety.AllowedPackages, pkg)
+
+	// Return cleanup function
+	return func() {
+		// Remove the temporarily added package
+		for i, p := range c.config.Safety.AllowedPackages {
+			if strings.EqualFold(p, pkg) {
+				c.config.Safety.AllowedPackages = append(
+					c.config.Safety.AllowedPackages[:i],
+					c.config.Safety.AllowedPackages[i+1:]...,
+				)
+				return
+			}
+		}
+	}
 }
 
 // --- Search Operations ---

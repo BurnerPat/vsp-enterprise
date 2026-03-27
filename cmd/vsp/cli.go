@@ -39,10 +39,27 @@ type systemParams struct {
 	Insecure     bool
 	CookieFile   string
 	CookieString string
+
+	// RFC connection settings
+	ConnectionMode string
+	AsHost         string
+	SysNr          string
+	MsHost         string
+	MsServ         string
+	R3Name         string
+	Group          string
+	JcoProxyJar    string
+	JavaPath       string
 }
 
 // resolveSystemParams resolves system parameters from --system flag or env vars.
 func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
+	// Debug: show which system is being used
+	verbose, _ := cmd.Flags().GetBool("verbose")
+	if verbose || os.Getenv("VSP_DEBUG") == "true" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] resolveSystemParams: systemName=%q\n", systemName)
+	}
+
 	// If --system is specified, load from systems config
 	if systemName != "" {
 		cfg, path, err := config.LoadSystems()
@@ -58,38 +75,51 @@ func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 			return nil, err
 		}
 
-		// Require either password or cookie auth
+		// Require either password or cookie auth (RFC mode supports SSO without password)
 		hasCookieAuth := sys.CookieFile != "" || sys.CookieString != ""
-		if sys.Password == "" && !hasCookieAuth {
+		isRFC := strings.EqualFold(sys.ConnectionMode, "rfc")
+		if sys.Password == "" && !hasCookieAuth && !isRFC {
 			return nil, fmt.Errorf("auth not found for system '%s'. Set VSP_%s_PASSWORD env var or use cookie_file/cookie_string", systemName, strings.ToUpper(systemName))
 		}
 
 		verbose, _ := cmd.Flags().GetBool("verbose")
-		if verbose || os.Getenv("VSP_VERBOSE") == "true" {
+		if verbose || os.Getenv("VSP_VERBOSE") == "true" || os.Getenv("VSP_DEBUG") == "true" {
 			fmt.Fprintf(os.Stderr, "[INFO] Using system '%s' from %s\n", systemName, path)
+			fmt.Fprintf(os.Stderr, "[DEBUG] URL: %s, User: %s\n", sys.URL, sys.User)
 		}
 
 		return &systemParams{
-			URL:          sys.URL,
-			User:         sys.User,
-			Password:     sys.Password,
-			Client:       sys.Client,
-			Language:     sys.Language,
-			Insecure:     sys.Insecure,
-			CookieFile:   sys.CookieFile,
-			CookieString: sys.CookieString,
+			URL:            sys.URL,
+			User:           sys.User,
+			Password:       sys.Password,
+			Client:         sys.Client,
+			Language:       sys.Language,
+			Insecure:       sys.Insecure,
+			CookieFile:     sys.CookieFile,
+			CookieString:   sys.CookieString,
+			ConnectionMode: sys.ConnectionMode,
+			AsHost:         sys.AsHost,
+			SysNr:          sys.SysNr,
+			MsHost:         sys.MsHost,
+			MsServ:         sys.MsServ,
+			R3Name:         sys.R3Name,
+			Group:          sys.Group,
+			JcoProxyJar:    sys.JcoProxyJar,
+			JavaPath:       sys.JavaPath,
 		}, nil
 	}
 
 	// Fall back to environment variables
 	url := os.Getenv("SAP_URL")
-	if url == "" {
+	connMode := os.Getenv("SAP_CONNECTION_MODE")
+	if url == "" && !strings.EqualFold(connMode, "rfc") {
 		return nil, fmt.Errorf("SAP_URL not set. Use --system flag or set SAP_* env vars")
 	}
 
 	user := os.Getenv("SAP_USER")
 	password := os.Getenv("SAP_PASSWORD")
-	if user == "" || password == "" {
+	// RFC mode supports SSO — password is optional
+	if !strings.EqualFold(connMode, "rfc") && (user == "" || password == "") {
 		return nil, fmt.Errorf("SAP_USER and SAP_PASSWORD required")
 	}
 
@@ -269,16 +299,36 @@ func runSearch(cmd *cobra.Command, args []string) error {
 // --- source command ---
 
 var sourceCmd = &cobra.Command{
-	Use:   "source <type> <name>",
+	Use:   "source [type] [name]",
 	Short: "Get ABAP source code",
 	Long: `Retrieve source code for an ABAP object.
+
+Subcommands:
+  read     Read source code (same as 'vsp source <type> <name>')
+  write    Write source code from stdin
+  edit     Surgical string replacement
+  context  Source with compressed dependency contracts
 
 Examples:
   vsp -s a4h source CLAS ZCL_MY_CLASS
   vsp source PROG ZTEST_PROGRAM
-  vsp source INTF ZIF_MY_INTERFACE`,
-	Args: cobra.ExactArgs(2),
-	RunE: runSource,
+  vsp source read CLAS ZCL_MY_CLASS
+  vsp source write CLAS ZCL_FOO < file.abap
+  vsp source edit CLAS ZCL_FOO --old "old" --new "new"
+  vsp source context CLAS ZCL_FOO`,
+	Args: cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 2 {
+			return runSource(cmd, args)
+		}
+		return cmd.Help()
+	},
+}
+
+func init() {
+	sourceCmd.Flags().String("parent", "", "Function group name (required for FUNC type)")
+	sourceCmd.Flags().String("include", "", "Class include type: definitions, implementations, macros, testclasses (CLAS only)")
+	sourceCmd.Flags().String("method", "", "Method name to retrieve only that METHOD...ENDMETHOD block (CLAS only)")
 }
 
 func runSource(cmd *cobra.Command, args []string) error {
@@ -294,8 +344,18 @@ func runSource(cmd *cobra.Command, args []string) error {
 	objType := strings.ToUpper(args[0])
 	name := strings.ToUpper(args[1])
 
+	parent, _ := cmd.Flags().GetString("parent")
+	include, _ := cmd.Flags().GetString("include")
+	method, _ := cmd.Flags().GetString("method")
+
+	opts := &adt.GetSourceOptions{
+		Parent:  parent,
+		Include: include,
+		Method:  method,
+	}
+
 	ctx := context.Background()
-	source, err := client.GetSource(ctx, objType, name, nil)
+	source, err := client.GetSource(ctx, objType, name, opts)
 	if err != nil {
 		return fmt.Errorf("failed to get source: %w", err)
 	}

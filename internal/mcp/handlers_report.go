@@ -13,9 +13,39 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
+// routeReportAction routes "debug" with report-related sub-actions.
+func (s *Server) routeReportAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
+	if action != "debug" {
+		return nil, false, nil
+	}
+	switch objectType {
+	case "RUN_REPORT":
+		return s.callHandler(ctx, s.handleRunReport, params)
+	case "RUN_REPORT_ASYNC":
+		return s.callHandler(ctx, s.handleRunReportAsync, params)
+	case "GET_ASYNC_RESULT":
+		return s.callHandler(ctx, s.handleGetAsyncResult, params)
+	case "GET_VARIANTS":
+		return s.callHandler(ctx, s.handleGetVariants, params)
+	case "GET_TEXT_ELEMENTS":
+		return s.callHandler(ctx, s.handleGetTextElements, params)
+	case "SET_TEXT_ELEMENTS":
+		return s.callHandler(ctx, s.handleSetTextElements, params)
+	}
+	return nil, false, nil
+}
+
 // --- Report Execution Handlers ---
 
+// rfcModeWSUnavailable returns an error for WebSocket-based tools in RFC mode.
+func (s *Server) rfcModeWSUnavailable(toolName string) *mcp.CallToolResult {
+	return newToolResultError(fmt.Sprintf("%s is not available in RFC mode (requires ZADT_VSP WebSocket). Use CallRFC to call function modules directly.", toolName))
+}
+
 func (s *Server) handleRunReport(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if s.isRfcMode() {
+		return s.rfcModeWSUnavailable("RunReport"), nil
+	}
 	// Ensure WebSocket is connected
 	if errResult := s.ensureWSConnected(ctx, "RunReport"); errResult != nil {
 		return errResult, nil
@@ -104,6 +134,9 @@ func (s *Server) handleRunReport(ctx context.Context, request mcp.CallToolReques
 }
 
 func (s *Server) handleRunReportAsync(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if s.isRfcMode() {
+		return s.rfcModeWSUnavailable("RunReportAsync"), nil
+	}
 	// Ensure WebSocket is connected
 	if errResult := s.ensureWSConnected(ctx, "RunReportAsync"); errResult != nil {
 		return errResult, nil
@@ -302,6 +335,9 @@ func (s *Server) handleGetAsyncResult(ctx context.Context, request mcp.CallToolR
 }
 
 func (s *Server) handleGetVariants(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if s.isRfcMode() {
+		return s.rfcModeWSUnavailable("GetVariants"), nil
+	}
 	if errResult := s.ensureWSConnected(ctx, "GetVariants"); errResult != nil {
 		return errResult, nil
 	}
@@ -335,6 +371,9 @@ func (s *Server) handleGetVariants(ctx context.Context, request mcp.CallToolRequ
 }
 
 func (s *Server) handleGetTextElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if s.isRfcMode() {
+		return s.rfcModeWSUnavailable("GetTextElements"), nil
+	}
 	if errResult := s.ensureWSConnected(ctx, "GetTextElements"); errResult != nil {
 		return errResult, nil
 	}
@@ -377,6 +416,9 @@ func (s *Server) handleGetTextElements(ctx context.Context, request mcp.CallTool
 }
 
 func (s *Server) handleSetTextElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if s.isRfcMode() {
+		return s.rfcModeWSUnavailable("SetTextElements"), nil
+	}
 	if errResult := s.ensureWSConnected(ctx, "SetTextElements"); errResult != nil {
 		return errResult, nil
 	}

@@ -12,6 +12,13 @@ import (
 	"sync"
 )
 
+// Requester abstracts HTTP request execution for the ADT client.
+// Transport implements this for direct HTTP; RfcTransport implements it
+// for RFC sidecar proxy mode.
+type Requester interface {
+	Request(ctx context.Context, path string, opts *RequestOptions) (*Response, error)
+}
+
 // HTTPDoer is an interface for executing HTTP requests.
 // This abstraction allows for easy testing with mock implementations.
 type HTTPDoer interface {
@@ -171,6 +178,20 @@ func (t *Transport) Request(ctx context.Context, path string, opts *RequestOptio
 				return nil, fmt.Errorf("refreshing session after timeout: %w", err)
 			}
 			// Retry the request
+			return t.retryRequest(ctx, path, opts)
+		}
+
+		// Handle 401 Unauthorized - re-authenticate and retry once.
+		// This happens after idle periods when the SAP session expires.
+		// We preserve apiErr so the original path/body is not lost if re-auth itself fails.
+		if resp.StatusCode == http.StatusUnauthorized {
+			t.setCSRFToken("")
+			t.setSessionID("")
+			if err := t.fetchCSRFToken(ctx); err != nil {
+				// Return both errors: re-auth failure wraps the original 401 context
+				// so callers can see which endpoint triggered the expiry.
+				return nil, fmt.Errorf("re-authenticating after 401 on %s: %w (original error: %v)", path, err, apiErr)
+			}
 			return t.retryRequest(ctx, path, opts)
 		}
 
