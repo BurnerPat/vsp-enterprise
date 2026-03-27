@@ -1,0 +1,20 @@
+{
+  "systems": {
+    "DEV": {
+      "url": "https://dev-sap.example.com:44300",
+      "client": "100",
+      "language": "EN",
+      "browser_auth": true,
+      "browser_auth_timeout": "120s",
+      "cookie_save": "dev-cookies.txt"
+    },
+    "QAS": {
+      "connection_mode": "rfc",
+      "client": "200",
+      "language": "EN",
+      "snc": true,
+      "sysid": "QAS",
+      "read_only": true
+    }
+  }
+}

@@ -2,7 +2,11 @@ package adt
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -10,7 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
 
@@ -101,6 +107,12 @@ func friendlyBrowserName(path string) string {
 // The browser navigates to the ADT discovery endpoint which requires authentication,
 // triggering the SSO redirect. Once SAP-specific cookies appear, they are extracted
 // and the browser is closed.
+//
+// We launch the browser process manually and connect via RemoteAllocator instead
+// of using chromedp's ExecAllocator. ExecAllocator has a known race condition
+// where its cmd.Wait goroutine can panic with "close of closed channel" when the
+// browser process exits unexpectedly (common in MCP host environments like VS Code
+// that manage child process lifecycles).
 func BrowserLogin(ctx context.Context, sapURL string, insecure bool, timeout time.Duration, execPath string, verbose bool) (map[string]string, error) {
 	u, err := url.Parse(sapURL)
 	if err != nil {
@@ -116,54 +128,56 @@ func BrowserLogin(ctx context.Context, sapURL string, insecure bool, timeout tim
 	// try to download as a file, breaking the flow.
 	targetURL := strings.TrimRight(sapURL, "/") + "/sap/bc/adt/"
 
-	// Create a headed (non-headless) browser context
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", false),
-		chromedp.Flag("disable-gpu", false),
-		chromedp.WindowSize(800, 700),
-		// Set User-Agent to mimic Eclipse ADT. SAP ICM/ICF on many systems
-		// (especially R3/ECC) only sends WWW-Authenticate: Negotiate (Kerberos)
-		// for recognized ADT User-Agents. Without this, the system falls back
-		// to form-based login instead of triggering SPNEGO.
-		chromedp.UserAgent("Eclipse/4.39.0 (win32; x86_64) ADT/3.56.0 (devedition)"),
-		// Enable Kerberos/SPNEGO: chromedp uses a temporary profile that doesn't
-		// inherit the system's Integrated Windows Auth settings. These flags
-		// explicitly allow Negotiate auth with the SAP server.
-		chromedp.Flag("auth-server-whitelist", u.Host),
-		chromedp.Flag("auth-negotiate-delegate-whitelist", u.Host),
-	)
-
 	// Determine which browser to use
 	browserName := "browser"
 	if execPath != "" {
-		// User specified a browser explicitly
 		if _, err := os.Stat(execPath); os.IsNotExist(err) {
-			// Maybe it's a command name in PATH
 			if resolved, lookErr := exec.LookPath(execPath); lookErr == nil {
 				execPath = resolved
 			} else {
 				return nil, fmt.Errorf("browser executable not found: %s", execPath)
 			}
 		}
-		opts = append(opts, chromedp.ExecPath(execPath))
 		browserName = friendlyBrowserName(execPath)
 	} else {
-		// Auto-detect: find best available Chromium-based browser
 		if found, name := FindBrowser(); found != "" {
-			opts = append(opts, chromedp.ExecPath(found))
+			execPath = found
 			browserName = name
+		} else {
+			return nil, fmt.Errorf("no Chromium-based browser found. Install Edge, Chrome, or Chromium, or use --browser-exec to specify the path")
 		}
-		// If not found, let chromedp try its own default detection
 	}
 
-	if insecure {
-		opts = append(opts, chromedp.Flag("ignore-certificate-errors", true))
+	// Launch browser manually and get DevTools WebSocket URL.
+	// We manage the process ourselves to avoid chromedp ExecAllocator's
+	// goroutine race condition on browser process exit.
+	wsURL, cmd, dataDir, debugPort, err := launchBrowserProcess(ctx, execPath, u.Host, insecure, verbose)
+	if err != nil {
+		return nil, fmt.Errorf("failed to launch %s: %w", browserName, err)
 	}
+	defer cleanupBrowser(cmd, dataDir)
 
-	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
+	// Connect to the browser via RemoteAllocator (no ExecAllocator goroutines).
+	allocCtx, allocCancel := chromedp.NewRemoteAllocator(ctx, wsURL)
 	defer allocCancel()
 
-	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
+	// Attach to the existing tab instead of creating a new one.
+	// Edge opens one tab on startup (about:blank); we reuse it via its target ID.
+	targetID, err := findFirstTarget(debugPort)
+	if err != nil {
+		// Fallback: create a new context (will create a second tab)
+		if verbose {
+			fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Could not find existing tab, creating new one: %v\n", err)
+		}
+	}
+
+	var browserCtx context.Context
+	var browserCancel context.CancelFunc
+	if targetID != "" {
+		browserCtx, browserCancel = chromedp.NewContext(allocCtx, chromedp.WithTargetID(target.ID(targetID)))
+	} else {
+		browserCtx, browserCancel = chromedp.NewContext(allocCtx)
+	}
 	defer browserCancel()
 
 	timeoutCtx, timeoutCancel := context.WithTimeout(browserCtx, timeout)
@@ -205,7 +219,197 @@ func BrowserLogin(ctx context.Context, sapURL string, insecure bool, timeout tim
 			fmt.Fprintf(os.Stderr, "[BROWSER-AUTH]   cookie: %s\n", name)
 		}
 	}
+
+	// Gracefully close the browser via CDP so the window disappears immediately.
+	// The deferred cleanupBrowser will handle any remaining process/dir cleanup.
+	chromedp.Run(browserCtx, browser.Close())
+
 	return cookies, nil
+}
+
+// launchBrowserProcess starts a Chromium browser with DevTools enabled and returns
+// the WebSocket debugger URL. The caller is responsible for calling cleanupBrowser.
+//
+// Instead of reading the DevTools URL from stdout/stderr (which fails under VS Code's
+// job object / ConPTY), we:
+//  1. Find a free TCP port
+//  2. Launch Edge with --remote-debugging-port=PORT
+//  3. Poll http://127.0.0.1:PORT/json/version until it responds with the wsURL
+//
+// This approach is immune to pipe/handle inheritance issues.
+func launchBrowserProcess(ctx context.Context, execPath, sapHost string, insecure, verbose bool) (wsURL string, cmd *exec.Cmd, dataDir string, debugPort int, err error) {
+	// Create temporary user data directory
+	dataDir, err = os.MkdirTemp("", "vsp-browser-*")
+	if err != nil {
+		return "", nil, "", 0, fmt.Errorf("failed to create temp dir: %w", err)
+	}
+
+	// Find a free port for DevTools
+	debugPort, err = findFreePort()
+	if err != nil {
+		os.RemoveAll(dataDir)
+		return "", nil, "", 0, fmt.Errorf("failed to find free port: %w", err)
+	}
+
+	args := []string{
+		fmt.Sprintf("--remote-debugging-port=%d", debugPort),
+		"--user-data-dir=" + dataDir,
+		"--no-first-run",
+		"--no-default-browser-check",
+		"--disable-default-apps",
+		"--disable-extensions",
+		"--disable-sync",
+		"--disable-breakpad",
+		"--disable-background-networking",
+		"--disable-component-update",
+		"--enable-automation",
+		"--password-store=basic",
+		"--use-mock-keychain",
+		"--window-size=800,700",
+		// User-Agent mimics Eclipse ADT so SAP sends Negotiate (Kerberos) auth
+		"--user-agent=Eclipse/4.39.0 (win32; x86_64) ADT/3.56.0 (devedition)",
+		// Enable Kerberos/SPNEGO with the SAP host
+		"--auth-server-whitelist=" + sapHost,
+		"--auth-negotiate-delegate-whitelist=" + sapHost,
+	}
+	if insecure {
+		args = append(args, "--ignore-certificate-errors")
+	}
+	if os.Getuid() == 0 {
+		args = append(args, "--no-sandbox")
+	}
+	// Start with about:blank to avoid opening the user's configured start page.
+	// We'll navigate to the real URL via CDP after connecting.
+	args = append(args, "about:blank")
+
+	cmd = exec.CommandContext(ctx, execPath, args...)
+	setBrowserProcessAttrs(cmd)
+	// Redirect all handles away from the MCP protocol pipes
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
+	if err := cmd.Start(); err != nil {
+		os.RemoveAll(dataDir)
+		return "", nil, "", 0, fmt.Errorf("failed to start browser: %w", err)
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Launched browser (PID %d) on debug port %d\n", cmd.Process.Pid, debugPort)
+	}
+
+	// Poll the DevTools HTTP endpoint until it responds
+	wsURL, err = pollDevToolsEndpoint(ctx, debugPort, verbose)
+	if err != nil {
+		cmd.Process.Kill()
+		cmd.Wait()
+		os.RemoveAll(dataDir)
+		return "", nil, "", 0, err
+	}
+
+	return wsURL, cmd, dataDir, debugPort, nil
+}
+
+// findFreePort asks the OS for a free TCP port by binding to :0.
+func findFreePort() (int, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	return port, nil
+}
+
+// findFirstTarget queries the DevTools HTTP API for the first "page" target.
+// This lets us attach to Edge's existing about:blank tab instead of creating a new one.
+func findFirstTarget(port int) (string, error) {
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/json/list", port))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var targets []struct {
+		ID   string `json:"id"`
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(body, &targets); err != nil {
+		return "", err
+	}
+
+	for _, t := range targets {
+		if t.Type == "page" && t.ID != "" {
+			return t.ID, nil
+		}
+	}
+	return "", fmt.Errorf("no page targets found")
+}
+
+// pollDevToolsEndpoint polls the Chrome DevTools HTTP endpoint until it returns
+// the WebSocket debugger URL, or the context/timeout expires.
+func pollDevToolsEndpoint(ctx context.Context, port int, verbose bool) (string, error) {
+	endpointURL := fmt.Sprintf("http://127.0.0.1:%d/json/version", port)
+	client := &http.Client{Timeout: 2 * time.Second}
+
+	deadline := time.After(30 * time.Second)
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-deadline:
+			return "", fmt.Errorf("timed out waiting for browser DevTools on port %d", port)
+		case <-ticker.C:
+			resp, err := client.Get(endpointURL)
+			if err != nil {
+				if verbose {
+					fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Waiting for DevTools on port %d...\n", port)
+				}
+				continue
+			}
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				continue
+			}
+
+			// Parse {"webSocketDebuggerUrl": "ws://127.0.0.1:PORT/devtools/browser/UUID"}
+			var result struct {
+				WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+			}
+			if err := json.Unmarshal(body, &result); err != nil {
+				continue
+			}
+			if result.WebSocketDebuggerURL != "" {
+				if verbose {
+					fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] DevTools URL: %s\n", result.WebSocketDebuggerURL)
+				}
+				return result.WebSocketDebuggerURL, nil
+			}
+		}
+	}
+}
+
+// cleanupBrowser kills the browser process and removes its temp directory.
+func cleanupBrowser(cmd *exec.Cmd, dataDir string) {
+	if cmd != nil && cmd.Process != nil {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}
+	if dataDir != "" {
+		// Small delay for Windows file locks to be released
+		time.Sleep(50 * time.Millisecond)
+		os.RemoveAll(dataDir)
+	}
 }
 
 // pollForSAPCookies polls the browser for SAP-specific cookies at 1-second intervals.

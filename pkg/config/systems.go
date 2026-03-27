@@ -23,6 +23,12 @@ type SystemConfig struct {
 	CookieFile   string `json:"cookie_file,omitempty"`   // Path to Netscape-format cookie file
 	CookieString string `json:"cookie_string,omitempty"` // Inline cookie string
 
+	// Browser-based SSO authentication (alternative to user/password)
+	BrowserAuth        bool   `json:"browser_auth,omitempty"`         // Enable SSO login via browser
+	BrowserAuthTimeout string `json:"browser_auth_timeout,omitempty"` // Timeout for browser login (e.g. "120s")
+	BrowserExec        string `json:"browser_exec,omitempty"`         // Path to Chromium browser (auto-detect if empty)
+	CookieSave         string `json:"cookie_save,omitempty"`          // Save browser cookies to file for reuse
+
 	// RFC connection settings (alternative to URL-based HTTP)
 	ConnectionMode string `json:"connection_mode,omitempty"` // "http" (default) or "rfc"
 	AsHost         string `json:"ashost,omitempty"`

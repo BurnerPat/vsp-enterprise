@@ -428,6 +428,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 				SNC:                sys.SNC,
 				SysID:              sys.SysID,
 				LandscapeFile:      sys.LandscapeFile,
+				BrowserAuth:        sys.BrowserAuth,
+				BrowserAuthTimeout: sys.BrowserAuthTimeout,
+				BrowserExec:        sys.BrowserExec,
+				CookieSave:         sys.CookieSave,
 				Verbose:            sys.Verbose,
 			}
 
@@ -464,6 +468,40 @@ func runServer(cmd *cobra.Command, args []string) error {
 				cookies := adt.ParseCookieString(sys.CookieString)
 				if len(cookies) > 0 {
 					resolved.Cookies = cookies
+				}
+			}
+
+			// Handle browser-based SSO authentication for this system
+			if sys.BrowserAuth && len(resolved.Cookies) == 0 {
+				if resolved.BaseURL == "" {
+					return fmt.Errorf("--multi-system: system %q has browser_auth=true but no url configured", sysID)
+				}
+
+				browserTimeout := 120 * time.Second
+				if sys.BrowserAuthTimeout != "" {
+					if d, err := time.ParseDuration(sys.BrowserAuthTimeout); err == nil {
+						browserTimeout = d
+					}
+				}
+
+				if cfg.Verbose || resolved.Verbose {
+					fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Multi-system: starting browser login for system %q (%s)\n", sysID, resolved.BaseURL)
+				}
+
+				ctx := context.Background()
+				cookies, err := adt.BrowserLogin(ctx, resolved.BaseURL, resolved.InsecureSkipVerify, browserTimeout, sys.BrowserExec, cfg.Verbose || resolved.Verbose)
+				if err != nil {
+					return fmt.Errorf("--multi-system: browser authentication failed for system %q: %w", sysID, err)
+				}
+				resolved.Cookies = cookies
+
+				// Save cookies if requested
+				if sys.CookieSave != "" {
+					if err := adt.SaveCookiesToFile(cookies, resolved.BaseURL, sys.CookieSave); err != nil {
+						fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Warning: failed to save cookies for system %q: %v\n", sysID, err)
+					} else {
+						fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Cookies for system %q saved to %s (reuse with cookie_file)\n", sysID, sys.CookieSave)
+					}
 				}
 			}
 

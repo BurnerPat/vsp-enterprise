@@ -539,7 +539,7 @@ func newPerSystemServer(cfg *Config) *Server {
 	}
 	featureProber := adt.NewFeatureProber(adtClient, featureConfig, cfg.Verbose)
 
-	return &Server{
+	s := &Server{
 		adtClient:     adtClient,
 		config:        cfg,
 		featureProber: featureProber,
@@ -549,6 +549,13 @@ func newPerSystemServer(cfg *Config) *Server {
 		handlerMap:    make(map[string]server.ToolHandlerFunc), // builder mode
 		toolMap:       make(map[string]mcp.Tool),               // builder mode
 	}
+
+	// Start session keep-alive if configured
+	if cfg.KeepAliveInterval > 0 {
+		adtClient.StartKeepAlive(cfg.KeepAliveInterval, cfg.Verbose)
+	}
+
+	return s
 }
 
 // registerMultiSystemTools registers all tools on the main MCP server with system_id routing.
@@ -644,7 +651,7 @@ func (s *Server) requireActiveAMDPSession() *mcp.CallToolResult {
 // - handlers_ui5.go: UI5ListApps, UI5GetApp, etc.
 // - handlers_git.go: GitTypes, GitExport
 // - handlers_report.go: RunReport, GetVariants, etc.
-// - handlers_install.go: (removed)
+// - handlers_install.go: InstallZADTVSP, InstallAbapGit, etc.
 // - handlers_transport.go: ListTransports, GetTransport, etc.
 //
 // Tool registration is in:

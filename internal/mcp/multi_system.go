@@ -166,6 +166,9 @@ func systemConfigForMCP(sysID string, sysCfg *SystemConfigResolved, globalCfg *C
 
 		// Global debugger settings
 		TerminalID: globalCfg.TerminalID,
+
+		// Global keep-alive (applies to all systems)
+		KeepAliveInterval: globalCfg.KeepAliveInterval,
 	}
 
 	// Per-system safety overrides
@@ -223,6 +226,12 @@ type SystemConfigResolved struct {
 	SysID         string
 	LandscapeFile string
 	JcoProperties map[string]string // Resolved JCo properties (populated during SNC resolution)
+
+	// Browser-based SSO authentication
+	BrowserAuth        bool
+	BrowserAuthTimeout string // Duration string (e.g. "120s")
+	BrowserExec        string // Path to Chromium browser
+	CookieSave         string // Save browser cookies to file for reuse
 
 	// Per-system verbose
 	Verbose bool
