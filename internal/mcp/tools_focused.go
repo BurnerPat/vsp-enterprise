@@ -53,7 +53,7 @@ func focusedToolSet() map[string]bool {
 		"ImportFromFile": true, // File → SAP (replaces DeployFromFile)
 		"ExportToFile":   true, // SAP → File (replaces SaveToFile)
 
-		// System information (2)
+		// System information (2) — GetConnectionInfo, GetFeatures, GetAbapHelp are alwaysOn in systemToolDefs
 		"GetSystemInfo":          true, // System ID, release, kernel
 		"GetInstalledComponents": true, // Installed software components
 
