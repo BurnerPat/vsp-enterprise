@@ -61,6 +61,10 @@ func NewRfcTransport(sidecarURL string, cfg *Config, maxConcurrent int) *RfcTran
 	}
 }
 
+
+// Ping is a no-op for RFC transport (sessions are managed by the JCo sidecar).
+func (r *RfcTransport) Ping(_ context.Context) error { return nil }
+
 // Request implements Requester by converting the ADT request into a ProxyRequest JSON,
 // POSTing it to the sidecar's /rfc-proxy endpoint, and parsing the ProxyResponse back.
 func (r *RfcTransport) Request(ctx context.Context, path string, opts *RequestOptions) (*Response, error) {

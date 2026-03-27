@@ -45,6 +45,10 @@ func NewStdioRfcTransport(sidecar *SidecarManager, cfg *Config, maxConcurrent in
 }
 
 // Request implements Requester by converting the ADT request into a STDIO JSON message.
+
+// Ping is a no-op for STDIO RFC transport (sessions are managed by the JCo sidecar).
+func (r *StdioRfcTransport) Ping(_ context.Context) error { return nil }
+
 func (r *StdioRfcTransport) Request(ctx context.Context, path string, opts *RequestOptions) (*Response, error) {
 	if opts == nil {
 		opts = &RequestOptions{}

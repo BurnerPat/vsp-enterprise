@@ -98,6 +98,11 @@ type Config struct {
 	// Debugger configuration
 	TerminalID string // SAP GUI terminal ID for cross-tool breakpoint sharing
 
+	// Session keep-alive interval (0 = disabled)
+	// Sends periodic pings to prevent session timeout during idle periods.
+	// Useful for cookie/browser-auth where sessions expire server-side.
+	KeepAliveInterval time.Duration
+
 	// RFC connection settings (alternative to HTTP)
 	ConnectionMode   string
 	AsHost           string
@@ -118,7 +123,7 @@ type Config struct {
 	LandscapeFile string            // Explicit path to SAP UI Landscape XML
 	JcoProperties map[string]string // Resolved JCo properties (populated during config resolution)
 
-	// Sidecar transport mode: \"http\" (default) or \"stdio\"
+	// Sidecar transport mode: "http" (default) or "stdio"
 	SidecarTransport string
 
 	// Multi-system mode
@@ -304,6 +309,11 @@ func NewServer(cfg *Config) *Server {
 
 	// Register tools based on mode, disabled groups, and granular tool config
 	s.registerTools(cfg.Mode, cfg.DisabledGroups, cfg.ToolsConfig)
+
+	// Start session keep-alive if configured
+	if cfg.KeepAliveInterval > 0 {
+		adtClient.StartKeepAlive(cfg.KeepAliveInterval, cfg.Verbose)
+	}
 
 	return s
 }

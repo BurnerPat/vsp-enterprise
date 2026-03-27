@@ -17,6 +17,7 @@ import (
 // for RFC sidecar proxy mode.
 type Requester interface {
 	Request(ctx context.Context, path string, opts *RequestOptions) (*Response, error)
+	Ping(ctx context.Context) error
 }
 
 // HTTPDoer is an interface for executing HTTP requests.
@@ -479,4 +480,10 @@ func IsSessionExpiredError(err error) bool {
 		return apiErr.IsSessionExpired()
 	}
 	return false
+}
+
+// Ping sends a lightweight HEAD request to /sap/bc/adt/core/discovery to keep the session alive.
+// It refreshes the CSRF token as a side effect.
+func (t *Transport) Ping(ctx context.Context) error {
+	return t.fetchCSRFToken(ctx)
 }
