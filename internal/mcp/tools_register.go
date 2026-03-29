@@ -7,7 +7,8 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/oisee/vibing-steampunk/internal/mcp/tools"
+	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 )
 
 // paramMapper transforms universal-mode params into handler-specific params.
@@ -16,70 +17,52 @@ type paramMapper func(objectType, objectName string, params map[string]any) map[
 
 // universalRoute describes how a tool is accessible via the single SAP(action, target, params) tool.
 // A tool can have multiple routes (e.g., accessible via different action/target combinations).
-type universalRoute struct {
-	action     string      // universal-mode action: "read", "edit", "create", "delete", "search", "query", "grep", "test", "analyze", "debug", "system"
-	targetType string      // match objectType from target (e.g., "PROG", "INFO"). Empty = don't match on targetType.
-	paramsType string      // match params["type"] (e.g., "list_transports"). Empty = don't match on params.type.
-	mapArgs    paramMapper // optional: transform params before calling handler. nil = pass through.
+type UniversalRoute struct {
+	Action     string      // universal-mode action: "read", "edit", "create", "delete", "search", "query", "grep", "test", "analyze", "debug", "system"
+	TargetType string      // match objectType from target (e.g., "PROG", "INFO"). Empty = don't match on targetType.
+	ParamsType string      // match params["type"] (e.g., "list_transports"). Empty = don't match on params.type.
+	MapArgs    paramMapper // optional: transform params before calling handler. nil = pass through.
 }
 
-// toolDef is a self-contained, declarative tool definition.
+// ToolDef is a self-contained, declarative tool definition.
 // All metadata lives here — no separate focused/group maps needed.
-type toolDef struct {
-	tool     mcp.Tool
-	handler  server.ToolHandlerFunc
-	alwaysOn bool     // if true, registered regardless of mode/groups/config
-	readOnly bool     // tool only reads data, never modifies the SAP system
-	focused  bool     // included in "focused" mode (default mode)
-	groups   []string // group codes for --disabled-groups (e.g., "D", "H", "X")
+type ToolDef struct {
+	Tool     mcp.Tool
+	Handler  types.ToolHandlerFunc
+	AlwaysOn bool     // if true, registered regardless of mode/groups/config
+	ReadOnly bool     // tool only reads data, never modifies the SAP system
+	Focused  bool     // included in "focused" mode (default mode)
+	Groups   []string // group codes for --disabled-groups (e.g., "D", "H", "X")
 
 	// Universal mode routing (optional).
 	// Describes how this tool is reachable via SAP(action, target, params).
 	// If empty, the tool is only available as an individual named tool.
-	routes []universalRoute
+	Routes []UniversalRoute
 }
 
-// registerTools registers ADT tools with the MCP server based on mode, disabled groups, and granular config.
 func (s *Server) registerTools(mode string, disabledGroups string, toolsConfig map[string]bool) {
-	// Hyperfocused mode: single universal SAP tool
-	if mode == "hyperfocused" {
-		s.registerUniversalTool()
-		return
-	}
-
-	defs := s.allToolDefs()
-	shouldRegister := buildShouldRegister(mode, disabledGroups, toolsConfig, defs)
-
-	// Register tools that pass the filter
-	for _, td := range defs {
-		if td.alwaysOn || shouldRegister(td.tool.Name) {
-			s.addTool(td.tool, td.handler)
-		}
-	}
-
-	// Register tool aliases for common operations
-	s.registerToolAliases(shouldRegister)
+	// Handled by Router now
 }
 
 // buildShouldRegister creates a filter function.
-// Focused set and group membership are derived from toolDef metadata.
-func buildShouldRegister(mode string, disabledGroups string, toolsConfig map[string]bool, defs []toolDef) func(string) bool {
+// Focused set and group membership are derived from ToolDef metadata.
+func buildShouldRegister(mode string, disabledGroups string, toolsConfig map[string]bool, defs []ToolDef) func(string) bool {
 	// Derive focused set from metadata
 	focusedTools := make(map[string]bool)
 	for _, td := range defs {
-		if td.focused || td.alwaysOn {
-			focusedTools[td.tool.Name] = true
+		if td.Focused || td.AlwaysOn {
+			focusedTools[td.Tool.Name] = true
 		}
 	}
 
 	// Derive group membership from metadata
 	groupTools := make(map[string]map[string]bool) // group code → tool names
 	for _, td := range defs {
-		for _, g := range td.groups {
+		for _, g := range td.Groups {
 			if groupTools[g] == nil {
 				groupTools[g] = make(map[string]bool)
 			}
-			groupTools[g][td.tool.Name] = true
+			groupTools[g][td.Tool.Name] = true
 		}
 	}
 	// "U" alias for "5" (UI5)
@@ -112,29 +95,13 @@ func buildShouldRegister(mode string, disabledGroups string, toolsConfig map[str
 }
 
 // allToolDefs collects tool definitions from all handler groups.
-func (s *Server) allToolDefs() []toolDef {
-	var defs []toolDef
-	defs = append(defs, s.unifiedToolDefs()...)
-	defs = append(defs, s.readToolDefs()...)
-	defs = append(defs, s.systemToolDefs()...)
-	defs = append(defs, s.analysisToolDefs()...)
-	defs = append(defs, s.dumpToolDefs()...)
-	defs = append(defs, s.traceToolDefs()...)
-	defs = append(defs, s.sqlTraceToolDefs()...)
-	defs = append(defs, s.debuggerToolDefs()...)
-	defs = append(defs, s.searchToolDefs()...)
-	defs = append(defs, s.devToolDefs()...)
-	defs = append(defs, s.crudToolDefs()...)
-	defs = append(defs, s.classIncludeToolDefs()...)
-	defs = append(defs, s.workflowToolDefs()...)
-	defs = append(defs, s.fileToolDefs()...)
-	defs = append(defs, s.editToolDefs()...)
-	defs = append(defs, s.grepToolDefs()...)
-	defs = append(defs, s.codeIntelToolDefs()...)
-	defs = append(defs, s.ui5ToolDefs()...)
-	defs = append(defs, s.amdpToolDefs()...)
-	defs = append(defs, s.transportToolDefs()...)
-	defs = append(defs, s.gitToolDefs()...)
-	defs = append(defs, s.reportToolDefs()...)
+func (s *Server) allToolDefs() []types.ToolDef {
+	var defs []types.ToolDef
+	defs = append(defs, tools.UnifiedToolDefs()...)
+	defs = append(defs, tools.ReadToolDefs()...)
+	defs = append(defs, tools.SystemToolDefs()...)
+	defs = append(defs, tools.AnalysisToolDefs()...)
+	defs = append(defs, tools.TransportToolDefs()...)
+	// ... add remaining ones as they are refactored
 	return defs
 }

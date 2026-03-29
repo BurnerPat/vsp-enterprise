@@ -1,6 +1,6 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
 // tool_help.go provides help documentation for the universal SAP tool.
-package mcp
+package tools
 
 import (
 	"fmt"

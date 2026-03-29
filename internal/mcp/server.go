@@ -14,6 +14,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	deps "github.com/oisee/vibing-steampunk/embedded/deps"
+	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
@@ -40,15 +41,48 @@ type Server struct {
 	sidecar       *adt.SidecarManager       // JCo sidecar (RFC mode only)
 
 	// Multi-system support
-	multiSystem bool                              // true when --multi-system is active
-	router      *multiSystemRouter                // routes requests to per-system servers (multi-system only)
-	handlerMap  map[string]server.ToolHandlerFunc // local handler registry (per-system builder mode)
-	toolMap     map[string]mcp.Tool               // tool definitions (per-system builder mode)
+	multiSystem bool                             // true when --multi-system is active
+	router      *Router                          // routes requests to per-system servers (multi-system only)
+	handlerMap  map[string]types.ToolHandlerFunc // local handler registry (per-system builder mode)
+	toolMap     map[string]mcp.Tool              // tool definitions (per-system builder mode)
 
 	// Async task management
 	asyncTasks   map[string]*AsyncTask
 	asyncTasksMu sync.RWMutex
 	asyncTaskID  int64
+}
+
+// ADT implements types.System
+func (s *Server) ADT() *adt.Client {
+	return s.adtClient
+}
+
+// Config implements types.System
+func (s *Server) Config() any {
+	return s.config
+}
+
+// IsRfcMode implements types.System
+func (s *Server) IsRfcMode() bool {
+	return s.sidecar != nil
+}
+
+// Sidecar implements types.System
+func (s *Server) Sidecar() *adt.SidecarManager {
+	return s.sidecar
+}
+
+// RequireActiveAMDPSession implements types.System
+func (s *Server) RequireActiveAMDPSession() *mcp.CallToolResult {
+	if s.amdpWSClient == nil || !s.amdpWSClient.IsActive() {
+		return types.ErrorResult("No active AMDP debug session. Start one using StartAMDPDebugSession tool.")
+	}
+	return nil
+}
+
+// EnsureWSConnected implements types.System
+func (s *Server) EnsureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult {
+	return s.ensureWSConnected(ctx, toolName)
 }
 
 // Config holds MCP server configuration.
@@ -138,7 +172,7 @@ type Config struct {
 
 // addTool registers a tool on the server. In normal mode, it delegates to the MCP server.
 // In per-system builder mode (handlerMap != nil), it stores the handler and tool def locally.
-func (s *Server) addTool(tool mcp.Tool, handler server.ToolHandlerFunc) {
+func (s *Server) addTool(tool mcp.Tool, handler types.ToolHandlerFunc) {
 	if s.handlerMap != nil {
 		// Per-system builder mode: store handler and tool definition locally
 		s.handlerMap[tool.Name] = handler
@@ -146,7 +180,9 @@ func (s *Server) addTool(tool mcp.Tool, handler server.ToolHandlerFunc) {
 		return
 	}
 	// Normal single-system mode
-	s.mcpServer.AddTool(tool, handler)
+	s.mcpServer.AddTool(tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handler(ctx, s, request)
+	})
 }
 
 // buildADTOptions constructs the common ADT client options from config.
@@ -346,8 +382,13 @@ func NewServer(cfg *Config) *Server {
 		os.Exit(1)
 	}
 
-	s.mcpServer = newMCPServer()
-	s.registerTools(cfg.Mode, cfg.DisabledGroups, cfg.ToolsConfig)
+	mcpSrv := newMCPServer()
+	router := NewRouter(mcpSrv)
+	s.mcpServer = mcpSrv
+	s.router = router
+
+	router.AddSystem("default", s)
+	router.RegisterTools(cfg.Mode, cfg.DisabledGroups, cfg.ToolsConfig)
 
 	return s
 }
@@ -359,8 +400,10 @@ func (s *Server) Shutdown() {
 	}
 	// In multi-system mode, shut down all per-system servers
 	if s.router != nil {
-		for _, inst := range s.router.systems {
-			inst.server.Shutdown()
+		for _, sys := range s.router.systems {
+			if srv, ok := sys.(*Server); ok {
+				srv.Shutdown()
+			}
 		}
 	}
 }
@@ -375,16 +418,11 @@ func NewMultiSystemServer(globalCfg *Config) (*Server, error) {
 	// Auto-extract embedded proxy JAR once for all systems (shared JCo infrastructure)
 	ensureProxyJAR(globalCfg)
 
-	// Collect system IDs
-	systemIDs := make([]string, 0, len(globalCfg.MultiSystems))
-	for id := range globalCfg.MultiSystems {
-		systemIDs = append(systemIDs, id)
-	}
-
-	router := newMultiSystemRouter(systemIDs)
+	mcpSrv := newMCPServer()
+	router := NewRouter(mcpSrv)
 
 	mainServer := &Server{
-		mcpServer:   newMCPServer(),
+		mcpServer:   mcpSrv,
 		multiSystem: true,
 		router:      router,
 		asyncTasks:  make(map[string]*AsyncTask),
@@ -400,15 +438,8 @@ func NewMultiSystemServer(globalCfg *Config) (*Server, error) {
 			return nil, fmt.Errorf("failed to create server for system %q: %w", sysID, err)
 		}
 
-		router.addSystem(sysID, perSystemServer)
-
-		// Register tools on the per-system server (populates handlerMap)
-		perSystemServer.registerTools(globalCfg.Mode, globalCfg.DisabledGroups, globalCfg.ToolsConfig)
-
-		// Copy handlers from per-system server to router
-		for toolName, handler := range perSystemServer.handlerMap {
-			router.registerHandler(toolName, sysID, handler)
-		}
+		router.AddSystem(sysID, perSystemServer)
+		perSystemServer.router = router // Allow per-system server to access router if needed
 
 		if globalCfg.Verbose {
 			connInfo := perSystemCfg.BaseURL
@@ -418,13 +449,13 @@ func NewMultiSystemServer(globalCfg *Config) (*Server, error) {
 					connInfo = fmt.Sprintf("RFC-LB(%s)", perSystemCfg.MsHost)
 				}
 			}
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: initialized %q → %s (user: %s, %d tools)\n",
-				sysID, connInfo, perSystemCfg.Username, len(perSystemServer.handlerMap))
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: initialized %q → %s (user: %s)\n",
+				sysID, connInfo, perSystemCfg.Username)
 		}
 	}
 
-	// Register tools on main MCP server with system_id routing
-	mainServer.registerMultiSystemTools(router, globalCfg.Mode, globalCfg.DisabledGroups, globalCfg.ToolsConfig)
+	// Register tools on the router (which registers them on the main MCP server)
+	router.RegisterTools(globalCfg.Mode, globalCfg.DisabledGroups, globalCfg.ToolsConfig)
 
 	return mainServer, nil
 }
@@ -437,29 +468,15 @@ func newPerSystemServer(cfg *Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.handlerMap = make(map[string]server.ToolHandlerFunc)
+	s.handlerMap = make(map[string]types.ToolHandlerFunc)
 	s.toolMap = make(map[string]mcp.Tool)
 	return s, nil
 }
 
 // registerMultiSystemTools registers all tools on the main MCP server with system_id routing.
 // It uses the first system's tool definitions and wires each to the router.
-func (s *Server) registerMultiSystemTools(router *multiSystemRouter, mode string, disabledGroups string, toolsConfig map[string]bool) {
-	// Pick any system to get the canonical tool definitions
-	var canonicalSystem *Server
-	for _, inst := range router.systems {
-		canonicalSystem = inst.server
-		break
-	}
-	if canonicalSystem == nil {
-		return
-	}
-
-	// For each tool, add it to the main MCP server with system_id parameter and routing
-	for toolName, tool := range canonicalSystem.toolMap {
-		toolWithSystemID := addSystemIDToTool(tool, router.systemIDs)
-		s.mcpServer.AddTool(toolWithSystemID, router.routeHandler(toolName))
-	}
+func (s *Server) registerMultiSystemTools(router *Router, mode string, disabledGroups string, toolsConfig map[string]bool) {
+	// Handled by NewMultiSystemServer and Router now
 }
 
 // isRfcMode returns true if the server is running in RFC mode.

@@ -9,8 +9,8 @@ import (
 
 func TestSaveCookiesToFile(t *testing.T) {
 	cookies := map[string]string{
-		"MYSAPSSO2":              "abc123",
-		"sap-usercontext":        "sap-client=001",
+		"MYSAPSSO2":             "abc123",
+		"sap-usercontext":       "sap-client=001",
 		"SAP_SESSIONID_NPL_001": "session456",
 	}
 
@@ -27,8 +27,12 @@ func TestSaveCookiesToFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot stat cookie file: %v", err)
 	}
-	if info.Mode().Perm() != 0600 {
-		t.Errorf("expected permissions 0600, got %o", info.Mode().Perm())
+
+	// On Windows, the permission bits may not be meaningful, so we skip this check there
+	if !strings.HasPrefix(strings.ToLower(os.Getenv("OS")), "windows") {
+		if info.Mode().Perm() != 0600 {
+			t.Errorf("expected permissions 0600, got %o", info.Mode().Perm())
+		}
 	}
 
 	// Verify roundtrip: saved cookies can be loaded back

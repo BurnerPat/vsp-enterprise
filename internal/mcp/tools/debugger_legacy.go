@@ -1,7 +1,7 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
 // tool_debugger_legacy.go contains handlers for legacy REST-based debugging.
 // These use REST API which works for Listen/Attach/Step but not for breakpoints.
-package mcp
+package tools
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
@@ -26,37 +27,56 @@ func init() {
 	}
 }
 
-// routeDebuggerLegacyAction routes "debug" sub-actions for the legacy REST-based debugger.
-func (s *Server) routeDebuggerLegacyAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
-	if action != "debug" {
-		return nil, false, nil
+// DebuggerLegacyToolDefs returns tool definitions for legacy REST-based debugging.
+func DebuggerLegacyToolDefs() []types.ToolDef {
+	return []types.ToolDef{
+		{Tool: mcp.NewTool("DebuggerListen",
+			mcp.WithDescription("Start a legacy ADT debugger listener. Block until a program hits a breakpoint or timeout."),
+			mcp.WithString("user", mcp.Description("Filter by user (default: connection user)")),
+			mcp.WithNumber("timeout", mcp.Description("Timeout in seconds (default: 60, max: 240)")),
+		), Handler: HandleDebuggerListen},
+
+		{Tool: mcp.NewTool("DebuggerAttach",
+			mcp.WithDescription("Attach to a caught debuggee session."),
+			mcp.WithString("debuggee_id", mcp.Required(), mcp.Description("Debuggee ID from DebuggerListen")),
+			mcp.WithString("user", mcp.Description("Filter by user")),
+		), Handler: HandleDebuggerAttach},
+
+		{Tool: mcp.NewTool("DebuggerDetach",
+			mcp.WithDescription("Detach from the current debug session."),
+		), Handler: HandleDebuggerDetach},
+
+		{Tool: mcp.NewTool("DebuggerStep",
+			mcp.WithDescription("Execute a debug step."),
+			mcp.WithString("step_type", mcp.Required(), mcp.Description("stepInto, stepOver, stepReturn, stepContinue, stepRunToLine, stepJumpToLine")),
+			mcp.WithString("uri", mcp.Description("ADT URI for runToLine or jumpToLine")),
+		), Handler: HandleDebuggerStep},
+
+		{Tool: mcp.NewTool("DebuggerGetStack",
+			mcp.WithDescription("Get the current call stack."),
+		), Handler: HandleDebuggerGetStack, ReadOnly: true},
+
+		{Tool: mcp.NewTool("DebuggerGetVariables",
+			mcp.WithDescription("Read variable values."),
+			mcp.WithArray("variable_ids", mcp.Description("List of variable IDs to read (optional, default: @ROOT)"), mcp.WithStringItems()),
+		), Handler: HandleDebuggerGetVariables, ReadOnly: true},
+
+		{Tool: mcp.NewTool("DebuggerSetVariable",
+			mcp.WithDescription("Modify a variable value."),
+			mcp.WithString("variable_name", mcp.Required(), mcp.Description("Name of the variable")),
+			mcp.WithString("value", mcp.Required(), mcp.Description("New value")),
+		), Handler: HandleDebuggerSetVariable},
 	}
-	switch objectType {
-	case "LISTEN":
-		return s.callHandler(ctx, s.handleDebuggerListen, params)
-	case "ATTACH":
-		return s.callHandler(ctx, s.handleDebuggerAttach, params)
-	case "DETACH":
-		return s.callHandler(ctx, s.handleDebuggerDetach, params)
-	case "STEP":
-		return s.callHandler(ctx, s.handleDebuggerStep, params)
-	case "GET_STACK":
-		return s.callHandler(ctx, s.handleDebuggerGetStack, params)
-	case "GET_VARIABLES":
-		return s.callHandler(ctx, s.handleDebuggerGetVariables, params)
-	}
-	return nil, false, nil
 }
 
 // --- Legacy REST-based Debugger Handlers (fallback) ---
 
-func (s *Server) handleDebuggerListen(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	user, _ := request.Params.Arguments["user"].(string)
-	if user == "" {
-		user = s.config.Username // Default to connection user
-	}
+func HandleDebuggerListen(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Fallback to empty string if username not available through any means
+	user, _ := request.GetArguments()["user"].(string)
+
 	timeout := 60 // default
-	if t, ok := request.Params.Arguments["timeout"].(float64); ok && t > 0 {
+	if t, ok := request.GetArguments()["timeout"].(float64); ok && t > 0 {
 		timeout = int(t)
 		if timeout > 240 {
 			timeout = 240 // max 240 seconds
@@ -66,7 +86,7 @@ func (s *Server) handleDebuggerListen(ctx context.Context, request mcp.CallToolR
 	debugLog.Printf("DebuggerListen: user=%s, timeout=%d, mode=user", user, timeout)
 	start := time.Now()
 
-	result, err := s.adtClient.DebuggerListen(ctx, &adt.ListenOptions{
+	result, err := sys.ADT().DebuggerListen(ctx, &adt.ListenOptions{
 		DebuggingMode:  adt.DebuggingModeUser,
 		User:           user,
 		TimeoutSeconds: timeout,
@@ -74,7 +94,7 @@ func (s *Server) handleDebuggerListen(ctx context.Context, request mcp.CallToolR
 	elapsed := time.Since(start)
 	if err != nil {
 		debugLog.Printf("DebuggerListen: FAILED after %v: %v", elapsed, err)
-		return newToolResultError(fmt.Sprintf("DebuggerListen failed: %v", err)), nil
+		return types.ErrorResult(fmt.Sprintf("DebuggerListen failed: %v", err)), nil
 	}
 
 	if result.TimedOut {
@@ -107,29 +127,26 @@ func (s *Server) handleDebuggerListen(ctx context.Context, request mcp.CallToolR
 	return mcp.NewToolResultText("Listener returned with no result."), nil
 }
 
-func (s *Server) handleDebuggerAttach(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	debuggeeID, ok := request.Params.Arguments["debuggee_id"].(string)
+func HandleDebuggerAttach(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	debuggeeID, ok := request.GetArguments()["debuggee_id"].(string)
 	if !ok || debuggeeID == "" {
-		return newToolResultError("debuggee_id is required"), nil
+		return types.ErrorResult("debuggee_id is required"), nil
 	}
 
-	user, _ := request.Params.Arguments["user"].(string)
-	if user == "" {
-		user = s.config.Username // Default to connection user
-	}
+	user, _ := request.GetArguments()["user"].(string)
 
 	debugLog.Printf("DebuggerAttach: debuggeeID=%s, user=%s", debuggeeID, user)
 	start := time.Now()
 
-	result, err := s.adtClient.DebuggerAttach(ctx, debuggeeID, user)
+	result, err := sys.ADT().DebuggerAttach(ctx, debuggeeID, user)
 	elapsed := time.Since(start)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalidDebuggee") {
 			debugLog.Printf("DebuggerAttach: EXPIRED after %v: debuggee no longer available", elapsed)
-			return newToolResultError("Debuggee expired - the program finished before we could attach. Try again with a fresh run."), nil
+			return types.ErrorResult("Debuggee expired - the program finished before we could attach. Try again with a fresh run."), nil
 		}
 		debugLog.Printf("DebuggerAttach: FAILED after %v: %v", elapsed, err)
-		return newToolResultError(fmt.Sprintf("DebuggerAttach failed: %v", err)), nil
+		return types.ErrorResult(fmt.Sprintf("DebuggerAttach failed: %v", err)), nil
 	}
 	debugLog.Printf("DebuggerAttach: SUCCESS after %v: session=%s, pid=%d, stepping=%v",
 		elapsed, result.DebugSessionID, result.ProcessID, result.IsSteppingPossible)
@@ -165,24 +182,24 @@ func (s *Server) handleDebuggerAttach(ctx context.Context, request mcp.CallToolR
 	return mcp.NewToolResultText(sb.String()), nil
 }
 
-func (s *Server) handleDebuggerDetach(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleDebuggerDetach(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	debugLog.Printf("DebuggerDetach: starting")
 	start := time.Now()
-	err := s.adtClient.DebuggerDetach(ctx)
+	err := sys.ADT().DebuggerDetach(ctx)
 	elapsed := time.Since(start)
 	if err != nil {
 		debugLog.Printf("DebuggerDetach: FAILED after %v: %v", elapsed, err)
-		return newToolResultError(fmt.Sprintf("DebuggerDetach failed: %v", err)), nil
+		return types.ErrorResult(fmt.Sprintf("DebuggerDetach failed: %v", err)), nil
 	}
 
 	debugLog.Printf("DebuggerDetach: SUCCESS after %v", elapsed)
 	return mcp.NewToolResultText("Successfully detached from debug session."), nil
 }
 
-func (s *Server) handleDebuggerStep(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	stepTypeStr, ok := request.Params.Arguments["step_type"].(string)
+func HandleDebuggerStep(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	stepTypeStr, ok := request.GetArguments()["step_type"].(string)
 	if !ok || stepTypeStr == "" {
-		return newToolResultError("step_type is required"), nil
+		return types.ErrorResult("step_type is required"), nil
 	}
 
 	// Map string to step type
@@ -201,27 +218,27 @@ func (s *Server) handleDebuggerStep(ctx context.Context, request mcp.CallToolReq
 	case "stepJumpToLine":
 		stepType = adt.DebugStepJumpToLine
 	default:
-		return newToolResultError(fmt.Sprintf("Invalid step_type: %s. Valid values: stepInto, stepOver, stepReturn, stepContinue, stepRunToLine, stepJumpToLine", stepTypeStr)), nil
+		return types.ErrorResult(fmt.Sprintf("Invalid step_type: %s. Valid values: stepInto, stepOver, stepReturn, stepContinue, stepRunToLine, stepJumpToLine", stepTypeStr)), nil
 	}
 
-	uri, _ := request.Params.Arguments["uri"].(string)
+	uri, _ := request.GetArguments()["uri"].(string)
 
 	debugLog.Printf("DebuggerStep: type=%s, uri=%s", stepTypeStr, uri)
 	start := time.Now()
 
-	result, err := s.adtClient.DebuggerStep(ctx, stepType, uri)
+	result, err := sys.ADT().DebuggerStep(ctx, stepType, uri)
 	elapsed := time.Since(start)
 	if err != nil {
 		// debuggeeEnded is normal when stepContinue runs the program to completion
 		if strings.Contains(err.Error(), "debuggeeEnded") {
 			debugLog.Printf("DebuggerStep: program ended after %v (normal for stepContinue), resetting session", elapsed)
 			// Reset transport session to prevent "already attached" on next debug run
-			s.adtClient.DebuggerResetSession()
+			sys.ADT().DebuggerResetSession()
 			debugLog.Printf("DebuggerStep: session cookie cleared")
 			return mcp.NewToolResultText("Program execution completed. The debuggee has ended normally."), nil
 		}
 		debugLog.Printf("DebuggerStep: FAILED after %v: %v", elapsed, err)
-		return newToolResultError(fmt.Sprintf("DebuggerStep failed: %v", err)), nil
+		return types.ErrorResult(fmt.Sprintf("DebuggerStep failed: %v", err)), nil
 	}
 	debugLog.Printf("DebuggerStep: SUCCESS after %v: session=%s, stepping=%v, changed=%v",
 		elapsed, result.DebugSessionID, result.IsSteppingPossible, result.IsDebuggeeChanged)
@@ -243,14 +260,14 @@ func (s *Server) handleDebuggerStep(ctx context.Context, request mcp.CallToolReq
 	return mcp.NewToolResultText(sb.String()), nil
 }
 
-func (s *Server) handleDebuggerGetStack(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleDebuggerGetStack(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	debugLog.Printf("DebuggerGetStack: starting")
 	start := time.Now()
-	result, err := s.adtClient.DebuggerGetStack(ctx, true)
+	result, err := sys.ADT().DebuggerGetStack(ctx, true)
 	elapsed := time.Since(start)
 	if err != nil {
 		debugLog.Printf("DebuggerGetStack: FAILED after %v: %v", elapsed, err)
-		return newToolResultError(fmt.Sprintf("DebuggerGetStack failed: %v", err)), nil
+		return types.ErrorResult(fmt.Sprintf("DebuggerGetStack failed: %v", err)), nil
 	}
 	debugLog.Printf("DebuggerGetStack: SUCCESS after %v: %d entries", elapsed, len(result.Stack))
 
@@ -278,11 +295,11 @@ func (s *Server) handleDebuggerGetStack(ctx context.Context, request mcp.CallToo
 	return mcp.NewToolResultText(sb.String()), nil
 }
 
-func (s *Server) handleDebuggerGetVariables(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleDebuggerGetVariables(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse variable_ids from request
 	var variableIDs []string
 
-	if ids, ok := request.Params.Arguments["variable_ids"].([]interface{}); ok {
+	if ids, ok := request.GetArguments()["variable_ids"].([]interface{}); ok {
 		for _, id := range ids {
 			if s, ok := id.(string); ok {
 				variableIDs = append(variableIDs, s)
@@ -297,9 +314,9 @@ func (s *Server) handleDebuggerGetVariables(ctx context.Context, request mcp.Cal
 
 	// If @ROOT is requested, use GetChildVariables for top-level vars
 	if len(variableIDs) == 1 && variableIDs[0] == "@ROOT" {
-		result, err := s.adtClient.DebuggerGetChildVariables(ctx, []string{"@ROOT", "@DATAAGING"})
+		result, err := sys.ADT().DebuggerGetChildVariables(ctx, []string{"@ROOT", "@DATAAGING"})
 		if err != nil {
-			return newToolResultError(fmt.Sprintf("DebuggerGetVariables failed: %v", err)), nil
+			return types.ErrorResult(fmt.Sprintf("DebuggerGetVariables failed: %v", err)), nil
 		}
 
 		var sb strings.Builder
@@ -317,9 +334,9 @@ func (s *Server) handleDebuggerGetVariables(ctx context.Context, request mcp.Cal
 	}
 
 	// Get specific variables
-	result, err := s.adtClient.DebuggerGetVariables(ctx, variableIDs)
+	result, err := sys.ADT().DebuggerGetVariables(ctx, variableIDs)
 	if err != nil {
-		return newToolResultError(fmt.Sprintf("DebuggerGetVariables failed: %v", err)), nil
+		return types.ErrorResult(fmt.Sprintf("DebuggerGetVariables failed: %v", err)), nil
 	}
 
 	var sb strings.Builder
@@ -344,24 +361,24 @@ func (s *Server) handleDebuggerGetVariables(ctx context.Context, request mcp.Cal
 	return mcp.NewToolResultText(sb.String()), nil
 }
 
-func (s *Server) handleDebuggerSetVariable(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	variableName, ok := request.Params.Arguments["variable_name"].(string)
+func HandleDebuggerSetVariable(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	variableName, ok := request.GetArguments()["variable_name"].(string)
 	if !ok || variableName == "" {
-		return newToolResultError("variable_name is required"), nil
+		return types.ErrorResult("variable_name is required"), nil
 	}
-	value, ok := request.Params.Arguments["value"].(string)
+	value, ok := request.GetArguments()["value"].(string)
 	if !ok {
-		return newToolResultError("value is required"), nil
+		return types.ErrorResult("value is required"), nil
 	}
 
 	debugLog.Printf("DebuggerSetVariable: name=%s, value=%s", variableName, value)
 	start := time.Now()
 
-	result, err := s.adtClient.DebuggerSetVariableValue(ctx, variableName, value)
+	result, err := sys.ADT().DebuggerSetVariableValue(ctx, variableName, value)
 	elapsed := time.Since(start)
 	if err != nil {
 		debugLog.Printf("DebuggerSetVariable: FAILED after %v: %v", elapsed, err)
-		return newToolResultError(fmt.Sprintf("DebuggerSetVariable failed: %v", err)), nil
+		return types.ErrorResult(fmt.Sprintf("DebuggerSetVariable failed: %v", err)), nil
 	}
 
 	debugLog.Printf("DebuggerSetVariable: SUCCESS after %v: result=%s", elapsed, result)
