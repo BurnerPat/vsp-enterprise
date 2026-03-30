@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -169,9 +170,9 @@ func TestDefaultDisabledTools(t *testing.T) {
 func TestDisabledSystem(t *testing.T) {
 	cfg := &SystemsConfig{
 		Systems: map[string]SystemConfig{
-			"dev":  {URL: "http://dev:50000", User: "DEV"},
-			"prod": {URL: "http://prod:50000", User: "PROD", Disabled: true},
-			"qa":   {URL: "http://qa:50000", User: "QA"},
+			"dev":  {ConnectionConfig: ConnectionConfig{URL: "http://dev:50000", User: "DEV"}},
+			"prod": {ConnectionConfig: ConnectionConfig{URL: "http://prod:50000", User: "PROD"}, Disabled: true},
+			"qa":   {ConnectionConfig: ConnectionConfig{URL: "http://qa:50000", User: "QA"}},
 		},
 	}
 
@@ -203,4 +204,117 @@ func TestDisabledSystem(t *testing.T) {
 			t.Error("ListSystems() should not include disabled system 'prod'")
 		}
 	}
+}
+
+// TestSystemConfigJSONRoundTrip verifies that the embedded-struct refactoring
+// produces the exact same JSON keys as the original flat struct.
+func TestSystemConfigJSONRoundTrip(t *testing.T) {
+	original := SystemsConfig{
+		Default: "dev",
+		Systems: map[string]SystemConfig{
+			"dev": {
+				ConnectionConfig: ConnectionConfig{
+					URL:      "http://dev:50000",
+					User:     "DEV",
+					Password: "secret",
+					Client:   "001",
+					Language: "EN",
+					Insecure: true,
+				},
+				BrowserAuthConfig: BrowserAuthConfig{
+					BrowserAuth:        true,
+					BrowserAuthTimeout: "60s",
+				},
+				Verbose: true,
+			},
+			"rfc": {
+				ConnectionConfig: ConnectionConfig{
+					User:   "RFC_USER",
+					Client: "100",
+				},
+				RfcConfig: RfcConfig{
+					ConnectionMode: "rfc",
+					AsHost:         "sap.example.com",
+					SysNr:          "00",
+					JcoProxyJar:    "/opt/jco.jar",
+				},
+				SncConfig: SncConfig{
+					SNC:   true,
+					SysID: "A4H",
+				},
+				SafetySettings: SafetySettings{
+					ReadOnly:        true,
+					AllowedPackages: []string{"Z*"},
+				},
+			},
+		},
+		Tools: map[string]bool{"GetSource": true, "DeleteObject": false},
+	}
+
+	// Marshal
+	data, err := json.MarshalIndent(original, "", "  ")
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	// Verify key JSON keys exist at top level (flat, not nested)
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("Unmarshal to raw failed: %v", err)
+	}
+	for _, key := range []string{"systems", "default", "tools"} {
+		if _, ok := raw[key]; !ok {
+			t.Errorf("expected top-level key %q in JSON", key)
+		}
+	}
+
+	// Verify system-level keys are flat (not nested under sub-struct names)
+	var rawSystems struct {
+		Systems map[string]json.RawMessage `json:"systems"`
+	}
+	if err := json.Unmarshal(data, &rawSystems); err != nil {
+		t.Fatalf("Unmarshal systems failed: %v", err)
+	}
+	devRaw := rawSystems.Systems["dev"]
+	var devMap map[string]json.RawMessage
+	if err := json.Unmarshal(devRaw, &devMap); err != nil {
+		t.Fatalf("Unmarshal dev system failed: %v", err)
+	}
+	// These must be flat JSON keys, not nested under ConnectionConfig etc.
+	for _, key := range []string{"url", "user", "password", "client", "language", "insecure", "browser_auth", "browser_auth_timeout", "verbose"} {
+		if _, ok := devMap[key]; !ok {
+			t.Errorf("expected flat key %q in dev system JSON, got keys: %v", key, keysOf(devMap))
+		}
+	}
+	// Must NOT have embedded struct names as keys
+	for _, bad := range []string{"ConnectionConfig", "BrowserAuthConfig", "RfcConfig", "SncConfig", "SafetySettings"} {
+		if _, ok := devMap[bad]; ok {
+			t.Errorf("embedded struct name %q must not appear as JSON key", bad)
+		}
+	}
+
+	// Round-trip: unmarshal back and compare
+	var roundTripped SystemsConfig
+	if err := json.Unmarshal(data, &roundTripped); err != nil {
+		t.Fatalf("Round-trip unmarshal failed: %v", err)
+	}
+	if roundTripped.Default != original.Default {
+		t.Errorf("Default mismatch: got %q, want %q", roundTripped.Default, original.Default)
+	}
+	dev := roundTripped.Systems["dev"]
+	if dev.URL != "http://dev:50000" || dev.User != "DEV" || dev.Client != "001" || !dev.Insecure || !dev.BrowserAuth {
+		t.Errorf("dev system round-trip mismatch: %+v", dev)
+	}
+	rfc := roundTripped.Systems["rfc"]
+	if rfc.ConnectionMode != "rfc" || rfc.AsHost != "sap.example.com" || !rfc.SNC || rfc.SysID != "A4H" || !rfc.ReadOnly {
+		t.Errorf("rfc system round-trip mismatch: %+v", rfc)
+	}
+}
+
+func keysOf(m map[string]json.RawMessage) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }

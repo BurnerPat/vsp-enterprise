@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -19,92 +18,7 @@ type Server struct {
 	mcpServer   *server.MCPServer
 	router      *Router
 	multiSystem bool    // true when --multi-system is active
-	config      *Config // global configuration
-}
-
-// Config holds MCP server configuration.
-type Config struct {
-	// SAP connection settings
-	BaseURL            string
-	Username           string
-	Password           string
-	Client             string
-	Language           string
-	InsecureSkipVerify bool
-
-	// Cookie authentication (alternative to basic auth)
-	Cookies map[string]string
-
-	// Verbose output
-	Verbose bool
-
-	// Mode: focused or expert (default: focused)
-	Mode string
-
-	// DisabledGroups disables groups of tools using short codes:
-	// 5/U = UI5/BSP tools, T = Test tools, H = HANA/AMDP debugger, D = ABAP Debugger
-	// Example: "TH" disables Tests and HANA debugger tools
-	DisabledGroups string
-
-	// Safety configuration
-	ReadOnly                bool
-	BlockFreeSQL            bool
-	AllowedOps              string
-	DisallowedOps           string
-	AllowedPackages         []string
-	EnableTransports        bool     // Explicitly enable transport management (default: disabled)
-	TransportReadOnly       bool     // Only allow read operations on transports (list, get)
-	AllowedTransports       []string // Whitelist specific transports (supports wildcards like "A4HK*")
-	AllowTransportableEdits bool     // Allow editing objects that require transport requests
-
-	// Feature configuration (safety network)
-	// Values: "auto" (default, probe system), "on" (force enabled), "off" (force disabled)
-	FeatureHANA      string // HANA database detection (required for some AMDP features)
-	FeatureAbapGit   string // abapGit integration
-	FeatureRAP       string // RAP/OData development (DDLS, BDEF, SRVD, SRVB)
-	FeatureAMDP      string // AMDP/HANA debugger
-	FeatureUI5       string // UI5/Fiori BSP management
-	FeatureTransport string // CTS transport management (distinct from EnableTransports safety)
-
-	// Debugger configuration
-	TerminalID string // SAP GUI terminal ID for cross-tool breakpoint sharing
-
-	// Session keep-alive interval (0 = disabled)
-	// Sends periodic pings to prevent session timeout during idle periods.
-	// Useful for cookie/browser-auth where sessions expire server-side.
-	KeepAliveInterval time.Duration
-
-	// RFC connection settings (alternative to HTTP)
-	ConnectionMode   string
-	AsHost           string
-	SysNr            string
-	MsHost           string
-	MsServ           string
-	R3Name           string
-	Group            string
-	JcoProxyJar      string
-	JcoLibsDir       string
-	JavaPath         string
-	RfcProxyPort     int
-	RfcMaxConcurrent int
-
-	// SNC/SSO configuration (via SAP UI Landscape)
-	SNC           bool              // Enable SNC single sign-on
-	SysID         string            // SAP System ID from landscape (3 chars)
-	LandscapeFile string            // Explicit path to SAP UI Landscape XML
-	JcoProperties map[string]string // Resolved JCo properties (populated during config resolution)
-
-	// Sidecar transport mode: "http" (default) or "stdio"
-	SidecarTransport string
-
-	// Multi-system mode
-	MultiSystem  bool                             // Enable multi-system routing
-	MultiSystems map[string]*SystemConfigResolved // system_id -> resolved config (populated by cmd)
-
-	// Granular tool visibility (from .vsp.json)
-	// Key: tool name, Value: true=enabled, false=disabled
-	// Takes highest priority over mode and disabled groups
-	ToolsConfig map[string]bool
+	config      *Config // global configuration (type alias for config.ResolvedConfig)
 }
 
 // newMCPServer creates the underlying mcp-go MCPServer instance.
@@ -153,9 +67,10 @@ func NewMultiSystemServer(globalCfg *Config) (*Server, error) {
 
 	// Create per-system System instances, each with independent connections
 	for sysID, sysCfg := range globalCfg.MultiSystems {
-		perSystemCfg := systemConfigForMCP(sysID, sysCfg, globalCfg)
+		perSystemCfg := *sysCfg // copy to avoid mutating the original
+		perSystemCfg.MergeGlobal(globalCfg)
 
-		sys, err := newSystemInstance(perSystemCfg)
+		sys, err := newSystemInstance(&perSystemCfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create system for %q: %w", sysID, err)
 		}
@@ -163,7 +78,7 @@ func NewMultiSystemServer(globalCfg *Config) (*Server, error) {
 		router.AddSystem(sysID, sys)
 
 		if globalCfg.Verbose {
-			connInfo := perSystemCfg.BaseURL
+			connInfo := perSystemCfg.URL
 			if strings.EqualFold(perSystemCfg.ConnectionMode, "rfc") {
 				connInfo = fmt.Sprintf("RFC(%s)", perSystemCfg.AsHost)
 				if perSystemCfg.MsHost != "" {
@@ -171,7 +86,7 @@ func NewMultiSystemServer(globalCfg *Config) (*Server, error) {
 				}
 			}
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: initialized %q → %s (user: %s)\n",
-				sysID, connInfo, perSystemCfg.Username)
+				sysID, connInfo, perSystemCfg.User)
 		}
 	}
 

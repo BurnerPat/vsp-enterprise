@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	deps "github.com/oisee/vibing-steampunk/embedded/deps"
+	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
-	"github.com/oisee/vibing-steampunk/pkg/config"
 	"github.com/spf13/cobra"
 )
 

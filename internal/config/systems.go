@@ -9,9 +9,15 @@ import (
 	"strings"
 )
 
-// SystemConfig represents a SAP system configuration.
-type SystemConfig struct {
-	Disabled bool   `json:"disabled,omitempty"` // Skip this system when loading
+// ---------------------------------------------------------------------------
+// Composable configuration sub-structs.
+// Each groups related fields and carries JSON tags. When embedded, Go's
+// encoding/json flattens them so the serialized JSON stays identical to the
+// previous monolithic SystemConfig layout.
+// ---------------------------------------------------------------------------
+
+// ConnectionConfig holds core SAP connection settings.
+type ConnectionConfig struct {
 	URL      string `json:"url"`
 	User     string `json:"user,omitempty"`
 	Password string `json:"password,omitempty"` // Not recommended, use env var
@@ -22,14 +28,18 @@ type SystemConfig struct {
 	// Cookie authentication (alternative to user/password)
 	CookieFile   string `json:"cookie_file,omitempty"`   // Path to Netscape-format cookie file
 	CookieString string `json:"cookie_string,omitempty"` // Inline cookie string
+}
 
-	// Browser-based SSO authentication (alternative to user/password)
+// BrowserAuthConfig holds browser-based SSO authentication settings.
+type BrowserAuthConfig struct {
 	BrowserAuth        bool   `json:"browser_auth,omitempty"`         // Enable SSO login via browser
 	BrowserAuthTimeout string `json:"browser_auth_timeout,omitempty"` // Timeout for browser login (e.g. "120s")
 	BrowserExec        string `json:"browser_exec,omitempty"`         // Path to Chromium browser (auto-detect if empty)
 	CookieSave         string `json:"cookie_save,omitempty"`          // Save browser cookies to file for reuse
+}
 
-	// RFC connection settings (alternative to URL-based HTTP)
+// RfcConfig holds RFC connection settings (alternative to URL-based HTTP).
+type RfcConfig struct {
 	ConnectionMode string `json:"connection_mode,omitempty"` // "http" (default) or "rfc"
 	AsHost         string `json:"ashost,omitempty"`
 	SysNr          string `json:"sysnr,omitempty"`
@@ -39,18 +49,35 @@ type SystemConfig struct {
 	Group          string `json:"group,omitempty"`
 	JcoProxyJar    string `json:"jco_proxy_jar,omitempty"`
 	JavaPath       string `json:"java_path,omitempty"`
+}
 
-	// SNC/SSO configuration (via SAP UI Landscape)
+// SncConfig holds SNC/SSO configuration (via SAP UI Landscape).
+type SncConfig struct {
 	SNC           bool   `json:"snc,omitempty"`            // Enable SNC single sign-on
 	SysID         string `json:"sysid,omitempty"`          // SAP System ID from landscape (3 chars)
 	LandscapeFile string `json:"landscape_file,omitempty"` // Explicit path to SAP UI Landscape XML
+}
+
+// SafetySettings holds per-system safety restrictions.
+type SafetySettings struct {
+	ReadOnly        bool     `json:"read_only,omitempty"`
+	AllowedPackages []string `json:"allowed_packages,omitempty"`
+}
+
+// SystemConfig represents a SAP system configuration.
+// It composes the sub-structs above; Go's encoding/json flattens embedded
+// structs so the serialized JSON stays identical to the previous layout.
+type SystemConfig struct {
+	Disabled bool `json:"disabled,omitempty"` // Skip this system when loading
+	ConnectionConfig
+	BrowserAuthConfig
+	RfcConfig
+	SncConfig
 
 	// Per-system output settings
 	Verbose bool `json:"verbose,omitempty"` // Enable verbose logging for this system
 
-	// Optional safety settings per system
-	ReadOnly        bool     `json:"read_only,omitempty"`
-	AllowedPackages []string `json:"allowed_packages,omitempty"`
+	SafetySettings
 }
 
 // SystemsConfig is the root configuration containing all systems.
@@ -199,30 +226,42 @@ func ExampleConfig() string {
 		Default: "dev",
 		Systems: map[string]SystemConfig{
 			"dev": {
-				URL:    "http://dev.example.com:50000",
-				User:   "DEVELOPER",
-				Client: "001",
+				ConnectionConfig: ConnectionConfig{
+					URL:    "http://dev.example.com:50000",
+					User:   "DEVELOPER",
+					Client: "001",
+				},
 			},
 			"a4h": {
-				URL:      "http://a4h.local:50000",
-				User:     "ADMIN",
-				Client:   "001",
-				Insecure: true,
+				ConnectionConfig: ConnectionConfig{
+					URL:      "http://a4h.local:50000",
+					User:     "ADMIN",
+					Client:   "001",
+					Insecure: true,
+				},
 			},
 			"prod": {
-				URL:             "https://prod.example.com:44300",
-				User:            "READONLY_USER",
-				Client:          "100",
-				ReadOnly:        true,
-				AllowedPackages: []string{"Z*", "Y*"},
+				ConnectionConfig: ConnectionConfig{
+					URL:    "https://prod.example.com:44300",
+					User:   "READONLY_USER",
+					Client: "100",
+				},
+				SafetySettings: SafetySettings{
+					ReadOnly:        true,
+					AllowedPackages: []string{"Z*", "Y*"},
+				},
 			},
 			"rfc-direct": {
-				ConnectionMode: "rfc",
-				AsHost:         "sap-app.example.com",
-				SysNr:          "00",
-				User:           "RFC_USER",
-				Client:         "001",
-				JcoProxyJar:    "/opt/vsp/jco-proxy.jar",
+				ConnectionConfig: ConnectionConfig{
+					User:   "RFC_USER",
+					Client: "001",
+				},
+				RfcConfig: RfcConfig{
+					ConnectionMode: "rfc",
+					AsHost:         "sap-app.example.com",
+					SysNr:          "00",
+					JcoProxyJar:    "/opt/vsp/jco-proxy.jar",
+				},
 			},
 		},
 	}

@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
-	"github.com/oisee/vibing-steampunk/pkg/config"
 	"github.com/spf13/cobra"
 )
 
@@ -23,31 +23,8 @@ func init() {
 	rootCmd.AddCommand(systemsCmd)
 }
 
-// systemParams holds resolved system parameters.
-type systemParams struct {
-	URL          string
-	User         string
-	Password     string
-	Client       string
-	Language     string
-	Insecure     bool
-	CookieFile   string
-	CookieString string
-
-	// RFC connection settings
-	ConnectionMode string
-	AsHost         string
-	SysNr          string
-	MsHost         string
-	MsServ         string
-	R3Name         string
-	Group          string
-	JcoProxyJar    string
-	JavaPath       string
-}
-
 // resolveSystemParams resolves system parameters from --system flag or env vars.
-func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
+func resolveSystemParams(cmd *cobra.Command) (*config.ResolvedConfig, error) {
 	// Debug: show which system is being used
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	if verbose || os.Getenv("VSP_DEBUG") == "true" {
@@ -56,15 +33,15 @@ func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 
 	// If --system is specified, load from systems config
 	if systemName != "" {
-		cfg, path, err := config.LoadSystems()
+		sysCfg, path, err := config.LoadSystems()
 		if err != nil {
 			return nil, fmt.Errorf("failed to load systems config: %w", err)
 		}
-		if cfg == nil {
+		if sysCfg == nil {
 			return nil, fmt.Errorf("no systems config found. Create .vsp.json or ~/.vsp.json\n\nExample:\n%s", config.ExampleConfig())
 		}
 
-		sys, err := cfg.GetSystem(systemName)
+		sys, err := sysCfg.GetSystem(systemName)
 		if err != nil {
 			return nil, err
 		}
@@ -82,25 +59,7 @@ func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 			fmt.Fprintf(os.Stderr, "[DEBUG] URL: %s, User: %s\n", sys.URL, sys.User)
 		}
 
-		return &systemParams{
-			URL:            sys.URL,
-			User:           sys.User,
-			Password:       sys.Password,
-			Client:         sys.Client,
-			Language:       sys.Language,
-			Insecure:       sys.Insecure,
-			CookieFile:     sys.CookieFile,
-			CookieString:   sys.CookieString,
-			ConnectionMode: sys.ConnectionMode,
-			AsHost:         sys.AsHost,
-			SysNr:          sys.SysNr,
-			MsHost:         sys.MsHost,
-			MsServ:         sys.MsServ,
-			R3Name:         sys.R3Name,
-			Group:          sys.Group,
-			JcoProxyJar:    sys.JcoProxyJar,
-			JavaPath:       sys.JavaPath,
-		}, nil
+		return sys.ToResolved(), nil
 	}
 
 	// Fall back to environment variables
@@ -117,18 +76,20 @@ func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 		return nil, fmt.Errorf("SAP_USER and SAP_PASSWORD required")
 	}
 
-	return &systemParams{
-		URL:      url,
-		User:     user,
-		Password: password,
-		Client:   getEnvOrDefault("SAP_CLIENT", "001"),
-		Language: getEnvOrDefault("SAP_LANGUAGE", "EN"),
-		Insecure: os.Getenv("SAP_INSECURE") == "true",
+	return &config.ResolvedConfig{
+		ConnectionConfig: config.ConnectionConfig{
+			URL:      url,
+			User:     user,
+			Password: password,
+			Client:   getEnvOrDefault("SAP_CLIENT", "001"),
+			Language: getEnvOrDefault("SAP_LANGUAGE", "EN"),
+			Insecure: os.Getenv("SAP_INSECURE") == "true",
+		},
 	}, nil
 }
 
-// getClient creates an ADT client from system params.
-func getClient(params *systemParams) (*adt.Client, error) {
+// getClient creates an ADT client from resolved config.
+func getClient(params *config.ResolvedConfig) (*adt.Client, error) {
 	opts := []adt.Option{
 		adt.WithClient(params.Client),
 		adt.WithLanguage(params.Language),
@@ -156,8 +117,7 @@ func getClient(params *systemParams) (*adt.Client, error) {
 }
 
 // getWSClient creates an AMDP WebSocket client for GitExport.
-func getWSClient(ctx context.Context, params *systemParams) (*adt.AMDPWebSocketClient, error) {
-	// NewAMDPWebSocketClient(baseURL, client, user, password, insecure)
+func getWSClient(ctx context.Context, params *config.ResolvedConfig) (*adt.AMDPWebSocketClient, error) {
 	wsClient := adt.NewAMDPWebSocketClient(
 		params.URL,
 		params.Client,

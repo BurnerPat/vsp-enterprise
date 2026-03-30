@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/oisee/vibing-steampunk/internal/config"
 )
 
 func TestNewToolResultError(t *testing.T) {
@@ -34,19 +35,21 @@ func TestNewToolResultError(t *testing.T) {
 
 func TestConfig(t *testing.T) {
 	cfg := &Config{
-		BaseURL:            "https://sap.example.com:44300",
-		Username:           "testuser",
-		Password:           "testpass",
-		Client:             "100",
-		Language:           "DE",
-		InsecureSkipVerify: true,
+		ConnectionConfig: config.ConnectionConfig{
+			URL:      "https://sap.example.com:44300",
+			User:     "testuser",
+			Password: "testpass",
+			Client:   "100",
+			Language: "DE",
+			Insecure: true,
+		},
 	}
 
-	if cfg.BaseURL != "https://sap.example.com:44300" {
-		t.Errorf("BaseURL = %v, want https://sap.example.com:44300", cfg.BaseURL)
+	if cfg.URL != "https://sap.example.com:44300" {
+		t.Errorf("URL = %v, want https://sap.example.com:44300", cfg.URL)
 	}
-	if cfg.Username != "testuser" {
-		t.Errorf("Username = %v, want testuser", cfg.Username)
+	if cfg.User != "testuser" {
+		t.Errorf("User = %v, want testuser", cfg.User)
 	}
 	if cfg.Password != "testpass" {
 		t.Errorf("Password = %v, want testpass", cfg.Password)
@@ -57,18 +60,20 @@ func TestConfig(t *testing.T) {
 	if cfg.Language != "DE" {
 		t.Errorf("Language = %v, want DE", cfg.Language)
 	}
-	if !cfg.InsecureSkipVerify {
-		t.Error("InsecureSkipVerify should be true")
+	if !cfg.Insecure {
+		t.Error("Insecure should be true")
 	}
 }
 
 func TestNewServer(t *testing.T) {
 	cfg := &Config{
-		BaseURL:  "https://sap.example.com:44300",
-		Username: "testuser",
-		Password: "testpass",
-		Client:   "001",
-		Language: "EN",
+		ConnectionConfig: config.ConnectionConfig{
+			URL:      "https://sap.example.com:44300",
+			User:     "testuser",
+			Password: "testpass",
+			Client:   "001",
+			Language: "EN",
+		},
 	}
 
 	srv := NewServer(cfg)
@@ -97,11 +102,13 @@ func TestNewServer(t *testing.T) {
 
 func TestDebuggerGetVariablesSchemaIncludesItems(t *testing.T) {
 	cfg := &Config{
-		BaseURL:  "https://sap.example.com:44300",
-		Username: "testuser",
-		Password: "testpass",
-		Client:   "001",
-		Language: "EN",
+		ConnectionConfig: config.ConnectionConfig{
+			URL:      "https://sap.example.com:44300",
+			User:     "testuser",
+			Password: "testpass",
+			Client:   "001",
+			Language: "EN",
+		},
 	}
 
 	srv := NewServer(cfg)

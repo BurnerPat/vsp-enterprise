@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/oisee/vibing-steampunk/pkg/config"
+	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -313,10 +313,9 @@ func runMcpToVsp(cmd *cobra.Command, args []string) error {
 }
 
 func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
-	sys := config.SystemConfig{
-		Client:   "001",
-		Language: "EN",
-	}
+	var sys config.SystemConfig
+	sys.Client = "001"
+	sys.Language = "EN"
 
 	// Parse args array
 	if args, ok := serverMap["args"].([]interface{}); ok {
@@ -976,31 +975,43 @@ var vspSystemsExample = func() string {
 		Default: "dev",
 		Systems: map[string]config.SystemConfig{
 			"dev": {
-				URL:      "http://dev-sap.example.com:50000",
-				User:     "DEVELOPER",
-				Client:   "001",
-				Language: "EN",
+				ConnectionConfig: config.ConnectionConfig{
+					URL:      "http://dev-sap.example.com:50000",
+					User:     "DEVELOPER",
+					Client:   "001",
+					Language: "EN",
+				},
 			},
 			"a4h": {
-				URL:      "http://a4h.local:50000",
-				User:     "ADMIN",
-				Client:   "001",
-				Insecure: true,
+				ConnectionConfig: config.ConnectionConfig{
+					URL:      "http://a4h.local:50000",
+					User:     "ADMIN",
+					Client:   "001",
+					Insecure: true,
+				},
 			},
 			"prod": {
-				URL:             "https://prod-sap.example.com:44300",
-				User:            "READONLY",
-				Client:          "100",
-				ReadOnly:        true,
-				AllowedPackages: []string{"Z*", "Y*"},
+				ConnectionConfig: config.ConnectionConfig{
+					URL:    "https://prod-sap.example.com:44300",
+					User:   "READONLY",
+					Client: "100",
+				},
+				SafetySettings: config.SafetySettings{
+					ReadOnly:        true,
+					AllowedPackages: []string{"Z*", "Y*"},
+				},
 			},
 			"rfc-direct": {
-				ConnectionMode: "rfc",
-				AsHost:         "sap-app.example.com",
-				SysNr:          "00",
-				User:           "RFC_USER",
-				Client:         "001",
-				JcoProxyJar:    "/opt/vsp/jco-proxy.jar",
+				ConnectionConfig: config.ConnectionConfig{
+					User:   "RFC_USER",
+					Client: "001",
+				},
+				RfcConfig: config.RfcConfig{
+					ConnectionMode: "rfc",
+					AsHost:         "sap-app.example.com",
+					SysNr:          "00",
+					JcoProxyJar:    "/opt/vsp/jco-proxy.jar",
+				},
 			},
 		},
 	}

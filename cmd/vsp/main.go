@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/internal/mcp"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
-	"github.com/oisee/vibing-steampunk/pkg/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -23,7 +23,7 @@ var (
 	BuildDate = "unknown"
 )
 
-var cfg = &mcp.Config{}
+var cfg = &config.ResolvedConfig{}
 
 // Multi-system mode
 var (
@@ -84,18 +84,18 @@ func init() {
 	godotenv.Load()
 
 	// Service URL
-	rootCmd.Flags().StringVar(&cfg.BaseURL, "url", "", "SAP system URL (e.g., https://host:44300)")
-	rootCmd.Flags().StringVar(&cfg.BaseURL, "service", "", "SAP system URL (alias for --url)")
+	rootCmd.Flags().StringVar(&cfg.URL, "url", "", "SAP system URL (e.g., https://host:44300)")
+	rootCmd.Flags().StringVar(&cfg.URL, "service", "", "SAP system URL (alias for --url)")
 
 	// Authentication flags
-	rootCmd.Flags().StringVarP(&cfg.Username, "user", "u", "", "SAP username")
+	rootCmd.Flags().StringVarP(&cfg.User, "user", "u", "", "SAP username")
 	rootCmd.Flags().StringVarP(&cfg.Password, "password", "p", "", "SAP password")
 	rootCmd.Flags().StringVar(&cfg.Password, "pass", "", "SAP password (alias for --password)")
 
 	// SAP connection options
 	rootCmd.Flags().StringVar(&cfg.Client, "client", "001", "SAP client number")
 	rootCmd.Flags().StringVar(&cfg.Language, "language", "EN", "SAP language")
-	rootCmd.Flags().BoolVar(&cfg.InsecureSkipVerify, "insecure", false, "Skip TLS certificate verification")
+	rootCmd.Flags().BoolVar(&cfg.Insecure, "insecure", false, "Skip TLS certificate verification")
 
 	// Cookie authentication
 	rootCmd.Flags().String("cookie-file", "", "Path to cookie file in Netscape format")
@@ -307,12 +307,12 @@ func runServer(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] JCo proxy JAR: %s\n", cfg.JcoProxyJar)
 			fmt.Fprintf(os.Stderr, "[VERBOSE] JCo libs dir: %s\n", cfg.JcoLibsDir)
 		} else {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] SAP URL: %s\n", cfg.BaseURL)
+			fmt.Fprintf(os.Stderr, "[VERBOSE] SAP URL: %s\n", cfg.URL)
 		}
 		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP Client: %s\n", cfg.Client)
 		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP Language: %s\n", cfg.Language)
-		if cfg.Username != "" {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: Basic (user: %s)\n", cfg.Username)
+		if cfg.User != "" {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: Basic (user: %s)\n", cfg.User)
 		} else if cfg.SNC {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: SNC/SSO\n")
 		} else if len(cfg.Cookies) > 0 {
@@ -393,7 +393,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		}
 
 		// Resolve all systems from config
-		multiSystems := make(map[string]*mcp.SystemConfigResolved)
+		multiSystems := make(map[string]*config.ResolvedConfig)
 		rfcSystemCount := 0
 		for sysID, sysDef := range systemsCfg.Systems {
 			if sysDef.Disabled {
@@ -407,33 +407,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("--multi-system: failed to resolve system %q: %w", sysID, err)
 			}
 
-			resolved := &mcp.SystemConfigResolved{
-				BaseURL:            sys.URL,
-				Username:           sys.User,
-				Password:           sys.Password,
-				Client:             sys.Client,
-				Language:           sys.Language,
-				InsecureSkipVerify: sys.Insecure,
-				ReadOnly:           sys.ReadOnly,
-				AllowedPackages:    sys.AllowedPackages,
-				ConnectionMode:     sys.ConnectionMode,
-				AsHost:             sys.AsHost,
-				SysNr:              sys.SysNr,
-				MsHost:             sys.MsHost,
-				MsServ:             sys.MsServ,
-				R3Name:             sys.R3Name,
-				Group:              sys.Group,
-				JcoProxyJar:        sys.JcoProxyJar,
-				JavaPath:           sys.JavaPath,
-				SNC:                sys.SNC,
-				SysID:              sys.SysID,
-				LandscapeFile:      sys.LandscapeFile,
-				BrowserAuth:        sys.BrowserAuth,
-				BrowserAuthTimeout: sys.BrowserAuthTimeout,
-				BrowserExec:        sys.BrowserExec,
-				CookieSave:         sys.CookieSave,
-				Verbose:            sys.Verbose,
-			}
+			resolved := sys.ToResolved()
 
 			// Resolve SNC/SSO for this system if enabled
 			if resolved.SNC {
@@ -473,7 +447,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 			// Handle browser-based SSO authentication for this system
 			if sys.BrowserAuth && len(resolved.Cookies) == 0 {
-				if resolved.BaseURL == "" {
+				if resolved.URL == "" {
 					return fmt.Errorf("--multi-system: system %q has browser_auth=true but no url configured", sysID)
 				}
 
@@ -485,11 +459,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 				}
 
 				if cfg.Verbose || resolved.Verbose {
-					fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Multi-system: starting browser login for system %q (%s)\n", sysID, resolved.BaseURL)
+					fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Multi-system: starting browser login for system %q (%s)\n", sysID, resolved.URL)
 				}
 
 				ctx := context.Background()
-				cookies, err := adt.BrowserLogin(ctx, resolved.BaseURL, resolved.InsecureSkipVerify, browserTimeout, sys.BrowserExec, cfg.Verbose || resolved.Verbose)
+				cookies, err := adt.BrowserLogin(ctx, resolved.URL, resolved.Insecure, browserTimeout, sys.BrowserExec, cfg.Verbose || resolved.Verbose)
 				if err != nil {
 					return fmt.Errorf("--multi-system: browser authentication failed for system %q: %w", sysID, err)
 				}
@@ -497,7 +471,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 				// Save cookies if requested
 				if sys.CookieSave != "" {
-					if err := adt.SaveCookiesToFile(cookies, resolved.BaseURL, sys.CookieSave); err != nil {
+					if err := adt.SaveCookiesToFile(cookies, resolved.URL, sys.CookieSave); err != nil {
 						fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Warning: failed to save cookies for system %q: %v\n", sysID, err)
 					} else {
 						fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Cookies for system %q saved to %s (reuse with cookie_file)\n", sysID, sys.CookieSave)
@@ -575,11 +549,11 @@ func resolveConfig(cmd *cobra.Command) {
 					fmt.Fprintf(os.Stderr, "[VERBOSE] Loading system '%s' from %s\n", systemName, configPath)
 				}
 				// Apply system config as defaults (CLI flags already set on cfg take precedence)
-				if cfg.BaseURL == "" {
-					cfg.BaseURL = sys.URL
+				if cfg.URL == "" {
+					cfg.URL = sys.URL
 				}
-				if cfg.Username == "" {
-					cfg.Username = sys.User
+				if cfg.User == "" {
+					cfg.User = sys.User
 				}
 				if cfg.Password == "" {
 					cfg.Password = sys.Password
@@ -591,7 +565,7 @@ func resolveConfig(cmd *cobra.Command) {
 					cfg.Language = sys.Language
 				}
 				if !cmd.Flags().Changed("insecure") && sys.Insecure {
-					cfg.InsecureSkipVerify = true
+					cfg.Insecure = true
 				}
 				// RFC connection settings from system profile
 				if !cmd.Flags().Changed("connection-mode") && sys.ConnectionMode != "" {
@@ -655,19 +629,19 @@ func resolveConfig(cmd *cobra.Command) {
 	hasCookieAuth := cookieAuthViaCLI || cookieAuthViaEnv || hasBrowserAuth || len(cfg.Cookies) > 0
 
 	// URL: flag > system profile > SAP_URL env
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = viper.GetString("URL")
+	if cfg.URL == "" {
+		cfg.URL = viper.GetString("URL")
 	}
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = viper.GetString("SERVICE_URL")
+	if cfg.URL == "" {
+		cfg.URL = viper.GetString("SERVICE_URL")
 	}
 
 	// Username: flag > system profile > SAP_USER env (skip if cookie auth is present)
-	if cfg.Username == "" && !hasCookieAuth {
-		cfg.Username = viper.GetString("USER")
+	if cfg.User == "" && !hasCookieAuth {
+		cfg.User = viper.GetString("USER")
 	}
-	if cfg.Username == "" && !hasCookieAuth {
-		cfg.Username = viper.GetString("USERNAME")
+	if cfg.User == "" && !hasCookieAuth {
+		cfg.User = viper.GetString("USERNAME")
 	}
 
 	// Password: flag > system profile > SAP_PASSWORD env (skip if cookie auth is present)
@@ -694,7 +668,7 @@ func resolveConfig(cmd *cobra.Command) {
 
 	// Insecure: flag > system profile > SAP_INSECURE env
 	if !cmd.Flags().Changed("insecure") && systemName == "" {
-		cfg.InsecureSkipVerify = viper.GetBool("INSECURE")
+		cfg.Insecure = viper.GetBool("INSECURE")
 	}
 
 	// Mode: flag > SAP_MODE env > default (focused)
@@ -920,7 +894,7 @@ func validateConfig() error {
 		}
 	} else {
 		// HTTP mode requires URL
-		if cfg.BaseURL == "" {
+		if cfg.URL == "" {
 			return fmt.Errorf("SAP URL is required. Use --url flag or SAP_URL environment variable")
 		}
 	}
@@ -941,7 +915,7 @@ func processBrowserAuth(cmd *cobra.Command) error {
 		return nil
 	}
 
-	if cfg.BaseURL == "" {
+	if cfg.URL == "" {
 		return fmt.Errorf("--browser-auth requires --url to be set")
 	}
 
@@ -962,7 +936,7 @@ func processBrowserAuth(cmd *cobra.Command) error {
 	}
 
 	ctx := context.Background()
-	cookies, err := adt.BrowserLogin(ctx, cfg.BaseURL, cfg.InsecureSkipVerify, timeout, browserExec, cfg.Verbose)
+	cookies, err := adt.BrowserLogin(ctx, cfg.URL, cfg.Insecure, timeout, browserExec, cfg.Verbose)
 	if err != nil {
 		return fmt.Errorf("browser authentication failed: %w", err)
 	}
@@ -975,7 +949,7 @@ func processBrowserAuth(cmd *cobra.Command) error {
 		cookieSave = viper.GetString("COOKIE_SAVE")
 	}
 	if cookieSave != "" {
-		if err := adt.SaveCookiesToFile(cookies, cfg.BaseURL, cookieSave); err != nil {
+		if err := adt.SaveCookiesToFile(cookies, cfg.URL, cookieSave); err != nil {
 			fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Warning: failed to save cookies: %v\n", err)
 		} else {
 			fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Cookies saved to %s (reuse with --cookie-file)\n", cookieSave)
@@ -999,7 +973,7 @@ func processCookieAuth(cmd *cobra.Command) error {
 
 	// Count authentication methods
 	authMethods := 0
-	if cfg.Username != "" && cfg.Password != "" {
+	if cfg.User != "" && cfg.Password != "" {
 		authMethods++
 	}
 	if cookieFile != "" {

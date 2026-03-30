@@ -96,7 +96,7 @@ func (s *System) Shutdown() {
 func (s *System) ensureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult {
 	if s.amdpWSClient == nil || !s.amdpWSClient.IsConnected() {
 		s.amdpWSClient = adt.NewAMDPWebSocketClient(
-			s.config.BaseURL, s.config.Client, s.config.Username, s.config.Password, s.config.InsecureSkipVerify,
+			s.config.URL, s.config.Client, s.config.User, s.config.Password, s.config.Insecure,
 		)
 		if err := s.amdpWSClient.Connect(ctx); err != nil {
 			s.amdpWSClient = nil
@@ -124,7 +124,7 @@ func (s *System) requireActiveAMDPSession() *mcp.CallToolResult {
 func newSystemInstance(cfg *Config) (*System, error) {
 	ensureProxyJAR(cfg)
 
-	opts := buildADTOptions(cfg)
+	opts := cfg.BuildADTOptions()
 	adtClient, sidecar, err := createADTClient(cfg, opts)
 	if err != nil {
 		return nil, err
@@ -134,9 +134,9 @@ func newSystemInstance(cfg *Config) (*System, error) {
 	if cfg.TerminalID != "" {
 		adt.SetTerminalID(cfg.TerminalID)
 	}
-	adt.SetTerminalIDUser(cfg.Username)
+	adt.SetTerminalIDUser(cfg.User)
 
-	featureConfig := buildFeatureConfig(cfg)
+	featureConfig := cfg.BuildFeatureConfig()
 
 	sys := &System{
 		adtClient:     adtClient,
@@ -159,101 +159,19 @@ func newSystemInstance(cfg *Config) (*System, error) {
 // ADT client & config builder helpers (package-level, used by newSystemInstance)
 // ---------------------------------------------------------------------------
 
-// buildADTOptions constructs the common ADT client options from config.
-func buildADTOptions(cfg *Config) []adt.Option {
-	opts := []adt.Option{
-		adt.WithClient(cfg.Client),
-		adt.WithLanguage(cfg.Language),
-	}
-	if cfg.InsecureSkipVerify {
-		opts = append(opts, adt.WithInsecureSkipVerify())
-	}
-	if len(cfg.Cookies) > 0 {
-		opts = append(opts, adt.WithCookies(cfg.Cookies))
-	}
-	if cfg.Verbose {
-		opts = append(opts, adt.WithVerbose())
-	}
-	opts = append(opts, adt.WithSafety(buildSafetyConfig(cfg)))
-	return opts
-}
-
-// buildSafetyConfig constructs the safety configuration from config.
-func buildSafetyConfig(cfg *Config) adt.SafetyConfig {
-	safety := adt.UnrestrictedSafetyConfig()
-	if cfg.ReadOnly {
-		safety.ReadOnly = true
-	}
-	if cfg.BlockFreeSQL {
-		safety.BlockFreeSQL = true
-	}
-	if cfg.AllowedOps != "" {
-		safety.AllowedOps = cfg.AllowedOps
-	}
-	if cfg.DisallowedOps != "" {
-		safety.DisallowedOps = cfg.DisallowedOps
-	}
-	if len(cfg.AllowedPackages) > 0 {
-		safety.AllowedPackages = cfg.AllowedPackages
-	}
-	if cfg.EnableTransports {
-		safety.EnableTransports = true
-	}
-	if cfg.TransportReadOnly {
-		safety.TransportReadOnly = true
-	}
-	if len(cfg.AllowedTransports) > 0 {
-		safety.AllowedTransports = cfg.AllowedTransports
-	}
-	if cfg.AllowTransportableEdits {
-		safety.AllowTransportableEdits = true
-	}
-	return safety
-}
-
-// buildFeatureConfig constructs the feature detection configuration from config.
-func buildFeatureConfig(cfg *Config) adt.FeatureConfig {
-	return adt.FeatureConfig{
-		HANA:      parseFeatureMode(cfg.FeatureHANA),
-		AbapGit:   parseFeatureMode(cfg.FeatureAbapGit),
-		RAP:       parseFeatureMode(cfg.FeatureRAP),
-		AMDP:      parseFeatureMode(cfg.FeatureAMDP),
-		UI5:       parseFeatureMode(cfg.FeatureUI5),
-		Transport: parseFeatureMode(cfg.FeatureTransport),
-	}
-}
-
 // createADTClient creates an ADT client and optional sidecar based on connection mode.
 func createADTClient(cfg *Config, opts []adt.Option) (*adt.Client, *adt.SidecarManager, error) {
 	if strings.EqualFold(cfg.ConnectionMode, "rfc") {
 		return createRFCADTClient(cfg, opts)
 	}
-	return adt.NewClient(cfg.BaseURL, cfg.Username, cfg.Password, opts...), nil, nil
+	return adt.NewClient(cfg.URL, cfg.User, cfg.Password, opts...), nil, nil
 }
 
 // createRFCADTClient creates an ADT client using RFC mode with a JCo sidecar.
 func createRFCADTClient(cfg *Config, opts []adt.Option) (*adt.Client, *adt.SidecarManager, error) {
-	adtCfg := adt.NewConfig("", cfg.Username, cfg.Password, opts...)
+	adtCfg := adt.NewConfig("", cfg.User, cfg.Password, opts...)
 
-	sidecarCfg := &adt.SidecarConfig{
-		JcoProxyJar:   cfg.JcoProxyJar,
-		JcoLibsDir:    cfg.JcoLibsDir,
-		JavaPath:      cfg.JavaPath,
-		Port:          cfg.RfcProxyPort,
-		MaxConcurrent: cfg.RfcMaxConcurrent,
-		Transport:     cfg.SidecarTransport,
-		AsHost:        cfg.AsHost,
-		SysNr:         cfg.SysNr,
-		MsHost:        cfg.MsHost,
-		MsServ:        cfg.MsServ,
-		R3Name:        cfg.R3Name,
-		Group:         cfg.Group,
-		Client:        cfg.Client,
-		Username:      cfg.Username,
-		Password:      cfg.Password,
-		Language:      cfg.Language,
-		JcoProperties: cfg.JcoProperties,
-	}
+	sidecarCfg := cfg.BuildSidecarConfig()
 	sidecar := adt.NewSidecarManager(sidecarCfg)
 
 	if err := sidecar.Start(context.Background()); err != nil {
@@ -306,18 +224,6 @@ func ensureProxyJAR(cfg *Config) {
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
-}
-
-// parseFeatureMode converts string to FeatureMode.
-func parseFeatureMode(s string) adt.FeatureMode {
-	switch strings.ToLower(s) {
-	case "on", "true", "1", "yes", "enabled":
-		return adt.FeatureModeOn
-	case "off", "false", "0", "no", "disabled":
-		return adt.FeatureModeOff
-	default:
-		return adt.FeatureModeAuto
-	}
 }
 
 // newToolResultError creates an error result for tool execution failures.
