@@ -7,14 +7,11 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	deps "github.com/oisee/vibing-steampunk/embedded/deps"
 	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
@@ -123,8 +120,6 @@ func (s *System) requireActiveAMDPSession() *mcp.CallToolResult {
 // newSystemInstance creates a System with an ADT client, feature prober, and optional sidecar.
 // It does NOT create an MCP server or register tools — that is the Server's responsibility.
 func newSystemInstance(cfg *Config) (*System, error) {
-	ensureProxyJAR(cfg)
-
 	opts := cfg.BuildADTOptions()
 	adtClient, sidecar, err := createADTClient(cfg, opts)
 	if err != nil {
@@ -196,38 +191,6 @@ func createRFCADTClient(cfg *Config, opts []adt.Option) (*adt.Client, *adt.Sidec
 		adtClient = adt.NewClientWithTransport(adtCfg, rfcTransport)
 	}
 	return adtClient, sidecar, nil
-}
-
-// ensureProxyJAR auto-extracts the embedded proxy JAR if no valid path is configured.
-func ensureProxyJAR(cfg *Config) {
-	if cfg.JcoProxyJar != "" && fileExists(cfg.JcoProxyJar) {
-		return
-	}
-	data := deps.GetEmbeddedProxyJar()
-	if data == nil {
-		return
-	}
-	extractDir := config.GetInstance().JcoLibsDir
-	if extractDir == "" {
-		extractDir = "./jco-libs"
-	}
-	proxyPath := filepath.Join(extractDir, "jco-proxy.jar")
-	if err := os.MkdirAll(extractDir, 0755); err != nil {
-		return
-	}
-	if err := os.WriteFile(proxyPath, data, 0644); err != nil {
-		return
-	}
-	cfg.JcoProxyJar = proxyPath
-	if cfg.IsVerbose() {
-		fmt.Fprintf(os.Stderr, "[VERBOSE] Auto-extracted embedded proxy JAR to %s\n", proxyPath)
-	}
-}
-
-// fileExists returns true if the path exists and is a regular file.
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
 }
 
 // newToolResultError creates an error result for tool execution failures.

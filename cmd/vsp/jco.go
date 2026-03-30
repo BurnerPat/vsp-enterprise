@@ -186,7 +186,7 @@ func runJcoSetup(cmd *cobra.Command, args []string) error {
 
 			// Update JCo paths (jco_libs_dir is CLI-only, not per-system)
 			if proxyJar != "" {
-				sys.JcoProxyJar = proxyJar
+				cfg.JcoProxyJar = proxyJar
 			}
 
 			// Set connection mode to rfc if not already set

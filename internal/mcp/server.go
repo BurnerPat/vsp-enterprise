@@ -6,9 +6,11 @@ package mcp
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/oisee/vibing-steampunk/embedded/deps"
 	"github.com/oisee/vibing-steampunk/internal/config"
 )
 
@@ -45,7 +47,17 @@ func NewServer(globalCfg *GlobalConfig) (*Server, error) {
 	mcpSrv := newMCPServer()
 	router := NewRouter(mcpSrv)
 
+	proxyJarChecked := false
+
 	for sysID, sysCfg := range globalCfg.Systems {
+		if strings.EqualFold(sysCfg.ConnectionMode, "rfc") && !proxyJarChecked {
+			proxyJarChecked = true
+
+			if err := ensureProxyJARIsAvailable(globalCfg); err != nil {
+				return nil, fmt.Errorf("failed to ensure proxy JAR availability for system %q: %w", sysID, err)
+			}
+		}
+
 		sys, err := newSystemInstance(sysCfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create system for %q: %w", sysID, err)
@@ -73,6 +85,48 @@ func NewServer(globalCfg *GlobalConfig) (*Server, error) {
 		router:    router,
 		config:    globalCfg,
 	}, nil
+}
+
+func ensureProxyJARIsAvailable(cfg *config.ResolvedConfig) error {
+	if cfg.JcoProxyJar != "" {
+		if !fileExists(cfg.JcoProxyJar) {
+			return fmt.Errorf("proxy JAR file %s supplied by user does not exist", cfg.JcoProxyJar)
+		}
+
+		return nil
+	}
+
+	data := deps.GetEmbeddedProxyJar()
+	if data == nil {
+		panic("Embedded proxy JAR not found")
+	}
+
+	extractDir := cfg.JcoLibsDir
+	if extractDir == "" {
+		extractDir = "./jco-libs"
+	}
+	proxyPath := filepath.Join(extractDir, "jco-proxy.jar")
+
+	if err := os.MkdirAll(extractDir, 0755); err != nil {
+		return fmt.Errorf("failed to create target directory for proxy JAR: %s, %v", proxyPath, err)
+	}
+	if err := os.WriteFile(proxyPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write proxy JAR to %s: %v", proxyPath, err)
+	}
+
+	cfg.JcoProxyJar = proxyPath
+
+	if cfg.Verbose {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Auto-extracted embedded proxy JAR to %s\n", proxyPath)
+	}
+
+	return nil
+}
+
+// fileExists returns true if the path exists and is a regular file.
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // Shutdown gracefully stops the server and cleans up all system resources.

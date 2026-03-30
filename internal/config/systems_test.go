@@ -236,7 +236,6 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 					ConnectionMode: "rfc",
 					AsHost:         "sap.example.com",
 					SysNr:          "00",
-					JcoProxyJar:    "/opt/jco.jar",
 				},
 				SncConfig: SncConfig{
 					SNC:   true,

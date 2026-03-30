@@ -47,8 +47,6 @@ type RfcConfig struct {
 	MsServ         string `json:"msserv,omitempty"`
 	R3Name         string `json:"r3name,omitempty"`
 	Group          string `json:"group,omitempty"`
-	JcoProxyJar    string `json:"jco_proxy_jar,omitempty"`
-	JavaPath       string `json:"java_path,omitempty"`
 }
 
 // SncConfig holds SNC/SSO configuration (via SAP UI Landscape).
@@ -260,7 +258,6 @@ func ExampleConfig() string {
 					ConnectionMode: "rfc",
 					AsHost:         "sap-app.example.com",
 					SysNr:          "00",
-					JcoProxyJar:    "/opt/vsp/jco-proxy.jar",
 				},
 			},
 		},

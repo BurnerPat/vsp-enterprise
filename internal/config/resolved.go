@@ -24,6 +24,7 @@ func GetInstance() *ResolvedConfig {
 	if instance == nil {
 		panic("config.GetInstance() called before SetInstance — global configuration not initialized")
 	}
+
 	return instance
 }
 
@@ -76,6 +77,8 @@ type ResolvedConfig struct {
 	RfcProxyPort     int
 	RfcMaxConcurrent int
 	SidecarTransport string
+	JcoProxyJar      string
+	JavaPath         string
 
 	// Global safety settings
 	ReadOnly                bool
@@ -204,10 +207,16 @@ func (c *SystemResolvedConfig) BuildFeatureConfig() adt.FeatureConfig {
 // connection fields with global JCo settings from the singleton.
 func (c *SystemResolvedConfig) BuildSidecarConfig() *adt.SidecarConfig {
 	g := GetInstance()
-	sc := &adt.SidecarConfig{
+
+	return &adt.SidecarConfig{
 		// Per-system
-		JcoProxyJar:   c.JcoProxyJar,
-		JavaPath:      c.JavaPath,
+		JcoProxyJar:   g.JcoProxyJar,
+		JavaPath:      g.JavaPath,
+		JcoLibsDir:    g.JcoLibsDir,
+		Port:          g.RfcProxyPort,
+		MaxConcurrent: g.RfcMaxConcurrent,
+		Transport:     g.SidecarTransport,
+
 		AsHost:        c.AsHost,
 		SysNr:         c.SysNr,
 		MsHost:        c.MsHost,
@@ -220,12 +229,6 @@ func (c *SystemResolvedConfig) BuildSidecarConfig() *adt.SidecarConfig {
 		Language:      c.Language,
 		JcoProperties: c.JcoProperties,
 	}
-	// Global
-	sc.JcoLibsDir = g.JcoLibsDir
-	sc.Port = g.RfcProxyPort
-	sc.MaxConcurrent = g.RfcMaxConcurrent
-	sc.Transport = g.SidecarTransport
-	return sc
 }
 
 // parseFeatureMode converts a string feature flag to an adt.FeatureMode.

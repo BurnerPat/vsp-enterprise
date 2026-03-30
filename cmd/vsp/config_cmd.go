@@ -351,9 +351,9 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 			case "--group":
 				sys.Group = val
 			case "--jco-proxy-jar":
-				sys.JcoProxyJar = val
+				cfg.JcoProxyJar = val
 			case "--java-path":
-				sys.JavaPath = val
+				cfg.JavaPath = val
 			case "--insecure":
 				sys.Insecure = true
 				continue // insecure is a flag, not key-value
@@ -434,10 +434,10 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 			sys.Group = v
 		}
 		if v, ok := env["SAP_JCO_PROXY_JAR"].(string); ok && v != "" {
-			sys.JcoProxyJar = v
+			cfg.JcoProxyJar = v
 		}
 		if v, ok := env["SAP_JAVA_PATH"].(string); ok && v != "" {
-			sys.JavaPath = v
+			cfg.JavaPath = v
 		}
 	}
 
@@ -516,11 +516,11 @@ func runVspToMcp(cmd *cobra.Command, args []string) error {
 			if sys.Group != "" {
 				serverArgs = append(serverArgs, "--group", sys.Group)
 			}
-			if sys.JcoProxyJar != "" {
-				serverArgs = append(serverArgs, "--jco-proxy-jar", sys.JcoProxyJar)
+			if cfg.JcoProxyJar != "" {
+				serverArgs = append(serverArgs, "--jco-proxy-jar", cfg.JcoProxyJar)
 			}
-			if sys.JavaPath != "" {
-				serverArgs = append(serverArgs, "--java-path", sys.JavaPath)
+			if cfg.JavaPath != "" {
+				serverArgs = append(serverArgs, "--java-path", cfg.JavaPath)
 			}
 		} else {
 			serverArgs = append(serverArgs, "--url", sys.URL)
@@ -1010,7 +1010,6 @@ var vspSystemsExample = func() string {
 					ConnectionMode: "rfc",
 					AsHost:         "sap-app.example.com",
 					SysNr:          "00",
-					JcoProxyJar:    "/opt/vsp/jco-proxy.jar",
 				},
 			},
 		},

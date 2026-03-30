@@ -154,9 +154,9 @@ func init() {
 	rootCmd.Flags().StringVar(&singleSys.MsServ, "msserv", "", "SAP message server service/port (RFC load balancing)")
 	rootCmd.Flags().StringVar(&singleSys.R3Name, "r3name", "", "SAP system name (RFC load balancing)")
 	rootCmd.Flags().StringVar(&singleSys.Group, "group", "", "SAP logon group (RFC load balancing)")
-	rootCmd.Flags().StringVar(&singleSys.JcoProxyJar, "jco-proxy-jar", "", "Path to jco-proxy JAR file")
+	rootCmd.Flags().StringVar(&cfg.JcoProxyJar, "jco-proxy-jar", "", "Path to jco-proxy JAR file")
 	rootCmd.Flags().StringVar(&cfg.JcoLibsDir, "jco-libs-dir", "", "Path to JCo libraries directory")
-	rootCmd.Flags().StringVar(&singleSys.JavaPath, "java-path", "java", "Path to Java binary")
+	rootCmd.Flags().StringVar(&cfg.JavaPath, "java-path", "java", "Path to Java binary")
 	rootCmd.Flags().IntVar(&cfg.RfcProxyPort, "rfc-proxy-port", 0, "Fixed sidecar port (0=auto)")
 	rootCmd.Flags().IntVar(&cfg.RfcMaxConcurrent, "rfc-max-concurrent", 5, "Max concurrent RFC calls")
 	rootCmd.Flags().StringVar(&cfg.SidecarTransport, "jco-sidecar-transport", "http", "Sidecar transport: http (default) or stdio")
@@ -517,12 +517,6 @@ func resolveConfig(cmd *cobra.Command) {
 				if !cmd.Flags().Changed("group") && sys.Group != "" {
 					singleSys.Group = sys.Group
 				}
-				if !cmd.Flags().Changed("jco-proxy-jar") && sys.JcoProxyJar != "" {
-					singleSys.JcoProxyJar = sys.JcoProxyJar
-				}
-				if sys.JavaPath != "" && !cmd.Flags().Changed("java-path") {
-					singleSys.JavaPath = sys.JavaPath
-				}
 				// Cookie auth from system profile
 				if sys.CookieFile != "" {
 					cookies, err := adt.LoadCookiesFromFile(sys.CookieFile)
@@ -737,9 +731,9 @@ func resolveConfig(cmd *cobra.Command) {
 			singleSys.Group = v
 		}
 	}
-	if !cmd.Flags().Changed("jco-proxy-jar") && singleSys.JcoProxyJar == "" {
+	if !cmd.Flags().Changed("jco-proxy-jar") && cfg.JcoProxyJar == "" {
 		if v := viper.GetString("JCO_PROXY_JAR"); v != "" {
-			singleSys.JcoProxyJar = v
+			cfg.JcoProxyJar = v
 		}
 	}
 	if !cmd.Flags().Changed("jco-libs-dir") && cfg.JcoLibsDir == "" {
@@ -747,9 +741,9 @@ func resolveConfig(cmd *cobra.Command) {
 			cfg.JcoLibsDir = v
 		}
 	}
-	if !cmd.Flags().Changed("java-path") && singleSys.JavaPath == "" {
+	if !cmd.Flags().Changed("java-path") && cfg.JavaPath == "" {
 		if v := viper.GetString("JAVA_PATH"); v != "" {
-			singleSys.JavaPath = v
+			cfg.JavaPath = v
 		}
 	}
 	if !cmd.Flags().Changed("rfc-proxy-port") && cfg.RfcProxyPort == 0 {
@@ -987,7 +981,7 @@ func logSingleSystemVerbose() {
 		} else if singleSys.MsHost != "" {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] RFC: Load balanced via %s (r3name: %s, group: %s)\n", singleSys.MsHost, singleSys.R3Name, singleSys.Group)
 		}
-		fmt.Fprintf(os.Stderr, "[VERBOSE] JCo proxy JAR: %s\n", singleSys.JcoProxyJar)
+		fmt.Fprintf(os.Stderr, "[VERBOSE] JCo proxy JAR: %s\n", cfg.JcoProxyJar)
 		fmt.Fprintf(os.Stderr, "[VERBOSE] JCo libs dir: %s\n", cfg.JcoLibsDir)
 	} else {
 		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP URL: %s\n", singleSys.URL)
