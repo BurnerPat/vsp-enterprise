@@ -66,17 +66,24 @@ func TestConfig(t *testing.T) {
 }
 
 func TestNewServer(t *testing.T) {
-	cfg := &Config{
-		ConnectionConfig: config.ConnectionConfig{
-			URL:      "https://sap.example.com:44300",
-			User:     "testuser",
-			Password: "testpass",
-			Client:   "001",
-			Language: "EN",
+	globalCfg := &GlobalConfig{
+		Systems: map[string]*Config{
+			config.DefaultSystemID: {
+				ConnectionConfig: config.ConnectionConfig{
+					URL:      "https://sap.example.com:44300",
+					User:     "testuser",
+					Password: "testpass",
+					Client:   "001",
+					Language: "EN",
+				},
+			},
 		},
 	}
 
-	srv := NewServer(cfg)
+	srv, err := NewServer(globalCfg)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
 
 	if srv == nil {
 		t.Fatal("NewServer returned nil")
@@ -101,17 +108,24 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestDebuggerGetVariablesSchemaIncludesItems(t *testing.T) {
-	cfg := &Config{
-		ConnectionConfig: config.ConnectionConfig{
-			URL:      "https://sap.example.com:44300",
-			User:     "testuser",
-			Password: "testpass",
-			Client:   "001",
-			Language: "EN",
+	globalCfg := &GlobalConfig{
+		Systems: map[string]*Config{
+			config.DefaultSystemID: {
+				ConnectionConfig: config.ConnectionConfig{
+					URL:      "https://sap.example.com:44300",
+					User:     "testuser",
+					Password: "testpass",
+					Client:   "001",
+					Language: "EN",
+				},
+			},
 		},
 	}
 
-	srv := NewServer(cfg)
+	srv, err := NewServer(globalCfg)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
 	if srv == nil || srv.mcpServer == nil {
 		t.Fatal("server or MCP server is nil")
 	}

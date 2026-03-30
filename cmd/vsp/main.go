@@ -25,7 +25,12 @@ var (
 
 var cfg = &config.ResolvedConfig{}
 
-// Multi-system mode
+// singleSys accumulates per-system settings from CLI flags / env vars.
+// In single-system mode it is stored as cfg.Systems["default"] before
+// the server is created. In multi-system mode it is ignored.
+var singleSys = &config.SystemResolvedConfig{}
+
+// Multi-system mode (CLI-only flag for argument validation)
 var (
 	multiSystem bool
 	configFile  string
@@ -84,18 +89,18 @@ func init() {
 	godotenv.Load()
 
 	// Service URL
-	rootCmd.Flags().StringVar(&cfg.URL, "url", "", "SAP system URL (e.g., https://host:44300)")
-	rootCmd.Flags().StringVar(&cfg.URL, "service", "", "SAP system URL (alias for --url)")
+	rootCmd.Flags().StringVar(&singleSys.URL, "url", "", "SAP system URL (e.g., https://host:44300)")
+	rootCmd.Flags().StringVar(&singleSys.URL, "service", "", "SAP system URL (alias for --url)")
 
 	// Authentication flags
-	rootCmd.Flags().StringVarP(&cfg.User, "user", "u", "", "SAP username")
-	rootCmd.Flags().StringVarP(&cfg.Password, "password", "p", "", "SAP password")
-	rootCmd.Flags().StringVar(&cfg.Password, "pass", "", "SAP password (alias for --password)")
+	rootCmd.Flags().StringVarP(&singleSys.User, "user", "u", "", "SAP username")
+	rootCmd.Flags().StringVarP(&singleSys.Password, "password", "p", "", "SAP password")
+	rootCmd.Flags().StringVar(&singleSys.Password, "pass", "", "SAP password (alias for --password)")
 
 	// SAP connection options
-	rootCmd.Flags().StringVar(&cfg.Client, "client", "001", "SAP client number")
-	rootCmd.Flags().StringVar(&cfg.Language, "language", "EN", "SAP language")
-	rootCmd.Flags().BoolVar(&cfg.Insecure, "insecure", false, "Skip TLS certificate verification")
+	rootCmd.Flags().StringVar(&singleSys.Client, "client", "001", "SAP client number")
+	rootCmd.Flags().StringVar(&singleSys.Language, "language", "EN", "SAP language")
+	rootCmd.Flags().BoolVar(&singleSys.Insecure, "insecure", false, "Skip TLS certificate verification")
 
 	// Cookie authentication
 	rootCmd.Flags().String("cookie-file", "", "Path to cookie file in Netscape format")
@@ -142,24 +147,24 @@ func init() {
 	rootCmd.Flags().StringVar(&cfg.TerminalID, "terminal-id", "", "SAP GUI terminal ID for cross-tool breakpoint sharing")
 
 	// RFC connection settings
-	rootCmd.Flags().StringVar(&cfg.ConnectionMode, "connection-mode", "http", "Connection mode: http (default) or rfc")
-	rootCmd.Flags().StringVar(&cfg.AsHost, "ashost", "", "SAP application server hostname (RFC mode)")
-	rootCmd.Flags().StringVar(&cfg.SysNr, "sysnr", "00", "SAP system number (RFC mode)")
-	rootCmd.Flags().StringVar(&cfg.MsHost, "mshost", "", "SAP message server host (RFC load balancing)")
-	rootCmd.Flags().StringVar(&cfg.MsServ, "msserv", "", "SAP message server service/port (RFC load balancing)")
-	rootCmd.Flags().StringVar(&cfg.R3Name, "r3name", "", "SAP system name (RFC load balancing)")
-	rootCmd.Flags().StringVar(&cfg.Group, "group", "", "SAP logon group (RFC load balancing)")
-	rootCmd.Flags().StringVar(&cfg.JcoProxyJar, "jco-proxy-jar", "", "Path to jco-proxy JAR file")
+	rootCmd.Flags().StringVar(&singleSys.ConnectionMode, "connection-mode", "http", "Connection mode: http (default) or rfc")
+	rootCmd.Flags().StringVar(&singleSys.AsHost, "ashost", "", "SAP application server hostname (RFC mode)")
+	rootCmd.Flags().StringVar(&singleSys.SysNr, "sysnr", "00", "SAP system number (RFC mode)")
+	rootCmd.Flags().StringVar(&singleSys.MsHost, "mshost", "", "SAP message server host (RFC load balancing)")
+	rootCmd.Flags().StringVar(&singleSys.MsServ, "msserv", "", "SAP message server service/port (RFC load balancing)")
+	rootCmd.Flags().StringVar(&singleSys.R3Name, "r3name", "", "SAP system name (RFC load balancing)")
+	rootCmd.Flags().StringVar(&singleSys.Group, "group", "", "SAP logon group (RFC load balancing)")
+	rootCmd.Flags().StringVar(&singleSys.JcoProxyJar, "jco-proxy-jar", "", "Path to jco-proxy JAR file")
 	rootCmd.Flags().StringVar(&cfg.JcoLibsDir, "jco-libs-dir", "", "Path to JCo libraries directory")
-	rootCmd.Flags().StringVar(&cfg.JavaPath, "java-path", "java", "Path to Java binary")
+	rootCmd.Flags().StringVar(&singleSys.JavaPath, "java-path", "java", "Path to Java binary")
 	rootCmd.Flags().IntVar(&cfg.RfcProxyPort, "rfc-proxy-port", 0, "Fixed sidecar port (0=auto)")
 	rootCmd.Flags().IntVar(&cfg.RfcMaxConcurrent, "rfc-max-concurrent", 5, "Max concurrent RFC calls")
 	rootCmd.Flags().StringVar(&cfg.SidecarTransport, "jco-sidecar-transport", "http", "Sidecar transport: http (default) or stdio")
 
 	// SNC/SSO configuration (via SAP UI Landscape)
-	rootCmd.Flags().BoolVar(&cfg.SNC, "snc", false, "Enable SNC single sign-on via JCo (requires --sysid)")
-	rootCmd.Flags().StringVar(&cfg.SysID, "sysid", "", "SAP System ID for SNC logon (3-char SID, reads connection from SAP UI Landscape)")
-	rootCmd.Flags().StringVar(&cfg.LandscapeFile, "landscape-file", "", "Path to SAP UI Landscape XML (auto-discovered if not set)")
+	rootCmd.Flags().BoolVar(&singleSys.SNC, "snc", false, "Enable SNC single sign-on via JCo (requires --sysid)")
+	rootCmd.Flags().StringVar(&singleSys.SysID, "sysid", "", "SAP System ID for SNC logon (3-char SID, reads connection from SAP UI Landscape)")
+	rootCmd.Flags().StringVar(&singleSys.LandscapeFile, "landscape-file", "", "Path to SAP UI Landscape XML (auto-discovered if not set)")
 
 	// Output options
 	rootCmd.Flags().BoolVarP(&cfg.Verbose, "verbose", "v", false, "Enable verbose output to stderr")
@@ -232,124 +237,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// Resolve configuration with priority: flags > env vars > defaults
 	resolveConfig(cmd)
 
-	// In multi-system mode, skip single-system validation and cookie processing
-	// (each system validates independently during server creation)
-	if !multiSystem {
-		// Resolve SNC/SSO configuration from SAP UI Landscape file
-		if cfg.SNC {
-			if cfg.SysID == "" {
-				return fmt.Errorf("--sysid is required when --snc is specified")
-			}
-			if cfg.Verbose {
-				fmt.Fprintf(os.Stderr, "[VERBOSE] SNC mode: resolving system %q from SAP UI Landscape\n", cfg.SysID)
-				if cfg.LandscapeFile != "" {
-					fmt.Fprintf(os.Stderr, "[VERBOSE] Using landscape file: %s\n", cfg.LandscapeFile)
-				}
-			}
-			jcoProps, err := adt.ResolveSNCJcoProperties(cfg.SysID, cfg.LandscapeFile, cfg.Client, cfg.Language)
-			if err != nil {
-				return fmt.Errorf("SNC configuration failed: %w", err)
-			}
-			cfg.JcoProperties = jcoProps
-			cfg.ConnectionMode = "rfc" // SNC requires RFC mode via JCo sidecar
-			if cfg.Verbose {
-				fmt.Fprintf(os.Stderr, "[VERBOSE] SNC: resolved %d JCo properties for system %q\n", len(jcoProps), cfg.SysID)
-				for k, v := range jcoProps {
-					if k == "jco.client.snc_partnername" {
-						fmt.Fprintf(os.Stderr, "[VERBOSE]   %s = %s\n", k, v)
-					} else {
-						fmt.Fprintf(os.Stderr, "[VERBOSE]   %s = %s\n", k, v)
-					}
-				}
-			}
-		}
-
-		// Validate configuration
-		if err := validateConfig(); err != nil {
-			return err
-		}
-
-		// Browser-based SSO authentication (must run before processCookieAuth)
-		if err := processBrowserAuth(cmd); err != nil {
-			return err
-		}
-
-		// Process cookie authentication
-		if err := processCookieAuth(cmd); err != nil {
-			return err
-		}
-	}
-
-	// Set verbose log output for feature probing
-	if cfg.Verbose {
-		adt.SetLogOutput(os.Stderr)
-	}
-
-	if cfg.Verbose {
-		fmt.Fprintf(os.Stderr, "[VERBOSE] Starting vsp server\n")
-		fmt.Fprintf(os.Stderr, "[VERBOSE] Mode: %s\n", cfg.Mode)
-		if cfg.DisabledGroups != "" {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Disabled groups: %s (5/U=UI5, T=Tests, H=HANA, D=Debug)\n", cfg.DisabledGroups)
-		}
-		if strings.EqualFold(cfg.ConnectionMode, "rfc") {
-			transport := cfg.SidecarTransport
-			if transport == "" {
-				transport = "http"
-			}
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Connection: RFC mode (sidecar transport: %s)\n", transport)
-			if cfg.SNC {
-				fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: SNC/SSO (system ID: %s, %d JCo properties)\n", cfg.SysID, len(cfg.JcoProperties))
-			} else if cfg.AsHost != "" {
-				fmt.Fprintf(os.Stderr, "[VERBOSE] RFC: Direct connection to %s (sysnr: %s)\n", cfg.AsHost, cfg.SysNr)
-			} else if cfg.MsHost != "" {
-				fmt.Fprintf(os.Stderr, "[VERBOSE] RFC: Load balanced via %s (r3name: %s, group: %s)\n", cfg.MsHost, cfg.R3Name, cfg.Group)
-			}
-			fmt.Fprintf(os.Stderr, "[VERBOSE] JCo proxy JAR: %s\n", cfg.JcoProxyJar)
-			fmt.Fprintf(os.Stderr, "[VERBOSE] JCo libs dir: %s\n", cfg.JcoLibsDir)
-		} else {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] SAP URL: %s\n", cfg.URL)
-		}
-		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP Client: %s\n", cfg.Client)
-		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP Language: %s\n", cfg.Language)
-		if cfg.User != "" {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: Basic (user: %s)\n", cfg.User)
-		} else if cfg.SNC {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: SNC/SSO\n")
-		} else if len(cfg.Cookies) > 0 {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: Cookie (%d cookies)\n", len(cfg.Cookies))
-		}
-
-		// Safety status
-		if cfg.ReadOnly {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: READ-ONLY mode enabled\n")
-		}
-		if cfg.BlockFreeSQL {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Free SQL queries BLOCKED\n")
-		}
-		if cfg.AllowedOps != "" {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Allowed operations: %s\n", cfg.AllowedOps)
-		}
-		if cfg.DisallowedOps != "" {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Disallowed operations: %s\n", cfg.DisallowedOps)
-		}
-		if len(cfg.AllowedPackages) > 0 {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Allowed packages: %v\n", cfg.AllowedPackages)
-		}
-		if cfg.EnableTransports {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Transport management ENABLED\n")
-		}
-		if cfg.AllowTransportableEdits {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Transportable edits ENABLED (can modify non-local objects)\n")
-		}
-		if !cfg.ReadOnly && !cfg.BlockFreeSQL && cfg.AllowedOps == "" && cfg.DisallowedOps == "" && len(cfg.AllowedPackages) == 0 {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: UNRESTRICTED (no safety checks active)\n")
-		}
-		if cfg.KeepAliveInterval > 0 {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Session keep-alive: %s\n", cfg.KeepAliveInterval)
-		}
-	}
-
-	// Load granular tool visibility from .vsp.json if present
+	// Load .vsp.json for tool visibility and multi-system definitions
 	var systemsCfg *config.SystemsConfig
 	var systemsConfigPath string
 	{
@@ -383,8 +271,18 @@ func runServer(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Multi-system mode: create a multi-system server with per-system connections
+	// Set verbose log output for feature probing
+	if cfg.Verbose {
+		adt.SetLogOutput(os.Stderr)
+	}
+
+	// Initialize the Systems map
+	cfg.Systems = make(map[string]*config.SystemResolvedConfig)
+
 	if multiSystem {
+		// -----------------------------------------------------------
+		// Multi-system mode: populate cfg.Systems from .vsp.json
+		// -----------------------------------------------------------
 		if systemsCfg == nil {
 			return fmt.Errorf("--multi-system requires a .vsp.json configuration file. Use --config to specify path or create one with 'vsp config init'")
 		}
@@ -392,8 +290,6 @@ func runServer(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("--multi-system: no systems defined in configuration file %s", systemsConfigPath)
 		}
 
-		// Resolve all systems from config
-		multiSystems := make(map[string]*config.ResolvedConfig)
 		rfcSystemCount := 0
 		for sysID, sysDef := range systemsCfg.Systems {
 			if sysDef.Disabled {
@@ -407,7 +303,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("--multi-system: failed to resolve system %q: %w", sysID, err)
 			}
 
-			resolved := sys.ToResolved()
+			resolved := sys.ToSystemResolved()
 
 			// Resolve SNC/SSO for this system if enabled
 			if resolved.SNC {
@@ -479,56 +375,88 @@ func runServer(cmd *cobra.Command, args []string) error {
 				}
 			}
 
-			multiSystems[sysID] = resolved
+			cfg.Systems[sysID] = resolved
 		}
 
 		// Enforce stdio transport when multiple systems use RFC mode.
 		// Multiple HTTP-based sidecars would compete for ports; stdio is required.
 		if rfcSystemCount > 1 {
-			explicitHTTP := false
-			if strings.EqualFold(cfg.SidecarTransport, "http") {
-				explicitHTTP = true
-			}
-			for sysID, resolved := range multiSystems {
-				if strings.EqualFold(resolved.ConnectionMode, "rfc") {
-					if strings.EqualFold(resolved.SidecarTransport, "http") {
-						explicitHTTP = true
-					}
-					if explicitHTTP {
-						return fmt.Errorf("--multi-system: multiple systems use RFC mode (%d systems) — jco-sidecar-transport must be \"stdio\" (not \"http\"). "+
-							"Each RFC system needs its own sidecar process, which is only supported via stdio transport. "+
-							"Remove any explicit --jco-sidecar-transport=http or sidecar_transport settings", rfcSystemCount)
-					}
-					resolved.SidecarTransport = "stdio"
-					multiSystems[sysID] = resolved
-				}
+			if strings.EqualFold(cfg.SidecarTransport, "http") || cfg.SidecarTransport == "" {
+				// Default is "http" — must switch to stdio for multi-RFC
+				return fmt.Errorf("--multi-system: multiple systems use RFC mode (%d systems) — jco-sidecar-transport must be \"stdio\" (not \"http\"). "+
+					"Each RFC system needs its own sidecar process, which is only supported via stdio transport. "+
+					"Add --jco-sidecar-transport=stdio", rfcSystemCount)
 			}
 			if cfg.Verbose {
-				fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: %d RFC systems detected, enforcing stdio sidecar transport\n", rfcSystemCount)
+				fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: %d RFC systems detected, using stdio sidecar transport\n", rfcSystemCount)
 			}
 		}
 
-		cfg.MultiSystem = true
-		cfg.MultiSystems = multiSystems
-
 		if cfg.Verbose {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system mode: %d systems loaded from %s\n", len(multiSystems), systemsConfigPath)
-			for id := range multiSystems {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system mode: %d systems loaded from %s\n", len(cfg.Systems), systemsConfigPath)
+			for id := range cfg.Systems {
 				fmt.Fprintf(os.Stderr, "[VERBOSE]   - %s\n", id)
 			}
 		}
+	} else {
+		// -----------------------------------------------------------
+		// Single-system mode: validate singleSys and store as "default"
+		// -----------------------------------------------------------
 
-		srv, err := mcp.NewMultiSystemServer(cfg)
-		if err != nil {
-			return fmt.Errorf("multi-system server creation failed: %w", err)
+		// Resolve SNC/SSO configuration from SAP UI Landscape file
+		if singleSys.SNC {
+			if singleSys.SysID == "" {
+				return fmt.Errorf("--sysid is required when --snc is specified")
+			}
+			if cfg.Verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] SNC mode: resolving system %q from SAP UI Landscape\n", singleSys.SysID)
+				if singleSys.LandscapeFile != "" {
+					fmt.Fprintf(os.Stderr, "[VERBOSE] Using landscape file: %s\n", singleSys.LandscapeFile)
+				}
+			}
+			jcoProps, err := adt.ResolveSNCJcoProperties(singleSys.SysID, singleSys.LandscapeFile, singleSys.Client, singleSys.Language)
+			if err != nil {
+				return fmt.Errorf("SNC configuration failed: %w", err)
+			}
+			singleSys.JcoProperties = jcoProps
+			singleSys.ConnectionMode = "rfc" // SNC requires RFC mode via JCo sidecar
+			if cfg.Verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] SNC: resolved %d JCo properties for system %q\n", len(jcoProps), singleSys.SysID)
+				for k, v := range jcoProps {
+					fmt.Fprintf(os.Stderr, "[VERBOSE]   %s = %s\n", k, v)
+				}
+			}
 		}
-		defer srv.Shutdown()
-		return srv.ServeStdio()
+
+		// Validate single-system configuration
+		if err := validateSingleSystemConfig(); err != nil {
+			return err
+		}
+
+		// Browser-based SSO authentication (must run before processCookieAuth)
+		if err := processBrowserAuth(cmd); err != nil {
+			return err
+		}
+
+		// Process cookie authentication
+		if err := processCookieAuth(cmd); err != nil {
+			return err
+		}
+
+		if cfg.Verbose {
+			logSingleSystemVerbose()
+		}
+
+		cfg.Systems[config.DefaultSystemID] = singleSys
 	}
 
-	// Single-system mode: create and start MCP server
-	server := mcp.NewServer(cfg)
-	return server.ServeStdio()
+	// Create and start the unified server (works for both single and multi-system)
+	srv, err := mcp.NewServer(cfg)
+	if err != nil {
+		return fmt.Errorf("server creation failed: %w", err)
+	}
+	defer srv.Shutdown()
+	return srv.ServeStdio()
 }
 
 func resolveConfig(cmd *cobra.Command) {
@@ -548,128 +476,128 @@ func resolveConfig(cmd *cobra.Command) {
 				if cfg.Verbose {
 					fmt.Fprintf(os.Stderr, "[VERBOSE] Loading system '%s' from %s\n", systemName, configPath)
 				}
-				// Apply system config as defaults (CLI flags already set on cfg take precedence)
-				if cfg.URL == "" {
-					cfg.URL = sys.URL
+				// Apply system config as defaults (CLI flags already set on singleSys take precedence)
+				if singleSys.URL == "" {
+					singleSys.URL = sys.URL
 				}
-				if cfg.User == "" {
-					cfg.User = sys.User
+				if singleSys.User == "" {
+					singleSys.User = sys.User
 				}
-				if cfg.Password == "" {
-					cfg.Password = sys.Password
+				if singleSys.Password == "" {
+					singleSys.Password = sys.Password
 				}
 				if !cmd.Flags().Changed("client") && sys.Client != "" {
-					cfg.Client = sys.Client
+					singleSys.Client = sys.Client
 				}
 				if !cmd.Flags().Changed("language") && sys.Language != "" {
-					cfg.Language = sys.Language
+					singleSys.Language = sys.Language
 				}
 				if !cmd.Flags().Changed("insecure") && sys.Insecure {
-					cfg.Insecure = true
+					singleSys.Insecure = true
 				}
 				// RFC connection settings from system profile
 				if !cmd.Flags().Changed("connection-mode") && sys.ConnectionMode != "" {
-					cfg.ConnectionMode = sys.ConnectionMode
+					singleSys.ConnectionMode = sys.ConnectionMode
 				}
 				if !cmd.Flags().Changed("ashost") && sys.AsHost != "" {
-					cfg.AsHost = sys.AsHost
+					singleSys.AsHost = sys.AsHost
 				}
 				if !cmd.Flags().Changed("sysnr") && sys.SysNr != "" {
-					cfg.SysNr = sys.SysNr
+					singleSys.SysNr = sys.SysNr
 				}
 				if !cmd.Flags().Changed("mshost") && sys.MsHost != "" {
-					cfg.MsHost = sys.MsHost
+					singleSys.MsHost = sys.MsHost
 				}
 				if !cmd.Flags().Changed("msserv") && sys.MsServ != "" {
-					cfg.MsServ = sys.MsServ
+					singleSys.MsServ = sys.MsServ
 				}
 				if !cmd.Flags().Changed("r3name") && sys.R3Name != "" {
-					cfg.R3Name = sys.R3Name
+					singleSys.R3Name = sys.R3Name
 				}
 				if !cmd.Flags().Changed("group") && sys.Group != "" {
-					cfg.Group = sys.Group
+					singleSys.Group = sys.Group
 				}
 				if !cmd.Flags().Changed("jco-proxy-jar") && sys.JcoProxyJar != "" {
-					cfg.JcoProxyJar = sys.JcoProxyJar
+					singleSys.JcoProxyJar = sys.JcoProxyJar
 				}
 				if sys.JavaPath != "" && !cmd.Flags().Changed("java-path") {
-					cfg.JavaPath = sys.JavaPath
+					singleSys.JavaPath = sys.JavaPath
 				}
 				// Cookie auth from system profile
 				if sys.CookieFile != "" {
 					cookies, err := adt.LoadCookiesFromFile(sys.CookieFile)
 					if err == nil && len(cookies) > 0 {
-						cfg.Cookies = cookies
+						singleSys.Cookies = cookies
 					}
 				}
 				if sys.CookieString != "" {
 					cookies := adt.ParseCookieString(sys.CookieString)
 					if len(cookies) > 0 {
-						cfg.Cookies = cookies
+						singleSys.Cookies = cookies
 					}
 				}
 				// Safety settings from system profile
 				if sys.ReadOnly {
-					cfg.ReadOnly = true
+					singleSys.ReadOnly = true
 				}
-				if len(sys.AllowedPackages) > 0 && len(cfg.AllowedPackages) == 0 {
-					cfg.AllowedPackages = sys.AllowedPackages
+				if len(sys.AllowedPackages) > 0 && len(singleSys.AllowedPackages) == 0 {
+					singleSys.AllowedPackages = sys.AllowedPackages
 				}
 			}
 		}
 	}
 
 	// Check if cookie auth is explicitly requested via CLI flags OR env vars
-	// If so, we should NOT load user/password from env/.env to avoid conflicts
-	// Cookie auth takes precedence over basic auth since it's more explicit
 	cookieAuthViaCLI := cmd.Flags().Changed("cookie-file") || cmd.Flags().Changed("cookie-string")
 	cookieAuthViaEnv := viper.GetString("COOKIE_FILE") != "" || viper.GetString("COOKIE_STRING") != ""
 	browserAuth, _ := cmd.Flags().GetBool("browser-auth")
 	hasBrowserAuth := browserAuth || viper.GetBool("BROWSER_AUTH")
-	hasCookieAuth := cookieAuthViaCLI || cookieAuthViaEnv || hasBrowserAuth || len(cfg.Cookies) > 0
+	hasCookieAuth := cookieAuthViaCLI || cookieAuthViaEnv || hasBrowserAuth || len(singleSys.Cookies) > 0
 
 	// URL: flag > system profile > SAP_URL env
-	if cfg.URL == "" {
-		cfg.URL = viper.GetString("URL")
+	if singleSys.URL == "" {
+		singleSys.URL = viper.GetString("URL")
 	}
-	if cfg.URL == "" {
-		cfg.URL = viper.GetString("SERVICE_URL")
+	if singleSys.URL == "" {
+		singleSys.URL = viper.GetString("SERVICE_URL")
 	}
 
 	// Username: flag > system profile > SAP_USER env (skip if cookie auth is present)
-	if cfg.User == "" && !hasCookieAuth {
-		cfg.User = viper.GetString("USER")
+	if singleSys.User == "" && !hasCookieAuth {
+		singleSys.User = viper.GetString("USER")
 	}
-	if cfg.User == "" && !hasCookieAuth {
-		cfg.User = viper.GetString("USERNAME")
+	if singleSys.User == "" && !hasCookieAuth {
+		singleSys.User = viper.GetString("USERNAME")
 	}
 
 	// Password: flag > system profile > SAP_PASSWORD env (skip if cookie auth is present)
-	if cfg.Password == "" && !hasCookieAuth {
-		cfg.Password = viper.GetString("PASSWORD")
+	if singleSys.Password == "" && !hasCookieAuth {
+		singleSys.Password = viper.GetString("PASSWORD")
 	}
-	if cfg.Password == "" && !hasCookieAuth {
-		cfg.Password = viper.GetString("PASS")
+	if singleSys.Password == "" && !hasCookieAuth {
+		singleSys.Password = viper.GetString("PASS")
 	}
 
 	// Client: flag > system profile > SAP_CLIENT env > default
 	if !cmd.Flags().Changed("client") && systemName == "" {
 		if envClient := viper.GetString("CLIENT"); envClient != "" {
-			cfg.Client = envClient
+			singleSys.Client = envClient
 		}
 	}
 
 	// Language: flag > system profile > SAP_LANGUAGE env > default
 	if !cmd.Flags().Changed("language") && systemName == "" {
 		if envLang := viper.GetString("LANGUAGE"); envLang != "" {
-			cfg.Language = envLang
+			singleSys.Language = envLang
 		}
 	}
 
 	// Insecure: flag > system profile > SAP_INSECURE env
 	if !cmd.Flags().Changed("insecure") && systemName == "" {
-		cfg.Insecure = viper.GetBool("INSECURE")
+		singleSys.Insecure = viper.GetBool("INSECURE")
 	}
+
+	// --- Global settings (on cfg) ---
 
 	// Mode: flag > SAP_MODE env > default (focused)
 	if !cmd.Flags().Changed("mode") {
@@ -690,7 +618,7 @@ func resolveConfig(cmd *cobra.Command) {
 		cfg.Verbose = viper.GetBool("VERBOSE")
 	}
 
-	// Safety options: flag > SAP_* env
+	// Safety options (global): flag > SAP_* env
 	if !cmd.Flags().Changed("read-only") {
 		cfg.ReadOnly = viper.GetBool("READ_ONLY")
 	}
@@ -704,7 +632,6 @@ func resolveConfig(cmd *cobra.Command) {
 		cfg.DisallowedOps = viper.GetString("DISALLOWED_OPS")
 	}
 	if !cmd.Flags().Changed("allowed-packages") {
-		// Use GetString and split manually - GetStringSlice doesn't split comma-separated env vars
 		if pkgStr := viper.GetString("ALLOWED_PACKAGES"); pkgStr != "" {
 			cfg.AllowedPackages = splitCommaSeparated(pkgStr)
 		}
@@ -716,7 +643,6 @@ func resolveConfig(cmd *cobra.Command) {
 		cfg.TransportReadOnly = viper.GetBool("TRANSPORT_READ_ONLY")
 	}
 	if !cmd.Flags().Changed("allowed-transports") {
-		// Use GetString and split manually - GetStringSlice doesn't split comma-separated env vars
 		if transportStr := viper.GetString("ALLOWED_TRANSPORTS"); transportStr != "" {
 			cfg.AllowedTransports = splitCommaSeparated(transportStr)
 		}
@@ -775,46 +701,45 @@ func resolveConfig(cmd *cobra.Command) {
 		cfg.KeepAliveInterval, _ = cmd.Flags().GetDuration("keepalive")
 	}
 
-	// RFC settings: flag > system profile > SAP_* env
-	// When --system is used, system profile already set these; don't let env vars override
-	if !cmd.Flags().Changed("connection-mode") && cfg.ConnectionMode == "" {
+	// RFC settings (per-system): flag > system profile > SAP_* env
+	if !cmd.Flags().Changed("connection-mode") && singleSys.ConnectionMode == "" {
 		if v := viper.GetString("CONNECTION_MODE"); v != "" {
-			cfg.ConnectionMode = v
+			singleSys.ConnectionMode = v
 		}
 	}
-	if !cmd.Flags().Changed("ashost") && cfg.AsHost == "" {
+	if !cmd.Flags().Changed("ashost") && singleSys.AsHost == "" {
 		if v := viper.GetString("ASHOST"); v != "" {
-			cfg.AsHost = v
+			singleSys.AsHost = v
 		}
 	}
-	if !cmd.Flags().Changed("sysnr") && cfg.SysNr == "" {
+	if !cmd.Flags().Changed("sysnr") && singleSys.SysNr == "" {
 		if v := viper.GetString("SYSNR"); v != "" {
-			cfg.SysNr = v
+			singleSys.SysNr = v
 		}
 	}
-	if !cmd.Flags().Changed("mshost") && cfg.MsHost == "" {
+	if !cmd.Flags().Changed("mshost") && singleSys.MsHost == "" {
 		if v := viper.GetString("MSHOST"); v != "" {
-			cfg.MsHost = v
+			singleSys.MsHost = v
 		}
 	}
-	if !cmd.Flags().Changed("msserv") && cfg.MsServ == "" {
+	if !cmd.Flags().Changed("msserv") && singleSys.MsServ == "" {
 		if v := viper.GetString("MSSERV"); v != "" {
-			cfg.MsServ = v
+			singleSys.MsServ = v
 		}
 	}
-	if !cmd.Flags().Changed("r3name") && cfg.R3Name == "" {
+	if !cmd.Flags().Changed("r3name") && singleSys.R3Name == "" {
 		if v := viper.GetString("R3NAME"); v != "" {
-			cfg.R3Name = v
+			singleSys.R3Name = v
 		}
 	}
-	if !cmd.Flags().Changed("group") && cfg.Group == "" {
+	if !cmd.Flags().Changed("group") && singleSys.Group == "" {
 		if v := viper.GetString("GROUP"); v != "" {
-			cfg.Group = v
+			singleSys.Group = v
 		}
 	}
-	if !cmd.Flags().Changed("jco-proxy-jar") && cfg.JcoProxyJar == "" {
+	if !cmd.Flags().Changed("jco-proxy-jar") && singleSys.JcoProxyJar == "" {
 		if v := viper.GetString("JCO_PROXY_JAR"); v != "" {
-			cfg.JcoProxyJar = v
+			singleSys.JcoProxyJar = v
 		}
 	}
 	if !cmd.Flags().Changed("jco-libs-dir") && cfg.JcoLibsDir == "" {
@@ -822,9 +747,9 @@ func resolveConfig(cmd *cobra.Command) {
 			cfg.JcoLibsDir = v
 		}
 	}
-	if !cmd.Flags().Changed("java-path") && cfg.JavaPath == "" {
+	if !cmd.Flags().Changed("java-path") && singleSys.JavaPath == "" {
 		if v := viper.GetString("JAVA_PATH"); v != "" {
-			cfg.JavaPath = v
+			singleSys.JavaPath = v
 		}
 	}
 	if !cmd.Flags().Changed("rfc-proxy-port") && cfg.RfcProxyPort == 0 {
@@ -843,58 +768,58 @@ func resolveConfig(cmd *cobra.Command) {
 		}
 	}
 
-	// SNC/SSO settings: flag > SAP_* env
+	// SNC/SSO settings (per-system): flag > SAP_* env
 	if !cmd.Flags().Changed("snc") {
-		cfg.SNC = viper.GetBool("SNC")
+		singleSys.SNC = viper.GetBool("SNC")
 	}
-	if !cmd.Flags().Changed("sysid") && cfg.SysID == "" {
+	if !cmd.Flags().Changed("sysid") && singleSys.SysID == "" {
 		if v := viper.GetString("SYSID"); v != "" {
-			cfg.SysID = v
+			singleSys.SysID = v
 		}
 	}
-	if !cmd.Flags().Changed("landscape-file") && cfg.LandscapeFile == "" {
+	if !cmd.Flags().Changed("landscape-file") && singleSys.LandscapeFile == "" {
 		if v := viper.GetString("LANDSCAPE_FILE"); v != "" {
-			cfg.LandscapeFile = v
+			singleSys.LandscapeFile = v
 		}
 	}
 }
 
-func validateConfig() error {
+func validateSingleSystemConfig() error {
 	// In RFC mode, URL is not required; RFC connection params are
-	if strings.EqualFold(cfg.ConnectionMode, "rfc") {
-		if cfg.SNC {
+	if strings.EqualFold(singleSys.ConnectionMode, "rfc") {
+		if singleSys.SNC {
 			// SNC mode: connection params come from JcoProperties (resolved from landscape)
-			if len(cfg.JcoProperties) == 0 {
+			if len(singleSys.JcoProperties) == 0 {
 				return fmt.Errorf("SNC mode enabled but no JCo properties resolved from landscape")
 			}
 		} else {
 			// Standard RFC mode: need explicit connection params
-			hasDirect := cfg.AsHost != ""
-			hasLB := cfg.MsHost != ""
+			hasDirect := singleSys.AsHost != ""
+			hasLB := singleSys.MsHost != ""
 			if !hasDirect && !hasLB {
 				return fmt.Errorf("RFC mode requires --ashost or --mshost")
 			}
 			if hasDirect && hasLB {
 				return fmt.Errorf("cannot specify both --ashost (direct) and --mshost (load balancing)")
 			}
-			if hasDirect && cfg.SysNr == "" {
+			if hasDirect && singleSys.SysNr == "" {
 				return fmt.Errorf("--sysnr required for direct RFC connection")
 			}
 			if hasLB {
-				if cfg.MsServ == "" {
+				if singleSys.MsServ == "" {
 					return fmt.Errorf("--msserv required for RFC load balancing")
 				}
-				if cfg.R3Name == "" {
+				if singleSys.R3Name == "" {
 					return fmt.Errorf("--r3name required for RFC load balancing")
 				}
-				if cfg.Group == "" {
+				if singleSys.Group == "" {
 					return fmt.Errorf("--group required for RFC load balancing")
 				}
 			}
 		}
 	} else {
 		// HTTP mode requires URL
-		if cfg.URL == "" {
+		if singleSys.URL == "" {
 			return fmt.Errorf("SAP URL is required. Use --url flag or SAP_URL environment variable")
 		}
 	}
@@ -915,7 +840,7 @@ func processBrowserAuth(cmd *cobra.Command) error {
 		return nil
 	}
 
-	if cfg.URL == "" {
+	if singleSys.URL == "" {
 		return fmt.Errorf("--browser-auth requires --url to be set")
 	}
 
@@ -936,12 +861,12 @@ func processBrowserAuth(cmd *cobra.Command) error {
 	}
 
 	ctx := context.Background()
-	cookies, err := adt.BrowserLogin(ctx, cfg.URL, cfg.Insecure, timeout, browserExec, cfg.Verbose)
+	cookies, err := adt.BrowserLogin(ctx, singleSys.URL, singleSys.Insecure, timeout, browserExec, cfg.Verbose)
 	if err != nil {
 		return fmt.Errorf("browser authentication failed: %w", err)
 	}
 
-	cfg.Cookies = cookies
+	singleSys.Cookies = cookies
 
 	// Save cookies to file if requested
 	cookieSave, _ := cmd.Flags().GetString("cookie-save")
@@ -949,7 +874,7 @@ func processBrowserAuth(cmd *cobra.Command) error {
 		cookieSave = viper.GetString("COOKIE_SAVE")
 	}
 	if cookieSave != "" {
-		if err := adt.SaveCookiesToFile(cookies, cfg.URL, cookieSave); err != nil {
+		if err := adt.SaveCookiesToFile(cookies, singleSys.URL, cookieSave); err != nil {
 			fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Warning: failed to save cookies: %v\n", err)
 		} else {
 			fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Cookies saved to %s (reuse with --cookie-file)\n", cookieSave)
@@ -973,7 +898,7 @@ func processCookieAuth(cmd *cobra.Command) error {
 
 	// Count authentication methods
 	authMethods := 0
-	if cfg.User != "" && cfg.Password != "" {
+	if singleSys.User != "" && singleSys.Password != "" {
 		authMethods++
 	}
 	if cookieFile != "" {
@@ -982,16 +907,16 @@ func processCookieAuth(cmd *cobra.Command) error {
 	if cookieString != "" {
 		authMethods++
 	}
-	if cfg.SNC {
+	if singleSys.SNC {
 		authMethods++ // SNC uses OS-level SSO (Kerberos/SPNEGO), no user/password needed
 	}
-	// Browser auth already populated cfg.Cookies in processBrowserAuth
-	if len(cfg.Cookies) > 0 {
+	// Browser auth already populated singleSys.Cookies in processBrowserAuth
+	if len(singleSys.Cookies) > 0 {
 		authMethods++
 	}
 
 	// In RFC mode, SSO is valid — no password or cookies needed
-	isRFC := strings.EqualFold(cfg.ConnectionMode, "rfc")
+	isRFC := strings.EqualFold(singleSys.ConnectionMode, "rfc")
 
 	if authMethods > 1 {
 		return fmt.Errorf("only one authentication method can be used at a time (basic auth, cookie-file, cookie-string, browser-auth, or SNC)")
@@ -1002,7 +927,7 @@ func processCookieAuth(cmd *cobra.Command) error {
 	}
 
 	// If cookies already set by browser auth, we're done
-	if len(cfg.Cookies) > 0 {
+	if len(singleSys.Cookies) > 0 {
 		return nil
 	}
 
@@ -1021,7 +946,7 @@ func processCookieAuth(cmd *cobra.Command) error {
 			return fmt.Errorf("no cookies found in file: %s", cookieFile)
 		}
 
-		cfg.Cookies = cookies
+		singleSys.Cookies = cookies
 		if cfg.Verbose {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Loaded %d cookies from file: %s\n", len(cookies), cookieFile)
 		}
@@ -1034,13 +959,75 @@ func processCookieAuth(cmd *cobra.Command) error {
 			return fmt.Errorf("failed to parse cookie string")
 		}
 
-		cfg.Cookies = cookies
+		singleSys.Cookies = cookies
 		if cfg.Verbose {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Parsed %d cookies from string\n", len(cookies))
 		}
 	}
 
 	return nil
+}
+
+func logSingleSystemVerbose() {
+	fmt.Fprintf(os.Stderr, "[VERBOSE] Starting vsp server\n")
+	fmt.Fprintf(os.Stderr, "[VERBOSE] Mode: %s\n", cfg.Mode)
+	if cfg.DisabledGroups != "" {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Disabled groups: %s (5/U=UI5, T=Tests, H=HANA, D=Debug)\n", cfg.DisabledGroups)
+	}
+	if strings.EqualFold(singleSys.ConnectionMode, "rfc") {
+		transport := cfg.SidecarTransport
+		if transport == "" {
+			transport = "http"
+		}
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Connection: RFC mode (sidecar transport: %s)\n", transport)
+		if singleSys.SNC {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: SNC/SSO (system ID: %s, %d JCo properties)\n", singleSys.SysID, len(singleSys.JcoProperties))
+		} else if singleSys.AsHost != "" {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] RFC: Direct connection to %s (sysnr: %s)\n", singleSys.AsHost, singleSys.SysNr)
+		} else if singleSys.MsHost != "" {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] RFC: Load balanced via %s (r3name: %s, group: %s)\n", singleSys.MsHost, singleSys.R3Name, singleSys.Group)
+		}
+		fmt.Fprintf(os.Stderr, "[VERBOSE] JCo proxy JAR: %s\n", singleSys.JcoProxyJar)
+		fmt.Fprintf(os.Stderr, "[VERBOSE] JCo libs dir: %s\n", cfg.JcoLibsDir)
+	} else {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP URL: %s\n", singleSys.URL)
+	}
+	fmt.Fprintf(os.Stderr, "[VERBOSE] SAP Client: %s\n", singleSys.Client)
+	fmt.Fprintf(os.Stderr, "[VERBOSE] SAP Language: %s\n", singleSys.Language)
+	if singleSys.User != "" {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: Basic (user: %s)\n", singleSys.User)
+	} else if singleSys.SNC {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: SNC/SSO\n")
+	} else if len(singleSys.Cookies) > 0 {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: Cookie (%d cookies)\n", len(singleSys.Cookies))
+	}
+	if cfg.ReadOnly {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: READ-ONLY mode enabled\n")
+	}
+	if cfg.BlockFreeSQL {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Free SQL queries BLOCKED\n")
+	}
+	if cfg.AllowedOps != "" {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Allowed operations: %s\n", cfg.AllowedOps)
+	}
+	if cfg.DisallowedOps != "" {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Disallowed operations: %s\n", cfg.DisallowedOps)
+	}
+	if len(cfg.AllowedPackages) > 0 {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Allowed packages: %v\n", cfg.AllowedPackages)
+	}
+	if cfg.EnableTransports {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Transport management ENABLED\n")
+	}
+	if cfg.AllowTransportableEdits {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Transportable edits ENABLED (can modify non-local objects)\n")
+	}
+	if !cfg.ReadOnly && !cfg.BlockFreeSQL && cfg.AllowedOps == "" && cfg.DisallowedOps == "" && len(cfg.AllowedPackages) == 0 {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: UNRESTRICTED (no safety checks active)\n")
+	}
+	if cfg.KeepAliveInterval > 0 {
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Session keep-alive: %s\n", cfg.KeepAliveInterval)
+	}
 }
 
 // splitCommaSeparated splits a comma-separated string into a slice, trimming whitespace.

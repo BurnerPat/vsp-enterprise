@@ -9,16 +9,16 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/oisee/vibing-steampunk/internal/config"
 )
 
 // Server is the singleton MCP server instance.
 // It bootstraps the mcp-go server, manages individual System connections
 // via the Router, and handles setup/shutdown lifecycle.
 type Server struct {
-	mcpServer   *server.MCPServer
-	router      *Router
-	multiSystem bool    // true when --multi-system is active
-	config      *Config // global configuration (type alias for config.ResolvedConfig)
+	mcpServer *server.MCPServer
+	router    *Router
+	config    *GlobalConfig // top-level configuration
 }
 
 // newMCPServer creates the underlying mcp-go MCPServer instance.
@@ -31,46 +31,22 @@ func newMCPServer() *server.MCPServer {
 	)
 }
 
-// NewServer creates a new MCP server for ABAP ADT tools (single-system mode).
-func NewServer(cfg *Config) *Server {
-	sys, err := newSystemInstance(cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-		os.Exit(1)
+// NewServer creates a new MCP server from a fully populated GlobalConfig.
+// All systems (single or multi) must already be present in globalCfg.Systems.
+func NewServer(globalCfg *GlobalConfig) (*Server, error) {
+	if len(globalCfg.Systems) == 0 {
+		return nil, fmt.Errorf("no systems configured")
 	}
+
+	// Store the global config as a singleton so that Build* methods and
+	// other code can access global settings without field copying.
+	config.SetInstance(globalCfg)
 
 	mcpSrv := newMCPServer()
 	router := NewRouter(mcpSrv)
 
-	router.AddSystem("default", sys)
-	router.RegisterTools(cfg.Mode, cfg.DisabledGroups, cfg.ToolsConfig)
-
-	return &Server{
-		mcpServer: mcpSrv,
-		router:    router,
-		config:    cfg,
-	}
-}
-
-// NewMultiSystemServer creates an MCP server that routes requests to multiple SAP systems.
-// Each system gets its own goroutine-safe System instance with independent connections.
-func NewMultiSystemServer(globalCfg *Config) (*Server, error) {
-	if len(globalCfg.MultiSystems) == 0 {
-		return nil, fmt.Errorf("multi-system mode requires at least one system in configuration")
-	}
-
-	// Auto-extract embedded proxy JAR once for all systems (shared JCo infrastructure)
-	ensureProxyJAR(globalCfg)
-
-	mcpSrv := newMCPServer()
-	router := NewRouter(mcpSrv)
-
-	// Create per-system System instances, each with independent connections
-	for sysID, sysCfg := range globalCfg.MultiSystems {
-		perSystemCfg := *sysCfg // copy to avoid mutating the original
-		perSystemCfg.MergeGlobal(globalCfg)
-
-		sys, err := newSystemInstance(&perSystemCfg)
+	for sysID, sysCfg := range globalCfg.Systems {
+		sys, err := newSystemInstance(sysCfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create system for %q: %w", sysID, err)
 		}
@@ -78,26 +54,24 @@ func NewMultiSystemServer(globalCfg *Config) (*Server, error) {
 		router.AddSystem(sysID, sys)
 
 		if globalCfg.Verbose {
-			connInfo := perSystemCfg.URL
-			if strings.EqualFold(perSystemCfg.ConnectionMode, "rfc") {
-				connInfo = fmt.Sprintf("RFC(%s)", perSystemCfg.AsHost)
-				if perSystemCfg.MsHost != "" {
-					connInfo = fmt.Sprintf("RFC-LB(%s)", perSystemCfg.MsHost)
+			connInfo := sysCfg.URL
+			if strings.EqualFold(sysCfg.ConnectionMode, "rfc") {
+				connInfo = fmt.Sprintf("RFC(%s)", sysCfg.AsHost)
+				if sysCfg.MsHost != "" {
+					connInfo = fmt.Sprintf("RFC-LB(%s)", sysCfg.MsHost)
 				}
 			}
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: initialized %q → %s (user: %s)\n",
-				sysID, connInfo, perSystemCfg.User)
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Initialized system %q → %s (user: %s)\n",
+				sysID, connInfo, sysCfg.User)
 		}
 	}
 
-	// Register tools on the router (which registers them on the main MCP server)
 	router.RegisterTools(globalCfg.Mode, globalCfg.DisabledGroups, globalCfg.ToolsConfig)
 
 	return &Server{
-		mcpServer:   mcpSrv,
-		multiSystem: true,
-		router:      router,
-		config:      globalCfg,
+		mcpServer: mcpSrv,
+		router:    router,
+		config:    globalCfg,
 	}, nil
 }
 

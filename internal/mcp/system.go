@@ -15,6 +15,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	deps "github.com/oisee/vibing-steampunk/embedded/deps"
+	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
@@ -130,9 +131,12 @@ func newSystemInstance(cfg *Config) (*System, error) {
 		return nil, err
 	}
 
+	// Read global settings from the singleton
+	globalCfg := config.GetInstance()
+
 	// Set terminal ID for debugger operations
-	if cfg.TerminalID != "" {
-		adt.SetTerminalID(cfg.TerminalID)
+	if globalCfg.TerminalID != "" {
+		adt.SetTerminalID(globalCfg.TerminalID)
 	}
 	adt.SetTerminalIDUser(cfg.User)
 
@@ -141,15 +145,15 @@ func newSystemInstance(cfg *Config) (*System, error) {
 	sys := &System{
 		adtClient:     adtClient,
 		config:        cfg,
-		featureProber: adt.NewFeatureProber(adtClient, featureConfig, cfg.Verbose),
+		featureProber: adt.NewFeatureProber(adtClient, featureConfig, cfg.IsVerbose()),
 		featureConfig: featureConfig,
 		sidecar:       sidecar,
 		asyncTasks:    make(map[string]*AsyncTask),
 	}
 
 	// Start session keep-alive if configured
-	if cfg.KeepAliveInterval > 0 {
-		adtClient.StartKeepAlive(cfg.KeepAliveInterval, cfg.Verbose)
+	if globalCfg.KeepAliveInterval > 0 {
+		adtClient.StartKeepAlive(globalCfg.KeepAliveInterval, cfg.IsVerbose())
 	}
 
 	return sys, nil
@@ -178,9 +182,9 @@ func createRFCADTClient(cfg *Config, opts []adt.Option) (*adt.Client, *adt.Sidec
 		return nil, nil, fmt.Errorf("failed to start JCo sidecar: %w", err)
 	}
 
-	maxConcurrent := cfg.RfcMaxConcurrent
-	if maxConcurrent <= 0 {
-		maxConcurrent = 5
+	maxConcurrent := 5
+	if g := config.GetInstance(); g.RfcMaxConcurrent > 0 {
+		maxConcurrent = g.RfcMaxConcurrent
 	}
 
 	var adtClient *adt.Client
@@ -203,7 +207,7 @@ func ensureProxyJAR(cfg *Config) {
 	if data == nil {
 		return
 	}
-	extractDir := cfg.JcoLibsDir
+	extractDir := config.GetInstance().JcoLibsDir
 	if extractDir == "" {
 		extractDir = "./jco-libs"
 	}
@@ -215,7 +219,7 @@ func ensureProxyJAR(cfg *Config) {
 		return
 	}
 	cfg.JcoProxyJar = proxyPath
-	if cfg.Verbose {
+	if cfg.IsVerbose() {
 		fmt.Fprintf(os.Stderr, "[VERBOSE] Auto-extracted embedded proxy JAR to %s\n", proxyPath)
 	}
 }
