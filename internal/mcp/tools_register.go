@@ -1,13 +1,12 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
-// tools_register.go contains the tool registration loop and the toolDef type.
-// Individual tool definitions live alongside their handlers in tool_*.go files.
+// tools_register.go contains the tool registration helpers and filter logic.
+// Individual tool definitions live alongside their handlers in the tools/ package.
 package mcp
 
 import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/oisee/vibing-steampunk/internal/mcp/tools"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 )
 
@@ -38,10 +37,6 @@ type ToolDef struct {
 	// Describes how this tool is reachable via SAP(action, target, params).
 	// If empty, the tool is only available as an individual named tool.
 	Routes []UniversalRoute
-}
-
-func (s *Server) registerTools(mode string, disabledGroups string, toolsConfig map[string]bool) {
-	// Handled by Router now
 }
 
 // buildShouldRegister creates a filter function.
@@ -92,16 +87,4 @@ func buildShouldRegister(mode string, disabledGroups string, toolsConfig map[str
 		}
 		return focusedTools[toolName]
 	}
-}
-
-// allToolDefs collects tool definitions from all handler groups.
-func (s *Server) allToolDefs() []types.ToolDef {
-	var defs []types.ToolDef
-	defs = append(defs, tools.UnifiedToolDefs()...)
-	defs = append(defs, tools.ReadToolDefs()...)
-	defs = append(defs, tools.SystemToolDefs()...)
-	defs = append(defs, tools.AnalysisToolDefs()...)
-	defs = append(defs, tools.TransportToolDefs()...)
-	// ... add remaining ones as they are refactored
-	return defs
 }

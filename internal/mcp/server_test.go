@@ -71,16 +71,27 @@ func TestNewServer(t *testing.T) {
 		Language: "EN",
 	}
 
-	server := NewServer(cfg)
+	srv := NewServer(cfg)
 
-	if server == nil {
+	if srv == nil {
 		t.Fatal("NewServer returned nil")
 	}
-	if server.mcpServer == nil {
+	if srv.mcpServer == nil {
 		t.Error("MCP server should not be nil")
 	}
-	if server.adtClient == nil {
-		t.Error("ADT client should not be nil")
+	if srv.router == nil {
+		t.Fatal("Router should not be nil")
+	}
+	if len(srv.router.systems) != 1 {
+		t.Fatalf("Expected 1 system in router, got %d", len(srv.router.systems))
+	}
+	// Verify the default system has a non-nil ADT client
+	sys, ok := srv.router.systems["default"]
+	if !ok {
+		t.Fatal("Expected 'default' system in router")
+	}
+	if sys.ADT() == nil {
+		t.Error("ADT client on default system should not be nil")
 	}
 }
 
@@ -93,12 +104,12 @@ func TestDebuggerGetVariablesSchemaIncludesItems(t *testing.T) {
 		Language: "EN",
 	}
 
-	server := NewServer(cfg)
-	if server == nil || server.mcpServer == nil {
+	srv := NewServer(cfg)
+	if srv == nil || srv.mcpServer == nil {
 		t.Fatal("server or MCP server is nil")
 	}
 
-	rawResponse := server.mcpServer.HandleMessage(context.Background(), []byte(`{
+	rawResponse := srv.mcpServer.HandleMessage(context.Background(), []byte(`{
 		"jsonrpc": "2.0",
 		"id": 1,
 		"method": "tools/list",
