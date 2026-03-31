@@ -24,18 +24,22 @@ var (
 	BuildDate = "unknown"
 )
 
-var cfg = &config.ResolvedConfig{}
+var cfg = &config.GlobalConfig{}
 
 // singleSys accumulates per-system settings from CLI flags / env vars.
 // In single-system mode it is stored as cfg.Systems["default"] before
 // the server is created. In multi-system mode it is ignored.
-var singleSys = &config.SystemResolvedConfig{}
+var singleSys = &config.SystemConfig{}
 
 // Multi-system mode (CLI-only flag for argument validation)
 var (
 	multiSystem bool
 	configFile  string
 )
+
+// runtimeCookies holds per-system cookies acquired at runtime (e.g. browser auth).
+// They are intentionally not part of persistent configuration.
+var runtimeCookies = map[string]map[string]string{}
 
 var rootCmd = &cobra.Command{
 	Use:   "vsp",
@@ -107,8 +111,8 @@ func init() {
 	rootCmd.Flags().BoolVar(&singleSys.Insecure, "insecure", false, "Skip TLS certificate verification")
 
 	// Cookie authentication
-	rootCmd.Flags().String("cookie-file", "", "Path to cookie file in Netscape format")
-	rootCmd.Flags().String("cookie-string", "", "Cookie string (key1=val1; key2=val2)")
+	rootCmd.Flags().StringVar(&singleSys.CookieFile, "cookie-file", "", "Path to cookie file in Netscape format")
+	rootCmd.Flags().StringVar(&singleSys.CookieString, "cookie-string", "", "Cookie string (key1=val1; key2=val2)")
 
 	// Browser-based SSO authentication
 	rootCmd.Flags().Bool("browser-auth", false, "Open browser for SSO login (Kerberos, SAML, Keycloak)")
@@ -253,6 +257,17 @@ func runServer(cmd *cobra.Command, _ []string) error {
 	// Handle browser-based SSO authentication (single-system mode only)
 	// This must run after Bootstrap because it requires browser interaction
 	if !multiSystem {
+		// Copy cookie auth from env for single-system mode when flags are not provided.
+		// Cookie loading itself is done in mcp.NewServer.
+		if sys, ok := bootstrappedCfg.Systems[config.DefaultSystemID]; ok {
+			if sys.CookieFile == "" {
+				sys.CookieFile = viper.GetString("COOKIE_FILE")
+			}
+			if sys.CookieString == "" {
+				sys.CookieString = viper.GetString("COOKIE_STRING")
+			}
+		}
+
 		if err := processBrowserAuthSingleSystem(cmd); err != nil {
 			return err
 		}
@@ -264,7 +279,7 @@ func runServer(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Create and start the unified server (works for both single and multi-system)
-	srv, err := mcp.NewServer(bootstrappedCfg)
+	srv, err := mcp.NewServer(bootstrappedCfg, runtimeCookies)
 	if err != nil {
 		return fmt.Errorf("server creation failed: %w", err)
 	}
@@ -316,7 +331,7 @@ func processBrowserAuthSingleSystem(cmd *cobra.Command) error {
 		return fmt.Errorf("browser authentication failed: %w", err)
 	}
 
-	sys.Cookies = cookies
+	runtimeCookies[config.DefaultSystemID] = cookies
 
 	// Save cookies to file if requested
 	cookieSave, _ := cmd.Flags().GetString("cookie-save")
@@ -335,9 +350,10 @@ func processBrowserAuthSingleSystem(cmd *cobra.Command) error {
 }
 
 // logFinalConfiguration logs the final configuration after augmentation and validation.
-func logFinalConfiguration(cfg *config.ResolvedConfig) {
+func logFinalConfiguration(cfg *config.GlobalConfig) {
 	_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Starting vsp server\n")
 	_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Mode: %s\n", cfg.Mode)
+
 	if cfg.DisabledGroups != "" {
 		_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Disabled groups: %s (5/U=UI5, T=Tests, H=HANA, D=Debug)\n", cfg.DisabledGroups)
 	}
@@ -366,8 +382,8 @@ func logFinalConfiguration(cfg *config.ResolvedConfig) {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   Auth: Basic (user: %s)\n", sys.User)
 		} else if sys.SNC {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   Auth: SNC/SSO\n")
-		} else if len(sys.Cookies) > 0 {
-			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   Auth: Cookie (%d cookies)\n", len(sys.Cookies))
+		} else if c := runtimeCookies[sysID]; len(c) > 0 {
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   Auth: Cookie (%d cookies)\n", len(c))
 		}
 	}
 

@@ -4,14 +4,17 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/oisee/vibing-steampunk/embedded/deps"
 	"github.com/oisee/vibing-steampunk/internal/config"
+	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
 // Server is the singleton MCP server instance.
@@ -20,7 +23,7 @@ import (
 type Server struct {
 	mcpServer *server.MCPServer
 	router    *Router
-	config    *GlobalConfig // top-level configuration
+	config    *config.GlobalConfig // top-level configuration
 }
 
 // newMCPServer creates the underlying mcp-go MCPServer instance.
@@ -35,7 +38,8 @@ func newMCPServer() *server.MCPServer {
 
 // NewServer creates a new MCP server from a fully populated GlobalConfig.
 // All systems (single or multi) must already be present in globalCfg.Systems.
-func NewServer(globalCfg *GlobalConfig) (*Server, error) {
+// runtimeCookies is an optional per-system cookie map (e.g. from CLI browser auth).
+func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[string]string) (*Server, error) {
 	if len(globalCfg.Systems) == 0 {
 		return nil, fmt.Errorf("no systems configured")
 	}
@@ -58,7 +62,12 @@ func NewServer(globalCfg *GlobalConfig) (*Server, error) {
 			}
 		}
 
-		sys, err := newSystemInstance(sysCfg)
+		cookies, err := resolveSystemCookies(sysID, sysCfg, globalCfg.Verbose, runtimeCookies)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve cookies for system %q: %w", sysID, err)
+		}
+
+		sys, err := newSystemInstance(sysCfg, cookies)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create system for %q: %w", sysID, err)
 		}
@@ -87,7 +96,72 @@ func NewServer(globalCfg *GlobalConfig) (*Server, error) {
 	}, nil
 }
 
-func ensureProxyJARIsAvailable(cfg *config.ResolvedConfig) error {
+// resolveSystemCookies resolves runtime cookies for a system in this precedence:
+// 1) runtimeCookies (injected, e.g. browser-auth from CLI)
+// 2) cookie_file from config
+// 3) cookie_string from config
+// 4) browser_auth from config
+func resolveSystemCookies(systemID string, sysCfg *config.SystemConfig, verbose bool, runtimeCookies map[string]map[string]string) (map[string]string, error) {
+	if runtimeCookies != nil {
+		if c := runtimeCookies[systemID]; len(c) > 0 {
+			return c, nil
+		}
+	}
+
+	if sysCfg.CookieFile != "" {
+		cookies, err := adt.LoadCookiesFromFile(sysCfg.CookieFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load cookies from file %q: %w", sysCfg.CookieFile, err)
+		}
+		if len(cookies) > 0 {
+			return cookies, nil
+		}
+	}
+
+	if sysCfg.CookieString != "" {
+		cookies := adt.ParseCookieString(sysCfg.CookieString)
+		if len(cookies) > 0 {
+			return cookies, nil
+		}
+		return nil, fmt.Errorf("failed to parse cookie_string for system %q", systemID)
+	}
+
+	if sysCfg.BrowserAuth {
+		if sysCfg.URL == "" {
+			return nil, fmt.Errorf("browser_auth requires url")
+		}
+
+		timeout := 120 * time.Second
+		if sysCfg.BrowserAuthTimeout != "" {
+			if d, err := time.ParseDuration(sysCfg.BrowserAuthTimeout); err == nil {
+				timeout = d
+			}
+		}
+
+		if verbose || sysCfg.Verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Starting browser login for system %q (%s)\n", systemID, sysCfg.URL)
+		}
+
+		cookies, err := adt.BrowserLogin(context.Background(), sysCfg.URL, sysCfg.Insecure, timeout, sysCfg.BrowserExec, verbose || sysCfg.Verbose)
+		if err != nil {
+			return nil, fmt.Errorf("browser authentication failed: %w", err)
+		}
+
+		if sysCfg.CookieSave != "" {
+			if err := adt.SaveCookiesToFile(cookies, sysCfg.URL, sysCfg.CookieSave); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Warning: failed to save cookies for system %q: %v\n", systemID, err)
+			} else {
+				_, _ = fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Cookies for system %q saved to %s\n", systemID, sysCfg.CookieSave)
+			}
+		}
+
+		return cookies, nil
+	}
+
+	return nil, nil
+}
+
+func ensureProxyJARIsAvailable(cfg *config.GlobalConfig) error {
 	if cfg.JcoProxyJar != "" {
 		if !fileExists(cfg.JcoProxyJar) {
 			return fmt.Errorf("proxy JAR file %s supplied by user does not exist", cfg.JcoProxyJar)

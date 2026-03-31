@@ -34,7 +34,7 @@ func TestNewToolResultError(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	cfg := &Config{
+	cfg := &config.SystemConfig{
 		ConnectionConfig: config.ConnectionConfig{
 			URL:      "https://sap.example.com:44300",
 			User:     "testuser",
@@ -66,8 +66,8 @@ func TestConfig(t *testing.T) {
 }
 
 func TestNewServer(t *testing.T) {
-	globalCfg := &GlobalConfig{
-		Systems: map[string]*Config{
+	globalCfg := &config.GlobalConfig{
+		Systems: map[string]*config.SystemConfig{
 			config.DefaultSystemID: {
 				ConnectionConfig: config.ConnectionConfig{
 					URL:      "https://sap.example.com:44300",
@@ -80,7 +80,7 @@ func TestNewServer(t *testing.T) {
 		},
 	}
 
-	srv, err := NewServer(globalCfg)
+	srv, err := NewServer(globalCfg, nil)
 	if err != nil {
 		t.Fatalf("NewServer failed: %v", err)
 	}
@@ -108,8 +108,8 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestDebuggerGetVariablesSchemaIncludesItems(t *testing.T) {
-	globalCfg := &GlobalConfig{
-		Systems: map[string]*Config{
+	globalCfg := &config.GlobalConfig{
+		Systems: map[string]*config.SystemConfig{
 			config.DefaultSystemID: {
 				ConnectionConfig: config.ConnectionConfig{
 					URL:      "https://sap.example.com:44300",
@@ -122,7 +122,7 @@ func TestDebuggerGetVariablesSchemaIncludesItems(t *testing.T) {
 		},
 	}
 
-	srv, err := NewServer(globalCfg)
+	srv, err := NewServer(globalCfg, nil)
 	if err != nil {
 		t.Fatalf("NewServer failed: %v", err)
 	}

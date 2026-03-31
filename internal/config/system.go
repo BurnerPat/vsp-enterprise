@@ -71,11 +71,15 @@ type SystemConfig struct {
 	BrowserAuthConfig
 	RfcConfig
 	SncConfig
+	SafetySettings
 
 	// Per-system output settings
 	Verbose bool `json:"verbose,omitempty"` // Enable verbose logging for this system
 
-	SafetySettings
+	// JCo connection properties resolved from SAP UI Landscape (SNC mode).
+	// Stored here so they can be passed to the JCo sidecar and, in future,
+	// also be specified directly in the config file.
+	JcoProperties map[string]string `json:"jco_properties,omitempty"`
 }
 
 // SystemsConfig is the root configuration containing all systems.

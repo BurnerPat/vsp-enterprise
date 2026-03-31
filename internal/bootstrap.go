@@ -29,7 +29,7 @@ import (
 //   - cmd: Cobra command for flag inspection
 //
 // Returns the fully-augmented ResolvedConfig ready for instantiation.
-func Bootstrap(cfg *config.ResolvedConfig, singleSys *config.SystemResolvedConfig, multiSystem bool, configFile, systemName string, cmd *cobra.Command) (*config.ResolvedConfig, error) {
+func Bootstrap(cfg *config.GlobalConfig, singleSys *config.SystemConfig, multiSystem bool, configFile, systemName string, cmd *cobra.Command) (*config.GlobalConfig, error) {
 	// Step 1: Load configuration file (.vsp.json) if available
 	// Config file is OPTIONAL - if not found, just continue with CLI/ENV config
 	var systemsCfg *config.SystemsConfig
@@ -71,7 +71,7 @@ func Bootstrap(cfg *config.ResolvedConfig, singleSys *config.SystemResolvedConfi
 	}
 
 	// Step 2: Initialize the Systems map
-	cfg.Systems = make(map[string]*config.SystemResolvedConfig)
+	cfg.Systems = make(map[string]*config.SystemConfig)
 
 	// Step 3: Route to multi-system or single-system bootstrap
 	if multiSystem {
@@ -88,7 +88,7 @@ func Bootstrap(cfg *config.ResolvedConfig, singleSys *config.SystemResolvedConfi
 }
 
 // bootstrapMultiSystem populates cfg.Systems from .vsp.json and augments each system.
-func bootstrapMultiSystem(cfg *config.ResolvedConfig, systemsCfg *config.SystemsConfig, systemsConfigPath string) error {
+func bootstrapMultiSystem(cfg *config.GlobalConfig, systemsCfg *config.SystemsConfig, systemsConfigPath string) error {
 	if systemsCfg == nil {
 		return fmt.Errorf("--multi-system requires a .vsp.json configuration file. Use --config to specify path or create one with 'vsp config init'")
 	}
@@ -106,24 +106,22 @@ func bootstrapMultiSystem(cfg *config.ResolvedConfig, systemsCfg *config.Systems
 			continue
 		}
 
+		// GetSystem returns *config.SystemConfig directly — no conversion needed
 		sys, err := systemsCfg.GetSystem(sysID)
 		if err != nil {
 			return fmt.Errorf("--multi-system: failed to resolve system %q: %w", sysID, err)
 		}
 
-		resolved := sys.ToSystemResolved()
-
-		// Augment the system configuration
-		if err := augmentSystemConfiguration(resolved, cfg); err != nil {
+		if err := augmentSystemConfiguration(sys, cfg); err != nil {
 			return fmt.Errorf("--multi-system: failed to augment system %q: %w", sysID, err)
 		}
 
 		// Count RFC systems (explicit or via SNC)
-		if strings.EqualFold(resolved.ConnectionMode, "rfc") {
+		if strings.EqualFold(sys.ConnectionMode, "rfc") {
 			rfcSystemCount++
 		}
 
-		cfg.Systems[sysID] = resolved
+		cfg.Systems[sysID] = sys
 	}
 
 	// Enforce stdio transport when multiple systems use RFC mode
@@ -149,13 +147,14 @@ func bootstrapMultiSystem(cfg *config.ResolvedConfig, systemsCfg *config.Systems
 }
 
 // bootstrapSingleSystem resolves single-system configuration from CLI/ENV and .vsp.json profile.
-func bootstrapSingleSystem(cfg *config.ResolvedConfig, singleSys *config.SystemResolvedConfig, systemsCfg *config.SystemsConfig, systemName string) error {
+func bootstrapSingleSystem(cfg *config.GlobalConfig, singleSys *config.SystemConfig, systemsCfg *config.SystemsConfig, systemName string) error {
 	// If --system flag is specified, load system config from .vsp.json first
 	// System profile values act as base defaults; CLI/ENV values override them via merging
 	if systemName != "" {
 		if systemsCfg == nil {
 			_, _ = fmt.Fprintf(os.Stderr, "[WARN] --system '%s' specified but no .vsp.json found\n", systemName)
 		} else {
+			// GetSystem returns *config.SystemConfig directly — no conversion needed
 			sys, err := systemsCfg.GetSystem(systemName)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "[WARN] %v\n", err)
@@ -163,9 +162,8 @@ func bootstrapSingleSystem(cfg *config.ResolvedConfig, singleSys *config.SystemR
 				if cfg.Verbose {
 					_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Loading system '%s' from .vsp.json\n", systemName)
 				}
-				// Merge config file system profile into singleSys (CLI/ENV wins)
-				profileResolved := sys.ToSystemResolved()
-				if err := mergeSystemConfiguration(singleSys, profileResolved); err != nil {
+				// Merge config file profile into singleSys; CLI/ENV values win
+				if err := mergeSystemConfiguration(singleSys, sys); err != nil {
 					return fmt.Errorf("failed to merge system profile: %w", err)
 				}
 			}
@@ -186,109 +184,83 @@ func bootstrapSingleSystem(cfg *config.ResolvedConfig, singleSys *config.SystemR
 	return nil
 }
 
-// mergeSystemConfiguration merges system configuration with precedence: CLI/ENV wins > Config File.
-// Uses mergo to generically merge structs: only applies non-empty/non-zero values from fileConfig
-// to empty fields in cliEnv.
-func mergeSystemConfiguration(cliEnv, fileConfig *config.SystemResolvedConfig) error {
-	// mergo.Merge combines structs with the destination (cliEnv) taking precedence.
-	// We use WithOverride=false so that non-zero destination values are preserved.
-	// For zero values in cliEnv, mergo copies from fileConfig.
+// mergeSystemConfiguration merges fileConfig into cliEnv with CLI/ENV taking precedence.
+// Uses mergo: zero-value fields in cliEnv are filled from fileConfig; non-zero fields are kept.
+func mergeSystemConfiguration(cliEnv, fileConfig *config.SystemConfig) error {
 	if err := mergo.Merge(cliEnv, fileConfig); err != nil {
 		return fmt.Errorf("failed to merge system configuration: %w", err)
 	}
 	return nil
 }
 
-// augmentSystemConfiguration augments a single system with derived/resolved data:
-// - SNC/JCo properties from SAP UI Landscape
-// - Cookie authentication (browser-based, file, or string)
-// - Validation of connection configuration
-func augmentSystemConfiguration(resolved *config.SystemResolvedConfig, globalCfg *config.ResolvedConfig) error {
+// augmentSystemConfiguration augments a system with derived runtime data:
+// SNC/JCo properties from SAP UI Landscape, and cookie authentication.
+func augmentSystemConfiguration(sys *config.SystemConfig, globalCfg *config.GlobalConfig) error {
 	// Resolve SNC/SSO configuration from SAP UI Landscape file
-	if resolved.SNC {
-		if resolved.SysID == "" {
+	if sys.SNC {
+		if sys.SysID == "" {
 			return fmt.Errorf("--sysid is required when --snc is specified")
 		}
 		if globalCfg.Verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] SNC mode: resolving system %q from SAP UI Landscape\n", resolved.SysID)
-			if resolved.LandscapeFile != "" {
-				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Using landscape file: %s\n", resolved.LandscapeFile)
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] SNC mode: resolving system %q from SAP UI Landscape\n", sys.SysID)
+			if sys.LandscapeFile != "" {
+				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Using landscape file: %s\n", sys.LandscapeFile)
 			}
 		}
-		jcoProps, err := adt.ResolveSNCJcoProperties(resolved.SysID, resolved.LandscapeFile, resolved.Client, resolved.Language)
+		jcoProps, err := adt.ResolveSNCJcoProperties(sys.SysID, sys.LandscapeFile, sys.Client, sys.Language)
 		if err != nil {
 			return fmt.Errorf("SNC configuration failed: %w", err)
 		}
-		resolved.JcoProperties = jcoProps
-		resolved.ConnectionMode = "rfc" // SNC requires RFC mode via JCo sidecar
+		sys.JcoProperties = jcoProps
+		sys.ConnectionMode = "rfc" // SNC requires RFC mode via JCo sidecar
 		if globalCfg.Verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] SNC: resolved %d JCo properties for system %q\n", len(jcoProps), resolved.SysID)
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] SNC: resolved %d JCo properties for system %q\n", len(jcoProps), sys.SysID)
 			for k, v := range jcoProps {
 				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   %s = %s\n", k, v)
 			}
 		}
 	}
 
-	// Handle cookie authentication
-	if err := augmentCookieAuthentication(resolved); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// augmentCookieAuthentication augments cookie authentication for a system:
-// - Processes cookie file (config file level already loaded)
-// - Processes cookie string (CLI/env)
-func augmentCookieAuthentication(resolved *config.SystemResolvedConfig) error {
-	// If cookies already set by config file, they're already in place
-	if len(resolved.Cookies) > 0 {
-		return nil
-	}
-
-	// Browser auth is handled separately in main.go processBrowserAuthSingleSystem
-	// since it requires CLI context
-
 	return nil
 }
 
 // validateSystemConfiguration validates a system configuration for consistency.
-func validateSystemConfiguration(singleSys *config.SystemResolvedConfig, globalCfg *config.ResolvedConfig) error {
+func validateSystemConfiguration(sys *config.SystemConfig, globalCfg *config.GlobalConfig) error {
 	// In RFC mode, URL is not required; RFC connection params are
-	if strings.EqualFold(singleSys.ConnectionMode, "rfc") {
-		if singleSys.SNC {
+	if strings.EqualFold(sys.ConnectionMode, "rfc") {
+		if sys.SNC {
 			// SNC mode: connection params come from JcoProperties (resolved from landscape)
-			if len(singleSys.JcoProperties) == 0 {
+			if len(sys.JcoProperties) == 0 {
 				return fmt.Errorf("SNC mode enabled but no JCo properties resolved from landscape")
 			}
 		} else {
 			// Standard RFC mode: need explicit connection params
-			hasDirect := singleSys.AsHost != ""
-			hasLB := singleSys.MsHost != ""
+			hasDirect := sys.AsHost != ""
+			hasLB := sys.MsHost != ""
 			if !hasDirect && !hasLB {
 				return fmt.Errorf("RFC mode requires --ashost or --mshost")
 			}
 			if hasDirect && hasLB {
 				return fmt.Errorf("cannot specify both --ashost (direct) and --mshost (load balancing)")
 			}
-			if hasDirect && singleSys.SysNr == "" {
+			if hasDirect && sys.SysNr == "" {
 				return fmt.Errorf("--sysnr required for direct RFC connection")
 			}
 			if hasLB {
-				if singleSys.MsServ == "" {
+				if sys.MsServ == "" {
 					return fmt.Errorf("--msserv required for RFC load balancing")
 				}
-				if singleSys.R3Name == "" {
+				if sys.R3Name == "" {
 					return fmt.Errorf("--r3name required for RFC load balancing")
 				}
-				if singleSys.Group == "" {
+				if sys.Group == "" {
 					return fmt.Errorf("--group required for RFC load balancing")
 				}
 			}
 		}
 	} else {
 		// HTTP mode requires URL
-		if singleSys.URL == "" {
+		if sys.URL == "" {
 			return fmt.Errorf("SAP URL is required. Use --url flag or SAP_URL environment variable")
 		}
 	}

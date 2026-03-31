@@ -21,9 +21,10 @@ import (
 type System struct {
 	adtClient     *adt.Client
 	amdpWSClient  *adt.AMDPWebSocketClient // WebSocket-based AMDP client (ZADT_VSP)
-	config        *Config                  // Per-system configuration
+	config        *config.SystemConfig     // Per-system configuration
 	featureProber *adt.FeatureProber       // Feature detection system (safety network)
 	sidecar       *adt.SidecarManager      // JCo sidecar (RFC mode only)
+	cookies       map[string]string        // Runtime cookies (browser-auth, cookie-file, etc.)
 }
 
 // Ensure System implements types.System at compile time.
@@ -77,8 +78,16 @@ func (s *System) ensureWSConnected(ctx context.Context, toolName string) *mcp.Ca
 
 // newSystemInstance creates a System with an ADT client, feature prober, and optional sidecar.
 // It does NOT create an MCP server or register tools — that is the Server's responsibility.
-func newSystemInstance(cfg *Config) (*System, error) {
+func newSystemInstance(cfg *config.SystemConfig, cookies map[string]string) (*System, error) {
 	opts := cfg.BuildADTOptions()
+
+	// Cookies are a runtime concern owned by the System, not the config struct.
+	// They are passed in by the server and applied here when building
+	// the ADT client so the HTTP transport includes them from the first request.
+	if len(cookies) > 0 {
+		opts = append(opts, adt.WithCookies(cookies))
+	}
+
 	adtClient, sidecar, err := createADTClient(cfg, opts)
 	if err != nil {
 		return nil, err
@@ -98,6 +107,7 @@ func newSystemInstance(cfg *Config) (*System, error) {
 	sys := &System{
 		adtClient:     adtClient,
 		config:        cfg,
+		cookies:       cookies,
 		featureProber: adt.NewFeatureProber(adtClient, featureConfig, cfg.IsVerbose()),
 		sidecar:       sidecar,
 	}
@@ -115,7 +125,7 @@ func newSystemInstance(cfg *Config) (*System, error) {
 // ---------------------------------------------------------------------------
 
 // createADTClient creates an ADT client and optional sidecar based on connection mode.
-func createADTClient(cfg *Config, opts []adt.Option) (*adt.Client, *adt.SidecarManager, error) {
+func createADTClient(cfg *config.SystemConfig, opts []adt.Option) (*adt.Client, *adt.SidecarManager, error) {
 	if strings.EqualFold(cfg.ConnectionMode, "rfc") {
 		return createRFCADTClient(cfg, opts)
 	}
@@ -123,7 +133,7 @@ func createADTClient(cfg *Config, opts []adt.Option) (*adt.Client, *adt.SidecarM
 }
 
 // createRFCADTClient creates an ADT client using RFC mode with a JCo sidecar.
-func createRFCADTClient(cfg *Config, opts []adt.Option) (*adt.Client, *adt.SidecarManager, error) {
+func createRFCADTClient(cfg *config.SystemConfig, opts []adt.Option) (*adt.Client, *adt.SidecarManager, error) {
 	adtCfg := adt.NewConfig("", cfg.User, cfg.Password, opts...)
 
 	sidecarCfg := cfg.BuildSidecarConfig()

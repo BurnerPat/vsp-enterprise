@@ -12,15 +12,15 @@ import (
 // Set once at startup before any system is created; read-only afterwards.
 // ---------------------------------------------------------------------------
 
-var instance *ResolvedConfig
+var instance *GlobalConfig
 
 // SetInstance stores the global configuration singleton.
 // Must be called once at startup before creating systems.
-func SetInstance(cfg *ResolvedConfig) { instance = cfg }
+func SetInstance(cfg *GlobalConfig) { instance = cfg }
 
 // GetInstance returns the global configuration singleton.
 // It panics if called before SetInstance — callers may assume the result is never nil.
-func GetInstance() *ResolvedConfig {
+func GetInstance() *GlobalConfig {
 	if instance == nil {
 		panic("config.GetInstance() called before SetInstance — global configuration not initialized")
 	}
@@ -29,42 +29,16 @@ func GetInstance() *ResolvedConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Per-system resolved configuration.
-// ---------------------------------------------------------------------------
-
-// SystemResolvedConfig holds per-system settings that vary between SAP systems.
-// Global settings (safety, features, keep-alive, …) are NOT copied here;
-// code that needs them calls config.GetInstance().
-type SystemResolvedConfig struct {
-	// Per-system settings (from JSON config or CLI flags).
-	ConnectionConfig
-	BrowserAuthConfig
-	RfcConfig
-	SncConfig
-	SafetySettings
-
-	// Runtime-resolved fields (not from JSON)
-	Cookies       map[string]string // Parsed cookies (from cookie file/string/browser)
-	JcoProperties map[string]string // Resolved JCo properties (from SNC landscape)
-	Verbose       bool              // Per-system verbose flag
-}
-
-// IsVerbose returns true if either the per-system or global verbose flag is set.
-func (c *SystemResolvedConfig) IsVerbose() bool {
-	return c.Verbose || GetInstance().Verbose
-}
-
-// ---------------------------------------------------------------------------
 // Top-level (global) configuration — the singleton.
 // ---------------------------------------------------------------------------
 
-// ResolvedConfig is the top-level runtime configuration.
+// GlobalConfig is the top-level runtime configuration.
 // It holds global settings and all resolved system configurations.
 // In single-system mode the CLI stores the system under key "default".
 // Access it from anywhere via config.GetInstance().
-type ResolvedConfig struct {
+type GlobalConfig struct {
 	// All resolved systems, keyed by system ID.
-	Systems map[string]*SystemResolvedConfig
+	Systems map[string]*SystemConfig
 
 	// Global server settings
 	Verbose        bool            // Global verbose flag
@@ -110,37 +84,26 @@ type ResolvedConfig struct {
 const DefaultSystemID = "default"
 
 // ---------------------------------------------------------------------------
-// Converter
+// Methods on SystemConfig
+// These require access to global settings and therefore live here, next to
+// the GlobalConfig definition.
 // ---------------------------------------------------------------------------
 
-// ToSystemResolved creates a SystemResolvedConfig from a SystemConfig.
-func (sc *SystemConfig) ToSystemResolved() *SystemResolvedConfig {
-	return &SystemResolvedConfig{
-		ConnectionConfig:  sc.ConnectionConfig,
-		BrowserAuthConfig: sc.BrowserAuthConfig,
-		RfcConfig:         sc.RfcConfig,
-		SncConfig:         sc.SncConfig,
-		SafetySettings:    sc.SafetySettings,
-		Verbose:           sc.Verbose,
-	}
+// IsVerbose returns true if either the per-system or global verbose flag is set.
+func (c *SystemConfig) IsVerbose() bool {
+	return c.Verbose || GetInstance().Verbose
 }
 
-// ---------------------------------------------------------------------------
-// ADT builder methods — read per-system fields from the receiver and global
-// fields from the singleton (GetInstance()).
-// ---------------------------------------------------------------------------
-
 // BuildADTOptions constructs the common adt.Option slice.
-func (c *SystemResolvedConfig) BuildADTOptions() []adt.Option {
+// Note: cookies are a runtime concern owned by the System instance, not this
+// config struct. The System adds them separately when creating the ADT client.
+func (c *SystemConfig) BuildADTOptions() []adt.Option {
 	opts := []adt.Option{
 		adt.WithClient(c.Client),
 		adt.WithLanguage(c.Language),
 	}
 	if c.Insecure {
 		opts = append(opts, adt.WithInsecureSkipVerify())
-	}
-	if len(c.Cookies) > 0 {
-		opts = append(opts, adt.WithCookies(c.Cookies))
 	}
 	if c.IsVerbose() {
 		opts = append(opts, adt.WithVerbose())
@@ -151,7 +114,7 @@ func (c *SystemResolvedConfig) BuildADTOptions() []adt.Option {
 
 // BuildSafetyConfig constructs an adt.SafetyConfig by merging per-system
 // SafetySettings with global safety flags from the singleton.
-func (c *SystemResolvedConfig) BuildSafetyConfig() adt.SafetyConfig {
+func (c *SystemConfig) BuildSafetyConfig() adt.SafetyConfig {
 	g := GetInstance()
 	safety := adt.UnrestrictedSafetyConfig()
 
@@ -191,7 +154,7 @@ func (c *SystemResolvedConfig) BuildSafetyConfig() adt.SafetyConfig {
 }
 
 // BuildFeatureConfig constructs an adt.FeatureConfig from global settings.
-func (c *SystemResolvedConfig) BuildFeatureConfig() adt.FeatureConfig {
+func (c *SystemConfig) BuildFeatureConfig() adt.FeatureConfig {
 	g := GetInstance()
 	return adt.FeatureConfig{
 		HANA:      parseFeatureMode(g.FeatureHANA),
@@ -205,11 +168,11 @@ func (c *SystemResolvedConfig) BuildFeatureConfig() adt.FeatureConfig {
 
 // BuildSidecarConfig constructs an adt.SidecarConfig, combining per-system
 // connection fields with global JCo settings from the singleton.
-func (c *SystemResolvedConfig) BuildSidecarConfig() *adt.SidecarConfig {
+func (c *SystemConfig) BuildSidecarConfig() *adt.SidecarConfig {
 	g := GetInstance()
 
 	return &adt.SidecarConfig{
-		// Per-system
+		// Global JCo settings
 		JcoProxyJar:   g.JcoProxyJar,
 		JavaPath:      g.JavaPath,
 		JcoLibsDir:    g.JcoLibsDir,
@@ -217,6 +180,7 @@ func (c *SystemResolvedConfig) BuildSidecarConfig() *adt.SidecarConfig {
 		MaxConcurrent: g.RfcMaxConcurrent,
 		Transport:     g.SidecarTransport,
 
+		// Per-system connection fields
 		AsHost:        c.AsHost,
 		SysNr:         c.SysNr,
 		MsHost:        c.MsHost,
