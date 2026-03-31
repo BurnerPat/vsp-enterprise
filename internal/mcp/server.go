@@ -39,6 +39,7 @@ func newMCPServer() *server.MCPServer {
 // NewServer creates a new MCP server from a fully populated GlobalConfig.
 // All systems (single or multi) must already be present in globalCfg.Systems.
 // runtimeCookies is an optional per-system cookie map (e.g. from CLI browser auth).
+// NewServer is a pure instantiation step with no network I/O; call Connect then Start before ServeStdio.
 func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[string]string) (*Server, error) {
 	if len(globalCfg.Systems) == 0 {
 		return nil, fmt.Errorf("no systems configured")
@@ -54,19 +55,21 @@ func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[str
 	proxyJarChecked := false
 
 	for sysID, sysCfg := range globalCfg.Systems {
+		// Ensure proxy JAR is available for RFC mode (one-time check)
 		if strings.EqualFold(sysCfg.ConnectionMode, "rfc") && !proxyJarChecked {
 			proxyJarChecked = true
-
 			if err := ensureProxyJARIsAvailable(globalCfg); err != nil {
 				return nil, fmt.Errorf("failed to ensure proxy JAR availability for system %q: %w", sysID, err)
 			}
 		}
 
+		// Resolve runtime cookies (file, string, or browser auth)
 		cookies, err := resolveSystemCookies(sysID, sysCfg, globalCfg.Verbose, runtimeCookies)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve cookies for system %q: %w", sysID, err)
 		}
 
+		// Instantiate the system (pure allocation, no connection or activation)
 		sys, err := newSystemInstance(sysCfg, cookies)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create system for %q: %w", sysID, err)
@@ -82,11 +85,12 @@ func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[str
 					connInfo = fmt.Sprintf("RFC-LB(%s)", sysCfg.MsHost)
 				}
 			}
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Initialized system %q → %s (user: %s)\n",
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Instantiated system %q → %s (user: %s)\n",
 				sysID, connInfo, sysCfg.User)
 		}
 	}
 
+	// Register tools on the router
 	router.RegisterTools(globalCfg.Mode, globalCfg.DisabledGroups, globalCfg.ToolsConfig)
 
 	return &Server{
@@ -94,6 +98,56 @@ func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[str
 		router:    router,
 		config:    globalCfg,
 	}, nil
+}
+
+// Connect validates credentials and establishes connections for all systems.
+// Iterates over all systems calling System.Connect(ctx).
+// Fails fast on first error and returns it wrapped with system ID context.
+func (s *Server) Connect(ctx context.Context) error {
+	if s.router == nil {
+		return fmt.Errorf("server router not initialized")
+	}
+
+	for sysID, sys := range s.router.systems {
+		if s.config.Verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Connecting to system %q...\n", sysID)
+		}
+
+		if err := sys.Connect(ctx); err != nil {
+			return fmt.Errorf("failed to connect to system %q: %w", sysID, err)
+		}
+
+		if s.config.Verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Connected to system %q\n", sysID)
+		}
+	}
+
+	return nil
+}
+
+// Start activates runtime behavior for all systems (e.g., session keep-alive).
+// Iterates over all systems calling System.Start(ctx).
+// Fails fast on first error and returns it wrapped with system ID context.
+func (s *Server) Start(ctx context.Context) error {
+	if s.router == nil {
+		return fmt.Errorf("server router not initialized")
+	}
+
+	for sysID, sys := range s.router.systems {
+		if s.config.Verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Starting runtime for system %q...\n", sysID)
+		}
+
+		if err := sys.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start runtime for system %q: %w", sysID, err)
+		}
+
+		if s.config.Verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Runtime started for system %q\n", sysID)
+		}
+	}
+
+	return nil
 }
 
 // resolveSystemCookies resolves runtime cookies for a system in this precedence:
@@ -191,7 +245,7 @@ func ensureProxyJARIsAvailable(cfg *config.GlobalConfig) error {
 	cfg.JcoProxyJar = proxyPath
 
 	if cfg.Verbose {
-		fmt.Fprintf(os.Stderr, "[VERBOSE] Auto-extracted embedded proxy JAR to %s\n", proxyPath)
+		_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Auto-extracted embedded proxy JAR to %s\n", proxyPath)
 	}
 
 	return nil
@@ -204,14 +258,25 @@ func fileExists(path string) bool {
 }
 
 // Shutdown gracefully stops the server and cleans up all system resources.
-func (s *Server) Shutdown() {
-	if s.router != nil {
-		for _, sys := range s.router.systems {
-			if system, ok := sys.(*System); ok {
-				system.Shutdown()
+// Idempotent and safe to call multiple times. Collects errors from all systems
+// and returns the first non-nil error, but continues cleanup for remaining systems.
+func (s *Server) Shutdown() error {
+	if s.router == nil {
+		return nil
+	}
+
+	var firstErr error
+	for sysID, sys := range s.router.systems {
+		if err := sys.Shutdown(); err != nil {
+			if s.config.Verbose {
+				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Warning: shutdown error for system %q: %v\n", sysID, err)
+			}
+			if firstErr == nil {
+				firstErr = err
 			}
 		}
 	}
+	return firstErr
 }
 
 // ServeStdio starts the MCP server on stdin/stdout.

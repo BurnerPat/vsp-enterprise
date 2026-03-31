@@ -19,9 +19,15 @@ func (m *mockSystem) IsRfcMode() bool { return false }
 
 func (m *mockSystem) FeatureProber() *adt.FeatureProber { return m.prober }
 
-func (m *mockSystem) EnsureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult {
+func (m *mockSystem) EnsureWSConnected(_ context.Context, _ string) *mcp.CallToolResult {
 	return nil
 }
+
+func (m *mockSystem) Connect(_ context.Context) error { return nil }
+
+func (m *mockSystem) Start(_ context.Context) error { return nil }
+
+func (m *mockSystem) Shutdown() error { return nil }
 
 func TestHandleGetFeatures(t *testing.T) {
 	prober := adt.NewFeatureProber(nil, adt.FeatureConfig{

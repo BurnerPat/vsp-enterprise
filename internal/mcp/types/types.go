@@ -8,6 +8,9 @@ import (
 )
 
 // System defines the interface for interacting with a single SAP system.
+// Systems follow an explicit lifecycle: Connect validates credentials and opens transport,
+// Start activates runtime behavior (e.g., keep-alive), and Shutdown cleans up resources.
+// Handlers assume the system has been connected before use.
 type System interface {
 	// ADT returns the ADT client for the system.
 	ADT() *adt.Client
@@ -20,6 +23,23 @@ type System interface {
 
 	// EnsureWSConnected ensures the WebSocket client for a tool is connected.
 	EnsureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult
+
+	// Connect validates credentials and establishes the transport connection.
+	// For HTTP mode, this performs an explicit authentication check (Ping).
+	// For RFC/SNC mode, this is a silent no-op as logon validation is deferred to first RFC call.
+	// Connect is idempotent and safe to call multiple times.
+	// Returns error if authentication or connection fails.
+	Connect(ctx context.Context) error
+
+	// Start activates runtime behavior such as session keep-alive.
+	// For RFC/SNC mode, this is a silent no-op as runtime management is handled by sidecar or deferred.
+	// Start should be called after Connect.
+	// Returns error if runtime activation fails.
+	Start(ctx context.Context) error
+
+	// Shutdown gracefully stops system resources (keep-alive, sidecar, WebSocket clients).
+	// Shutdown is idempotent and safe to call multiple times.
+	Shutdown() error
 }
 
 // ToolHandlerFunc is the signature for MCP tool handlers.

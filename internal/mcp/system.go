@@ -50,11 +50,60 @@ func (s *System) EnsureWSConnected(ctx context.Context, toolName string) *mcp.Ca
 	return s.ensureWSConnected(ctx, toolName)
 }
 
-// Shutdown gracefully stops system-level resources (sidecar, keep-alive, etc.).
-func (s *System) Shutdown() {
-	if s.sidecar != nil {
-		_ = s.sidecar.Stop()
+// Connect implements types.System by validating credentials and establishing transport connection.
+// For HTTP mode, performs an explicit GetSystemInfo call to validate authentication and establish session.
+// For RFC/SNC mode, is a silent no-op (logon validation via explicit RFC call is a future enhancement).
+// Connect is idempotent and safe to call multiple times.
+func (s *System) Connect(ctx context.Context) error {
+	if strings.EqualFold(s.config.ConnectionMode, "rfc") {
+		// Intentional no-op for RFC/JCo sidecar; explicit logon validation via RFC function call
+		// (e.g., STFC_CONNECTION) is a future enhancement. The sidecar is already started during
+		// instantiation, and actual logon occurs on the first RFC call to the SAP system.
+		return nil
 	}
+
+	// HTTP mode: validate credentials via GetSystemInfo (establishes session and validates auth)
+	if _, err := s.adtClient.GetSystemInfo(ctx); err != nil {
+		return fmt.Errorf("failed to connect to system: %w", err)
+	}
+
+	return nil
+}
+
+// Start implements types.System by activating runtime behavior like session keep-alive.
+// For HTTP mode, starts the keep-alive goroutine if configured.
+// For RFC/SNC mode, is a silent no-op (runtime management is handled by sidecar or deferred to future enhancement).
+// Start should be called after Connect.
+func (s *System) Start(_ context.Context) error {
+	if strings.EqualFold(s.config.ConnectionMode, "rfc") {
+		// Intentional no-op for RFC/JCo sidecar; runtime activation (e.g., connection pooling monitoring)
+		// is managed by sidecar or deferred to future enhancement.
+		return nil
+	}
+
+	// HTTP mode: start keep-alive if configured
+	globalCfg := config.GetInstance()
+	if globalCfg.KeepAliveInterval > 0 {
+		s.adtClient.StartKeepAlive(globalCfg.KeepAliveInterval, s.config.IsVerbose())
+	}
+
+	return nil
+}
+
+// Shutdown implements types.System by gracefully stopping system resources.
+// Idempotent and safe to call multiple times.
+func (s *System) Shutdown() error {
+	// Stop keep-alive goroutine if running
+	s.adtClient.StopKeepAlive()
+
+	// Stop sidecar if running (RFC mode only)
+	if s.sidecar != nil {
+		if err := s.sidecar.Stop(); err != nil {
+			return fmt.Errorf("failed to stop sidecar: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // ensureWSConnected ensures the WebSocket client is connected, creating it if needed.
@@ -77,7 +126,8 @@ func (s *System) ensureWSConnected(ctx context.Context, toolName string) *mcp.Ca
 // ---------------------------------------------------------------------------
 
 // newSystemInstance creates a System with an ADT client, feature prober, and optional sidecar.
-// It does NOT create an MCP server or register tools — that is the Server's responsibility.
+// This is a pure allocation step with no network I/O or eager connection setup.
+// Call System.Connect() to validate credentials, then System.Start() to activate runtime behavior.
 func newSystemInstance(cfg *config.SystemConfig, cookies map[string]string) (*System, error) {
 	opts := cfg.BuildADTOptions()
 
@@ -112,10 +162,8 @@ func newSystemInstance(cfg *config.SystemConfig, cookies map[string]string) (*Sy
 		sidecar:       sidecar,
 	}
 
-	// Start session keep-alive if configured
-	if globalCfg.KeepAliveInterval > 0 {
-		adtClient.StartKeepAlive(globalCfg.KeepAliveInterval, cfg.IsVerbose())
-	}
+	// NOTE: No eager keep-alive or connection validation here.
+	// Both are deferred to System.Start() and System.Connect() respectively.
 
 	return sys, nil
 }

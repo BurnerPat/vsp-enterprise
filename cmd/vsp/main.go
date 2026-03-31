@@ -283,7 +283,22 @@ func runServer(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("server creation failed: %w", err)
 	}
-	defer srv.Shutdown()
+	defer func() {
+		if err := srv.Shutdown(); err != nil && cfg.Verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Warning during shutdown: %v\n", err)
+		}
+	}()
+
+	// Connect phase: validate credentials and establish transports
+	if err := srv.Connect(context.Background()); err != nil {
+		return fmt.Errorf("failed to connect to systems: %w", err)
+	}
+
+	// Start phase: activate runtime behavior (e.g., keep-alive)
+	if err := srv.Start(context.Background()); err != nil {
+		return fmt.Errorf("failed to start systems: %w", err)
+	}
+
 	return srv.ServeStdio()
 }
 
