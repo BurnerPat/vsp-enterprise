@@ -1,6 +1,10 @@
 # Vision: The Future of AI-Native ABAP Development
 
 > *"Debugging should feel like playing a TAS - scriptable, replayable, reversible, intelligent."*
+>
+> **Note**: This is the enterprise fork of [Vibing Steampunk](https://github.com/oisee/vibing-steampunk).
+> This vision document describes the long-term goals for the project.
+> See [FORK.md](../FORK.md) for the current focus on enterprise-ready multi-system support.
 
 ## The Dream
 

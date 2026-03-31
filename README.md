@@ -1,4 +1,4 @@
-# Vibing Steampunk (vsp)
+# Vibing Steampunk (vsp) — Enterprise Edition
 
 **AI-Agentic Development Unlocked for ABAP** — ECC, S/4HANA, everywhere ADT is available.
 
@@ -8,6 +8,48 @@
 > See also: [OData ↔ MCP Bridge](https://github.com/oisee/odata_mcp_go) for SAP data access.
 >
 > **Want to review or test?** Start here: **[Reviewer Guide](docs/reviewer-guide.md)** — 8 hands-on tasks, no SAP needed.
+
+> **ℹ️ This is an enterprise-focused fork** of the original [Vibing Steampunk](https://github.com/oisee/vibing-steampunk) project.
+> Optimized for multi-system deployments, enterprise authentication, and simplified maintenance.
+> See [FORK.md](FORK.md) for details on the fork history, what's changed, and credits to the original creator.
+
+## What You Get With This Fork
+
+This enterprise edition of Vibing Steampunk includes:
+
+**Core MCP Server:**
+- 81 tools in focused mode (default), up to 122 in expert mode, or 1 universal tool in hyperfocused mode
+- Full ABAP development via Claude, Gemini, GPT-4, and 5+ other AI assistants
+- Hyperfocused mode reduces MCP schema from ~40,000 to ~200 tokens for local/smaller models
+
+**Enterprise Features:**
+- **Multi-System Management**: Configure and manage multiple SAP systems with `.vsp.json` profiles
+- **Browser-Based SSO**: Kerberos, SAML, Keycloak support via browser automation
+- **Cookie Authentication**: Secure session-based authentication
+- **RFC Connectivity**: Connect via Java sidecar when HTTP/HTTPS ports are restricted
+- **Safety Controls**: Read-only mode, package/transport filtering, operation whitelisting
+
+**Developer Tools:**
+- **Context Compression**: Auto-compressed dependencies (7-30x reduction) with built-in ABAP parser
+- **Method-Level Edits**: Read/edit individual methods without full-class round-trips (95% token savings)
+- **AI Debugger**: Breakpoints, step execution, variable inspection, stack traces
+- **Code Analysis**: Find definition/references, call graphs, CDS dependencies
+- **Diagnostics**: Short dumps (RABAX), ABAP profiler (ATRA), SQL traces (ST05)
+- **RAP OData E2E**: Create CDS views, service definitions, bindings, publish OData 4.0 services
+- **ExecuteABAP**: Run arbitrary ABAP code via unit test wrapper
+
+**CLI & Automation:**
+- **System Management**: `vsp systems`, `vsp config init/show/tools`
+- **JCo Setup**: `vsp jco status`, `vsp jco setup` for RFC configuration
+- **Deployment**: `vsp install abapgit`, `vsp install zadt-vsp` for quick bootstrap
+- **Go DSL Library**: Programmatic access with fluent API for batch operations, testing, imports/exports
+
+**Removed (Intentionally):**
+- ❌ Lua scripting (replaced with Go DSL for better maintainability)
+- ❌ YAML workflow engine (moved to task-specific handlers)
+- ❌ LSP server (complex to maintain; use separate tool chains)
+- ❌ CLI DevOps commands (`vsp source`, `vsp export`, `vsp search`)
+- ❌ Server-side ABAP components (clients use ADT REST API)
 
 ![Vibing ABAP Developer](./docs/media/vibing-steampunk.png)
 
@@ -113,16 +155,12 @@ The AI only sends/receives the method block (~30 lines). vsp fetches the full cl
 
 > *Built-in ABAP parser based on [abaplint](https://github.com/abaplint/abaplint) by [Lars Hvam](https://github.com/larshp) — the same parser that powers abaplint's 392 ABAP statement types.*
 
-### ABAP LSP — Real-Time Diagnostics
-
-`vsp lsp --stdio` gives Claude Code (and other editors) **automatic** error detection and navigation for ABAP files. No explicit tool calls — the LSP pushes diagnostics on every save and compressed dependency context on file open.
-
-See [LSP setup](#abap-lsp-for-claude-code) for configuration.
-
 ### Other Highlights
-- **CLI DevOps Surface**: Full ABAP DevOps from the terminal — `vsp source read/write/edit/context`, `vsp test`, `vsp atc`, `vsp deploy`, `vsp transport list/get`, `vsp install zadt-vsp/abapgit`. Pipe source code, script CI/CD pipelines, bootstrap SAP systems without MCP.
-- **Bootstrap from CLI**: `vsp install abapgit` + `vsp install zadt-vsp` — deploy dependencies to SAP systems directly from the command line. No SAP GUI needed.
-- **Codebase Decomposition**: `server.go` (2,539→256 lines), `workflows.go` (3,564→402 lines) split into domain-specific files. Easier to contribute, review, and maintain.
+- **Multi-System Management**: Configure and manage multiple SAP systems in `.vsp.json` profiles. Switch between systems easily with `--system` or `--multi-system` flags.
+- **Enterprise Authentication**: Browser-based SSO (Kerberos, SAML, Keycloak), cookie-based authentication, secure password handling via environment variables.
+- **Bootstrap Commands**: Quick setup with `vsp install abapgit` and `vsp install zadt-vsp` — deploy dependencies directly from the command line.
+- **RFC Connectivity**: Support for RFC-based connections through a lightweight Java sidecar when HTTP access is restricted.
+- **Codebase Decomposition**: Clean architecture with domain-specific handlers. Easier to contribute, review, and maintain.
 
 ## Key Features
 
@@ -130,28 +168,30 @@ See [LSP setup](#abap-lsp-for-claude-code) for configuration.
 |---------|-------------|
 | **Hyperfocused Mode** | `--mode hyperfocused`: 1 universal SAP tool, **~200 tokens** vs ~40K for 122 |
 | **Context Compression** | Auto-compressed dependency contracts — 7–30x compression, built-in ABAP parser |
-| **ABAP LSP** | Built-in Language Server — real-time diagnostics, go-to-definition, context push |
 | **AI Debugger** | Breakpoints, listener, attach, step, inspect stack & variables |
 | **RAP OData E2E** | Create CDS views, Service Definitions, Bindings → Publish OData services |
+| **Multi-System Support** | Configure multiple SAP systems in profiles; switch easily with `--system` flag |
+| **Enterprise Auth** | Browser-based SSO (Kerberos, SAML, Keycloak), cookies, secure credential handling |
+| **Go DSL Library** | Fluent API for programmatic access, batch operations, RAP pipelines |
 | **Focused Mode** | 81 curated tools optimized for AI assistants |
 | **AI-Powered RCA** | Root cause analysis with dumps, traces, profiler + code intelligence |
-| **DSL & Workflows** | Fluent Go API + YAML automation for CI/CD pipelines |
 | **ExecuteABAP** | Run arbitrary ABAP code via unit test wrapper |
 | **Code Analysis** | Call graphs, object structure, find definition/references |
 | **System Introspection** | System info, installed components, CDS dependencies |
 | **Diagnostics** | Short dumps (RABAX), ABAP profiler (ATRA), SQL traces (ST05) |
 | **File Deployment** | Bypass token limits - deploy large files directly from filesystem |
 | **Surgical Edits** | `EditSource` tool matches Claude's Edit pattern for precise changes |
+| **RFC Connectivity** | Support for RFC connections via Java sidecar when HTTP is blocked |
 
 ## Quick Start
 
 ```bash
-# Download from releases
-curl -LO https://github.com/oisee/vibing-steampunk/releases/latest/download/vsp-linux-amd64
+# Download from releases (vsp-enterprise fork)
+curl -LO https://github.com/BurnerPat/vsp-enterprise/releases/latest/download/vsp-linux-amd64
 chmod +x vsp-linux-amd64
 
 # Or build from source
-git clone https://github.com/oisee/vibing-steampunk.git && cd vibing-steampunk
+git clone https://github.com/BurnerPat/vsp-enterprise.git && cd vsp-enterprise
 make build
 ```
 
@@ -344,50 +384,6 @@ Add `.mcp.json` to your project:
 }
 ```
 
-### ABAP LSP for Claude Code
-
-vsp includes a built-in LSP server that gives Claude Code **automatic** error detection when editing ABAP files — no explicit tool calls needed.
-
-**Add to Claude Code settings** (`.claude/settings.json` or global settings):
-
-```json
-{
-  "lsp": {
-    "abap": {
-      "command": "vsp",
-      "args": ["lsp", "--stdio"],
-      "extensionToLanguage": {
-        ".abap": "abap",
-        ".asddls": "abap",
-        ".asbdef": "abap"
-      }
-    }
-  }
-}
-```
-
-SAP credentials are resolved from environment variables or `.env` file — same as MCP mode.
-
-**Supported LSP features:**
-
-| Feature | Method | Source |
-|---------|--------|--------|
-| Real-time syntax errors | `textDocument/publishDiagnostics` | ADT SyntaxCheck |
-| Go-to-definition | `textDocument/definition` | ADT FindDefinition |
-
-**Supported file patterns** (abapGit naming convention):
-
-| Extension | Object Type |
-|-----------|-------------|
-| `.clas.abap` | Class (main source) |
-| `.clas.testclasses.abap` | Class test includes |
-| `.clas.locals_def.abap` | Class local definitions |
-| `.prog.abap` | Program / Report |
-| `.intf.abap` | Interface |
-| `.fugr.abap` | Function Group |
-| `.ddls.asddls` | CDS View |
-
-Namespace convention (`#dmo#cl_flight.clas.abap` → `/DMO/CL_FLIGHT`) is handled automatically.
 
 ### Transportable Packages Configuration
 
@@ -460,36 +456,9 @@ vsp --mode expert        # all 122 tools individually
 vsp --mode hyperfocused  # single SAP(action, target, params) tool
 ```
 
-## DSL & Automation
+## Go Library & Programmatic Access
 
-### YAML Workflows
-
-```yaml
-# ci-pipeline.yaml
-name: CI Pipeline
-vars:
-  package: "$TMP"
-steps:
-  - action: search
-    query: "ZCL_*"
-    types: [class]
-    package: "{{ .package }}"
-    save_as: classes
-
-  - action: test
-    objects: "{{ .classes }}"
-    parallel: 4
-
-  - action: fail_if
-    condition: tests_failed
-    message: "Unit tests failed"
-```
-
-```bash
-vsp workflow run ci-pipeline.yaml --var package='$ZRAY'
-```
-
-### Go Library
+The vsp ADT client library can be used directly in Go applications for programmatic access to SAP systems:
 
 ```go
 // Fluent search
@@ -800,18 +769,21 @@ go test -tags=integration -v ./pkg/adt/    # Integration tests (21+)
 <summary><strong>Architecture</strong></summary>
 
 ```
-vibing-steampunk/
+vsp-enterprise/
 ├── cmd/vsp/main.go           # CLI (cobra/viper)
+├── cmd/vsp/config_cmd.go     # Configuration management
+├── cmd/vsp/jco.go            # JCo setup wizard
 ├── pkg/adt/
 │   ├── client.go             # ADT client + read ops
 │   ├── crud.go               # CRUD operations
 │   ├── devtools.go           # Syntax check, activate, tests
 │   ├── codeintel.go          # Definition, refs, completion
 │   ├── workflows.go          # High-level workflows
-│   └── http.go               # HTTP transport (CSRF, auth)
-├── internal/mcp/server.go    # MCP tool handlers (62 tools)
-├── internal/lsp/             # ABAP LSP server (diagnostics, go-to-def)
-└── pkg/dsl/                  # DSL & workflow engine
+│   ├── http.go               # HTTP transport (CSRF, auth)
+│   └── browser_auth.go       # Browser-based SSO
+├── internal/mcp/server.go    # MCP tool handlers + registration
+├── internal/config/          # Multi-system configuration
+└── pkg/ctxcomp/              # Context compression engine
 ```
 
 </details>
@@ -827,8 +799,9 @@ vibing-steampunk/
 <details>
 <summary><strong>Roadmap</strong></summary>
 
-### Completed (v2.15.0)
-- [x] DSL & Workflow Engine
+> **Note**: This fork focuses on enterprise MCP server stability. Features like Lua scripting and YAML workflows were removed. See [FORK.md](FORK.md) for details.
+
+### Completed in This Fork (Enterprise Edition)
 - [x] CDS Dependency Analysis (`GetCDSDependencies`)
 - [x] ATC Code Quality Checks (`RunATCCheck`)
 - [x] ExecuteABAP (code injection via unit tests)
@@ -840,14 +813,22 @@ vibing-steampunk/
 - [x] **RAP OData E2E** - DDLS, SRVD, SRVB create + publish (v2.6.0)
 - [x] **External Breakpoints** - Line, exception, statement, message (v2.7.0)
 - [x] **Debug Session** - Listener, attach, detach, step, stack, variables (v2.8.0)
+- [x] **Multi-System Support** - Named profiles, system switching, configuration management
+- [x] **Enterprise Auth** - Browser-based SSO (Kerberos, SAML, Keycloak), cookie authentication
 - [x] **Tool Group Disablement** - `--disabled-groups 5THD` (v2.10.0)
 - [x] **UI5/BSP Read** - `UI5ListApps`, `UI5GetApp`, `UI5GetFileContent` (v2.10.1)
 - [x] **Feature Detection** - `GetFeatures` tool + system capability probing (v2.12.4)
 - [x] **WriteSource SRVB** - Create Service Bindings via unified API (v2.12.4)
 - [x] **Call Graph & RCA** - GetCallersOf, GetCalleesOf, TraceExecution (v2.13.0)
-- [x] **Lua Scripting** - REPL, 40+ bindings, debug session management (v2.14.0)
 - [x] **WebSocket Debugging** - ZADT_VSP handler, TPDAPI integration (v2.15.0)
-- [x] **Force Replay** - Variable history, state injection (v2.15.0)
+- [x] **Context Compression** - Auto-compressed dependencies, built-in ABAP parser
+
+### Removed from Original (Intentional Simplification)
+- ❌ Lua Scripting - Replaced with Go DSL library
+- ❌ YAML Workflow Engine - Moved to task-specific handlers
+- ❌ LSP Server - Complex to maintain; use separate tool chains
+- ❌ CLI DevOps Surface - CLI focused on config/setup only
+- ❌ Server-side ABAP Components - Clients use ADT REST API
 
 ### Parked (Needs Further Work)
 - [ ] **AMDP Debugger** - Experimental: Session works, breakpoint triggering under investigation ([Report](reports/2025-12-22-001-amdp-debugging-investigation.md))
@@ -855,10 +836,11 @@ vibing-steampunk/
 - [x] **abapGit Export** - WebSocket integration complete (v2.16.0) - GitTypes, GitExport tools ([Report](reports/2025-12-23-002-abapgit-websocket-integration-complete.md))
 - [ ] **abapGit Import** - Requires `ZCL_ABAPGIT_OBJECTS=>deserialize` with virtual repository
 
-### Planned
-- [ ] API Release State (ARS) - Contract stability checks
-- [ ] Message Server Logs
-- [ ] Background Job Management
+### Planned for Enterprise Edition
+- [ ] Advanced RFC Connection Pooling
+- [ ] Multi-Factor Authentication (MFA) Integration
+- [ ] Audit Logging & Compliance
+- [ ] Performance Optimization for Large Systems
 
 ### Future Considerations
 - [ ] AMDP Session Persistence (enable full HANA debugging)
@@ -1059,8 +1041,34 @@ AI Workflow:
 
 ## License
 
-MIT
+MIT — See [LICENSE](LICENSE) for details.
+
+**Copyright (c) 2025-2026 Alice Vinogradova and contributors**
+
+This is a fork of the original [Vibing Steampunk](https://github.com/oisee/vibing-steampunk) project created by Alice Vinogradova. This fork maintains the MIT license and honors all contributions from the original project.
+
+**Original Project**: [github.com/oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk)  
+**Original Creator**: Alice Vinogradova ([@oisee](https://github.com/oisee))
+
+See [FORK.md](FORK.md) for details on this fork, including what was changed and why.
 
 ## Contributing
 
-Contributions welcome! See [ARCHITECTURE.md](ARCHITECTURE.md) and [CLAUDE.md](CLAUDE.md) for guidelines.
+Contributions welcome! Whether you're working on the enterprise fork or interested in the original project:
+
+**This Fork (vsp-enterprise)**:
+- Multi-system scenarios and enterprise authentication
+- Configuration and deployment improvements
+- Safety network and feature probing enhancements
+- Documentation and examples
+- See [ARCHITECTURE.md](docs/architecture.md) and [CLAUDE.md](docs/CLAUDE.md) for guidelines
+
+**Original Project**:
+- Visit [github.com/oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk)
+- For contributions to the core ADT client library or vision features
+
+**Development Guidelines**:
+- See [ARCHITECTURE.md](docs/architecture.md) for codebase structure
+- See [CLAUDE.md](docs/CLAUDE.md) for AI assistant context
+- Run `go test ./...` for unit tests
+- Run `go fmt ./...` and `go vet ./...` for code quality

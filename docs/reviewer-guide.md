@@ -3,11 +3,14 @@
 > A hands-on checklist for anyone who wants to kick the tires.
 > No SAP system required for most tasks.
 
+> **Note**: This is the enterprise-focused fork of [Vibing Steampunk](https://github.com/oisee/vibing-steampunk).
+> For details on the fork and what's changed, see [FORK.md](../FORK.md).
+
 ## Build It (30 seconds)
 
 ```bash
-git clone https://github.com/oisee/vibing-steampunk.git
-cd vibing-steampunk
+git clone https://github.com/BurnerPat/vsp-enterprise.git
+cd vsp-enterprise
 go build -o vsp ./cmd/vsp
 ./vsp --version
 ```

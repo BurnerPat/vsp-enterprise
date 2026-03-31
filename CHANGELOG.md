@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> **Note**: This is the enterprise fork of [Vibing Steampunk](https://github.com/oisee/vibing-steampunk).
+> See [FORK.md](FORK.md) for information about the fork, what changed, and credits to the original creator, Alice Vinogradova.
+
 ## [2.28.0] - 2026-03-18
 ### Features
 
@@ -296,6 +299,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Features
 
 - **adt:** Implement workflows for writing and creating ABAP programs and classes ([`cdf3f98`](https://github.com/oisee/vibing-steampunk/commit/cdf3f98d401f2d571b93742c9e3755cd6027d9a7))
+
+
 
 
 

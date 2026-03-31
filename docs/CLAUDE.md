@@ -4,7 +4,19 @@ This file provides context for AI assistants (Claude, etc.) working on this proj
 
 ## Project Overview
 
-**vsp** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 81 essential tools (focused mode, default) or 122 complete tools (expert mode) for use with Claude and other MCP-compatible LLMs.
+**vsp** (vsp-enterprise) is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 81 essential tools (focused mode, default) or 122 complete tools (expert mode) for use with Claude and other MCP-compatible LLMs.
+
+### Fork Information
+
+**This is an enterprise-focused fork** of the original [Vibing Steampunk](https://github.com/oisee/vibing-steampunk) project created by [Alice Vinogradova](https://github.com/oisee).
+
+This fork optimizes the codebase for:
+- **Multiple SAP systems** in a single server instance
+- **Enterprise authentication** (browser-based SSO, cookie-based auth)
+- **Simplified maintenance** (removed experimental features like Lua scripting, LSP, legacy workflows)
+- **Production readiness** (focused on core MCP functionality and stability)
+
+See [FORK.md](../FORK.md) for a detailed breakdown of changes, features removed, and why.
 
 ## Quick Reference
 

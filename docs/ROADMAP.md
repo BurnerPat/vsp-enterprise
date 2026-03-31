@@ -1,6 +1,10 @@
 # Roadmap: vsp Development Plan
 
 > Last Updated: 2025-12-21
+>
+> **Note**: This is the enterprise fork of [Vibing Steampunk](https://github.com/oisee/vibing-steampunk).
+> This roadmap reflects the long-term vision for the project.
+> See [FORK.md](../FORK.md) for the current enterprise-focused improvements.
 
 ## Current Status: v2.15.0
 

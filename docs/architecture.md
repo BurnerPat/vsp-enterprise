@@ -1,5 +1,9 @@
 # vsp Architecture
 
+> **Note**: This is the enterprise fork of [Vibing Steampunk](https://github.com/oisee/vibing-steampunk).
+> This architecture document describes the current state after refactoring for multi-system support and enterprise readiness.
+> See [FORK.md](../FORK.md) for details on changes from the original project.
+
 ## High-Level Architecture
 
 ```mermaid
