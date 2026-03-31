@@ -238,16 +238,16 @@ func init() {
 }
 
 func runServer(cmd *cobra.Command, _ []string) error {
-	// Bootstrap the configuration: layer config file < env < CLI,
-	// augment with JCo/RFC/SNC/auth data, validate, and return fully-prepared config
+	// Set verbose log output if requested (Viper/Cobra have already resolved this from CLI/ENV)
+	if cfg.Verbose {
+		adt.SetLogOutput(os.Stderr)
+	}
+
+	// Bootstrap the configuration: load config file, merge with CLI/ENV, augment, and validate
+	// Viper/Cobra automatically handle CLI > ENV precedence, so no manual precedence checks needed
 	bootstrappedCfg, err := internal.Bootstrap(cfg, singleSys, multiSystem, configFile, systemName, cmd)
 	if err != nil {
 		return err
-	}
-
-	// Set verbose log output for feature probing once final global config is resolved.
-	if bootstrappedCfg.Verbose {
-		adt.SetLogOutput(os.Stderr)
 	}
 
 	// Handle browser-based SSO authentication (single-system mode only)

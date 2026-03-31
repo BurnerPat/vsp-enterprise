@@ -5,57 +5,55 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
+	"dario.cat/mergo"
 	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // Bootstrap orchestrates the entire configuration pipeline:
-// 1. Load configuration from config file (lowest priority)
-// 2. Layer environment variables (override config file)
-// 3. Layer CLI flags (override both)
-// 4. Load systems configuration (.vsp.json) for multi-system or tool visibility
-// 5. Resolve multi-system or single-system mode
-// 6. Augment each system with JCo/RFC properties, cookies, authentication
-// 7. Validate all systems
-// 8. Return fully-prepared config ready for mcp.NewServer()
+// 1. Viper/Cobra have already resolved CLI flags and environment variables into cfg
+// 2. Load configuration file (.vsp.json) if available
+// 3. Merge config file into cfg with precedence: CLI/Env wins > Config File
+// 4. Augment configuration with derived data (SNC, JCo properties, cookies, etc.)
+// 5. Validate final configuration
+// 6. Return fully-prepared config ready for mcp.NewServer()
 //
 // Parameters:
-//   - cfg: Base config structure to populate (systems map will be created)
-//   - singleSys: Per-system settings accumulated from CLI flags
+//   - cfg: Base config structure (already populated by Viper/Cobra from CLI/ENV)
+//   - singleSys: Per-system settings from CLI/ENV (already populated)
 //   - multiSystem: Whether multi-system mode is enabled
 //   - configFile: Explicit path to .vsp.json (empty = auto-discover)
 //   - systemName: System name from --system flag (for single-system mode)
-//   - cmd: Cobra command for flag inspection and precedence handling
+//   - cmd: Cobra command for flag inspection
 //
 // Returns the fully-augmented ResolvedConfig ready for instantiation.
 func Bootstrap(cfg *config.ResolvedConfig, singleSys *config.SystemResolvedConfig, multiSystem bool, configFile, systemName string, cmd *cobra.Command) (*config.ResolvedConfig, error) {
-	// Resolve global configuration first (Config File < ENV < CLI).
-	resolveGlobalConfiguration(cfg, cmd)
-
-	// Load systems configuration (.vsp.json) for tool visibility and multi-system definitions
+	// Step 1: Load configuration file (.vsp.json) if available
+	// Config file is OPTIONAL - if not found, just continue with CLI/ENV config
 	var systemsCfg *config.SystemsConfig
 	var systemsConfigPath string
-	{
+
+	if configFile != "" {
 		var err error
-		if configFile != "" {
-			systemsCfg, err = config.LoadSystemsFromFile(configFile)
-			if err != nil {
-				return nil, fmt.Errorf("failed to load config from %s: %w", configFile, err)
-			}
-			systemsConfigPath = configFile
-		} else {
-			systemsCfg, systemsConfigPath, err = config.LoadSystems()
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "[WARN] Failed to load systems config: %v\n", err)
+		systemsCfg, err = config.LoadSystemsFromFile(configFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config from %s: %w", configFile, err)
+		}
+		systemsConfigPath = configFile
+	} else {
+		var err error
+		systemsCfg, systemsConfigPath, err = config.LoadSystems()
+		if err != nil {
+			// Config file not found - that's OK, continue with CLI/ENV config
+			if cfg.Verbose {
+				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] No config file found, using CLI/ENV configuration\n")
 			}
 		}
 	}
 
-	// Apply tool visibility from .vsp.json
+	// Apply tool visibility from .vsp.json (if it exists)
 	if systemsCfg != nil && systemsCfg.Tools != nil {
 		cfg.ToolsConfig = systemsCfg.Tools
 		if cfg.Verbose {
@@ -72,15 +70,16 @@ func Bootstrap(cfg *config.ResolvedConfig, singleSys *config.SystemResolvedConfi
 		}
 	}
 
-	// Initialize the Systems map
+	// Step 2: Initialize the Systems map
 	cfg.Systems = make(map[string]*config.SystemResolvedConfig)
 
+	// Step 3: Route to multi-system or single-system bootstrap
 	if multiSystem {
 		if err := bootstrapMultiSystem(cfg, systemsCfg, systemsConfigPath); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := bootstrapSingleSystem(cfg, singleSys, systemsCfg, systemName, cmd); err != nil {
+		if err := bootstrapSingleSystem(cfg, singleSys, systemsCfg, systemName); err != nil {
 			return nil, err
 		}
 	}
@@ -149,10 +148,10 @@ func bootstrapMultiSystem(cfg *config.ResolvedConfig, systemsCfg *config.Systems
 	return nil
 }
 
-// bootstrapSingleSystem resolves single-system configuration from CLI/env/system profile and augments it.
-func bootstrapSingleSystem(cfg *config.ResolvedConfig, singleSys *config.SystemResolvedConfig, systemsCfg *config.SystemsConfig, systemName string, cmd *cobra.Command) error {
+// bootstrapSingleSystem resolves single-system configuration from CLI/ENV and .vsp.json profile.
+func bootstrapSingleSystem(cfg *config.ResolvedConfig, singleSys *config.SystemResolvedConfig, systemsCfg *config.SystemsConfig, systemName string) error {
 	// If --system flag is specified, load system config from .vsp.json first
-	// System profile values act as base defaults; CLI flags can override
+	// System profile values act as base defaults; CLI/ENV values override them via merging
 	if systemName != "" {
 		if systemsCfg == nil {
 			_, _ = fmt.Fprintf(os.Stderr, "[WARN] --system '%s' specified but no .vsp.json found\n", systemName)
@@ -164,16 +163,13 @@ func bootstrapSingleSystem(cfg *config.ResolvedConfig, singleSys *config.SystemR
 				if cfg.Verbose {
 					_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Loading system '%s' from .vsp.json\n", systemName)
 				}
-				// Apply config file as base (precedence: config file < env < CLI)
-				applySystemConfigDefaults(singleSys, sys, cmd)
+				// Merge config file system profile into singleSys (CLI/ENV wins)
+				profileResolved := sys.ToSystemResolved()
+				if err := mergeSystemConfiguration(singleSys, profileResolved); err != nil {
+					return fmt.Errorf("failed to merge system profile: %w", err)
+				}
 			}
 		}
-	}
-
-	// Resolve configuration with precedence: config file < env < CLI
-	// At this point, singleSys has config file defaults; now layer env and CLI
-	if err := resolveSystemConfiguration(singleSys, cmd); err != nil {
-		return err
 	}
 
 	// Validate single-system configuration
@@ -190,339 +186,17 @@ func bootstrapSingleSystem(cfg *config.ResolvedConfig, singleSys *config.SystemR
 	return nil
 }
 
-// applySystemConfigDefaults applies config file values as base defaults to singleSys,
-// respecting CLI flag precedence (CLI flags already set on singleSys take priority).
-func applySystemConfigDefaults(singleSys *config.SystemResolvedConfig, sys *config.SystemConfig, cmd *cobra.Command) {
-	// Connection config
-	if singleSys.URL == "" {
-		singleSys.URL = sys.URL
+// mergeSystemConfiguration merges system configuration with precedence: CLI/ENV wins > Config File.
+// Uses mergo to generically merge structs: only applies non-empty/non-zero values from fileConfig
+// to empty fields in cliEnv.
+func mergeSystemConfiguration(cliEnv, fileConfig *config.SystemResolvedConfig) error {
+	// mergo.Merge combines structs with the destination (cliEnv) taking precedence.
+	// We use WithOverride=false so that non-zero destination values are preserved.
+	// For zero values in cliEnv, mergo copies from fileConfig.
+	if err := mergo.Merge(cliEnv, fileConfig); err != nil {
+		return fmt.Errorf("failed to merge system configuration: %w", err)
 	}
-	if singleSys.User == "" {
-		singleSys.User = sys.User
-	}
-	if singleSys.Password == "" {
-		singleSys.Password = sys.Password
-	}
-	if !cmd.Flags().Changed("client") && sys.Client != "" {
-		singleSys.Client = sys.Client
-	}
-	if !cmd.Flags().Changed("language") && sys.Language != "" {
-		singleSys.Language = sys.Language
-	}
-	if !cmd.Flags().Changed("insecure") && sys.Insecure {
-		singleSys.Insecure = true
-	}
-
-	// RFC connection settings from system profile
-	if !cmd.Flags().Changed("connection-mode") && sys.ConnectionMode != "" {
-		singleSys.ConnectionMode = sys.ConnectionMode
-	}
-	if !cmd.Flags().Changed("ashost") && sys.AsHost != "" {
-		singleSys.AsHost = sys.AsHost
-	}
-	if !cmd.Flags().Changed("sysnr") && sys.SysNr != "" {
-		singleSys.SysNr = sys.SysNr
-	}
-	if !cmd.Flags().Changed("mshost") && sys.MsHost != "" {
-		singleSys.MsHost = sys.MsHost
-	}
-	if !cmd.Flags().Changed("msserv") && sys.MsServ != "" {
-		singleSys.MsServ = sys.MsServ
-	}
-	if !cmd.Flags().Changed("r3name") && sys.R3Name != "" {
-		singleSys.R3Name = sys.R3Name
-	}
-	if !cmd.Flags().Changed("group") && sys.Group != "" {
-		singleSys.Group = sys.Group
-	}
-
-	// Cookie auth from system profile (config file level)
-	if sys.CookieFile != "" {
-		cookies, err := adt.LoadCookiesFromFile(sys.CookieFile)
-		if err == nil && len(cookies) > 0 {
-			singleSys.Cookies = cookies
-		}
-	}
-	if sys.CookieString != "" {
-		cookies := adt.ParseCookieString(sys.CookieString)
-		if len(cookies) > 0 {
-			singleSys.Cookies = cookies
-		}
-	}
-
-	// Safety settings from system profile
-	if sys.ReadOnly {
-		singleSys.ReadOnly = true
-	}
-	if len(sys.AllowedPackages) > 0 && len(singleSys.AllowedPackages) == 0 {
-		singleSys.AllowedPackages = sys.AllowedPackages
-	}
-}
-
-// resolveSystemConfiguration applies environment variables and CLI flags
-// on top of config file defaults (precedence: config file < env < CLI).
-func resolveSystemConfiguration(singleSys *config.SystemResolvedConfig, cmd *cobra.Command) error {
-	// Check if cookie auth is explicitly requested via CLI flags OR env vars
-	cookieAuthViaCLI := cmd.Flags().Changed("cookie-file") || cmd.Flags().Changed("cookie-string")
-	cookieAuthViaEnv := viper.GetString("COOKIE_FILE") != "" || viper.GetString("COOKIE_STRING") != ""
-	browserAuth, _ := cmd.Flags().GetBool("browser-auth")
-	hasBrowserAuth := browserAuth || viper.GetBool("BROWSER_AUTH")
-	hasCookieAuth := cookieAuthViaCLI || cookieAuthViaEnv || hasBrowserAuth || len(singleSys.Cookies) > 0
-
-	// URL: CLI flag > env var > config file (already set on singleSys)
-	if singleSys.URL == "" {
-		singleSys.URL = viper.GetString("URL")
-	}
-	if singleSys.URL == "" {
-		singleSys.URL = viper.GetString("SERVICE_URL")
-	}
-
-	// Username: CLI flag > env var > config file (skip if cookie auth is present)
-	if singleSys.User == "" && !hasCookieAuth {
-		singleSys.User = viper.GetString("USER")
-	}
-	if singleSys.User == "" && !hasCookieAuth {
-		singleSys.User = viper.GetString("USERNAME")
-	}
-
-	// Password: CLI flag > env var > config file (skip if cookie auth is present)
-	if singleSys.Password == "" && !hasCookieAuth {
-		singleSys.Password = viper.GetString("PASSWORD")
-	}
-	if singleSys.Password == "" && !hasCookieAuth {
-		singleSys.Password = viper.GetString("PASS")
-	}
-
-	// Client: CLI flag > env var > config file > default
-	if !cmd.Flags().Changed("client") {
-		if envClient := viper.GetString("CLIENT"); envClient != "" {
-			singleSys.Client = envClient
-		} else if singleSys.Client == "" {
-			singleSys.Client = "001"
-		}
-	}
-
-	// Language: CLI flag > env var > config file > default
-	if !cmd.Flags().Changed("language") {
-		if envLang := viper.GetString("LANGUAGE"); envLang != "" {
-			singleSys.Language = envLang
-		} else if singleSys.Language == "" {
-			singleSys.Language = "EN"
-		}
-	}
-
-	// Insecure: CLI flag > env var > config file
-	if !cmd.Flags().Changed("insecure") {
-		singleSys.Insecure = viper.GetBool("INSECURE")
-	}
-
-	// RFC connection settings: CLI flag > env var > config file
-	if !cmd.Flags().Changed("connection-mode") && singleSys.ConnectionMode == "" {
-		if v := viper.GetString("CONNECTION_MODE"); v != "" {
-			singleSys.ConnectionMode = v
-		}
-	}
-	if !cmd.Flags().Changed("ashost") && singleSys.AsHost == "" {
-		if v := viper.GetString("ASHOST"); v != "" {
-			singleSys.AsHost = v
-		}
-	}
-	if !cmd.Flags().Changed("sysnr") && singleSys.SysNr == "" {
-		if v := viper.GetString("SYSNR"); v != "" {
-			singleSys.SysNr = v
-		}
-	}
-	if !cmd.Flags().Changed("mshost") && singleSys.MsHost == "" {
-		if v := viper.GetString("MSHOST"); v != "" {
-			singleSys.MsHost = v
-		}
-	}
-	if !cmd.Flags().Changed("msserv") && singleSys.MsServ == "" {
-		if v := viper.GetString("MSSERV"); v != "" {
-			singleSys.MsServ = v
-		}
-	}
-	if !cmd.Flags().Changed("r3name") && singleSys.R3Name == "" {
-		if v := viper.GetString("R3NAME"); v != "" {
-			singleSys.R3Name = v
-		}
-	}
-	if !cmd.Flags().Changed("group") && singleSys.Group == "" {
-		if v := viper.GetString("GROUP"); v != "" {
-			singleSys.Group = v
-		}
-	}
-
-	// SNC/SSO settings: CLI flag > env var > config file
-	if !cmd.Flags().Changed("snc") {
-		singleSys.SNC = viper.GetBool("SNC")
-	}
-	if !cmd.Flags().Changed("sysid") && singleSys.SysID == "" {
-		if v := viper.GetString("SYSID"); v != "" {
-			singleSys.SysID = v
-		}
-	}
-	if !cmd.Flags().Changed("landscape-file") && singleSys.LandscapeFile == "" {
-		if v := viper.GetString("LANDSCAPE_FILE"); v != "" {
-			singleSys.LandscapeFile = v
-		}
-	}
-
 	return nil
-}
-
-// resolveGlobalConfiguration resolves only global settings from env/CLI.
-// Per-system settings are intentionally handled in resolveSystemConfiguration.
-func resolveGlobalConfiguration(cfg *config.ResolvedConfig, cmd *cobra.Command) {
-	// Mode: CLI flag > env var > config/default value
-	if !cmd.Flags().Changed("mode") {
-		if envMode := viper.GetString("MODE"); envMode != "" {
-			cfg.Mode = envMode
-		}
-	}
-
-	// Disabled groups: CLI flag > env var > config/default value
-	if !cmd.Flags().Changed("disabled-groups") {
-		if envGroups := viper.GetString("DISABLED_GROUPS"); envGroups != "" {
-			cfg.DisabledGroups = envGroups
-		}
-	}
-
-	// Verbose: CLI flag > env var > config/default value
-	if !cmd.Flags().Changed("verbose") {
-		cfg.Verbose = viper.GetBool("VERBOSE")
-	}
-
-	// Safety settings (global)
-	if !cmd.Flags().Changed("read-only") {
-		cfg.ReadOnly = viper.GetBool("READ_ONLY")
-	}
-	if !cmd.Flags().Changed("block-free-sql") {
-		cfg.BlockFreeSQL = viper.GetBool("BLOCK_FREE_SQL")
-	}
-	if !cmd.Flags().Changed("allowed-ops") {
-		cfg.AllowedOps = viper.GetString("ALLOWED_OPS")
-	}
-	if !cmd.Flags().Changed("disallowed-ops") {
-		cfg.DisallowedOps = viper.GetString("DISALLOWED_OPS")
-	}
-	if !cmd.Flags().Changed("allowed-packages") {
-		if pkgStr := viper.GetString("ALLOWED_PACKAGES"); pkgStr != "" {
-			cfg.AllowedPackages = splitCommaSeparated(pkgStr)
-		}
-	}
-	if !cmd.Flags().Changed("enable-transports") {
-		cfg.EnableTransports = viper.GetBool("ENABLE_TRANSPORTS")
-	}
-	if !cmd.Flags().Changed("transport-read-only") {
-		cfg.TransportReadOnly = viper.GetBool("TRANSPORT_READ_ONLY")
-	}
-	if !cmd.Flags().Changed("allowed-transports") {
-		if transportStr := viper.GetString("ALLOWED_TRANSPORTS"); transportStr != "" {
-			cfg.AllowedTransports = splitCommaSeparated(transportStr)
-		}
-	}
-	if !cmd.Flags().Changed("allow-transportable-edits") {
-		cfg.AllowTransportableEdits = viper.GetBool("ALLOW_TRANSPORTABLE_EDITS")
-	}
-
-	// Feature settings (global)
-	if !cmd.Flags().Changed("feature-hana") {
-		if v := viper.GetString("FEATURE_HANA"); v != "" {
-			cfg.FeatureHANA = v
-		}
-	}
-	if !cmd.Flags().Changed("feature-abapgit") {
-		if v := viper.GetString("FEATURE_ABAPGIT"); v != "" {
-			cfg.FeatureAbapGit = v
-		}
-	}
-	if !cmd.Flags().Changed("feature-rap") {
-		if v := viper.GetString("FEATURE_RAP"); v != "" {
-			cfg.FeatureRAP = v
-		}
-	}
-	if !cmd.Flags().Changed("feature-amdp") {
-		if v := viper.GetString("FEATURE_AMDP"); v != "" {
-			cfg.FeatureAMDP = v
-		}
-	}
-	if !cmd.Flags().Changed("feature-ui5") {
-		if v := viper.GetString("FEATURE_UI5"); v != "" {
-			cfg.FeatureUI5 = v
-		}
-	}
-	if !cmd.Flags().Changed("feature-transport") {
-		if v := viper.GetString("FEATURE_TRANSPORT"); v != "" {
-			cfg.FeatureTransport = v
-		}
-	}
-
-	// Debugger setting (global)
-	if !cmd.Flags().Changed("terminal-id") {
-		if v := viper.GetString("TERMINAL_ID"); v != "" {
-			cfg.TerminalID = v
-		}
-	}
-
-	// Keepalive (global)
-	if !cmd.Flags().Changed("keepalive") {
-		if v := viper.GetString("KEEPALIVE"); v != "" {
-			if d, err := time.ParseDuration(v); err == nil {
-				cfg.KeepAliveInterval = d
-			}
-		}
-	} else {
-		cfg.KeepAliveInterval, _ = cmd.Flags().GetDuration("keepalive")
-	}
-
-	// JCo/RFC sidecar settings (global)
-	if !cmd.Flags().Changed("jco-proxy-jar") && cfg.JcoProxyJar == "" {
-		if v := viper.GetString("JCO_PROXY_JAR"); v != "" {
-			cfg.JcoProxyJar = v
-		}
-	}
-	if !cmd.Flags().Changed("jco-libs-dir") && cfg.JcoLibsDir == "" {
-		if v := viper.GetString("JCO_LIBS_DIR"); v != "" {
-			cfg.JcoLibsDir = v
-		}
-	}
-	if !cmd.Flags().Changed("java-path") && cfg.JavaPath == "" {
-		if v := viper.GetString("JAVA_PATH"); v != "" {
-			cfg.JavaPath = v
-		}
-	}
-	if !cmd.Flags().Changed("rfc-proxy-port") && cfg.RfcProxyPort == 0 {
-		if v := viper.GetInt("RFC_PROXY_PORT"); v != 0 {
-			cfg.RfcProxyPort = v
-		}
-	}
-	if !cmd.Flags().Changed("rfc-max-concurrent") && cfg.RfcMaxConcurrent == 0 {
-		if v := viper.GetInt("RFC_MAX_CONCURRENT"); v != 0 {
-			cfg.RfcMaxConcurrent = v
-		}
-	}
-	if !cmd.Flags().Changed("jco-sidecar-transport") {
-		if v := viper.GetString("JCO_SIDECAR_TRANSPORT"); v != "" {
-			cfg.SidecarTransport = v
-		}
-	}
-}
-
-// splitCommaSeparated splits comma-separated env values into a normalized slice.
-func splitCommaSeparated(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	result := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
 }
 
 // augmentSystemConfiguration augments a single system with derived/resolved data:
@@ -555,7 +229,7 @@ func augmentSystemConfiguration(resolved *config.SystemResolvedConfig, globalCfg
 		}
 	}
 
-	// Handle cookie authentication (must run before browser auth to avoid duplicate auth methods)
+	// Handle cookie authentication
 	if err := augmentCookieAuthentication(resolved); err != nil {
 		return err
 	}
@@ -564,17 +238,16 @@ func augmentSystemConfiguration(resolved *config.SystemResolvedConfig, globalCfg
 }
 
 // augmentCookieAuthentication augments cookie authentication for a system:
-// - Processes cookie file (config file level already loaded in applySystemConfigDefaults)
+// - Processes cookie file (config file level already loaded)
 // - Processes cookie string (CLI/env)
-// - Handles browser-based SSO authentication
 func augmentCookieAuthentication(resolved *config.SystemResolvedConfig) error {
 	// If cookies already set by config file, they're already in place
 	if len(resolved.Cookies) > 0 {
 		return nil
 	}
 
-	// Not implementing browser auth here since it requires cmd context
-	// Browser auth is handled separately in main.go processBrowserAuth
+	// Browser auth is handled separately in main.go processBrowserAuthSingleSystem
+	// since it requires CLI context
 
 	return nil
 }
