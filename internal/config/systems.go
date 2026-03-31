@@ -207,17 +207,6 @@ func loadMcpEnvVar(key string) string {
 	return ""
 }
 
-// ListSystems returns a list of configured system names.
-func (c *SystemsConfig) ListSystems() []string {
-	systems := make([]string, 0, len(c.Systems))
-	for name, sys := range c.Systems {
-		if !sys.Disabled {
-			systems = append(systems, name)
-		}
-	}
-	return systems
-}
-
 // ExampleConfig returns an example configuration for documentation.
 func ExampleConfig() string {
 	example := SystemsConfig{
@@ -265,30 +254,6 @@ func ExampleConfig() string {
 
 	data, _ := json.MarshalIndent(example, "", "  ")
 	return string(data)
-}
-
-// IsToolEnabled checks if a tool is enabled in the configuration.
-// Tools not explicitly listed are enabled by default.
-func (c *SystemsConfig) IsToolEnabled(toolName string) bool {
-	if c.Tools == nil {
-		return true
-	}
-	enabled, exists := c.Tools[toolName]
-	if !exists {
-		return true // Default: enabled
-	}
-	return enabled
-}
-
-// GetDisabledTools returns a list of explicitly disabled tools.
-func (c *SystemsConfig) GetDisabledTools() []string {
-	var disabled []string
-	for name, enabled := range c.Tools {
-		if !enabled {
-			disabled = append(disabled, name)
-		}
-	}
-	return disabled
 }
 
 // SetToolEnabled sets the enabled state for a tool.

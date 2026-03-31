@@ -202,16 +202,16 @@ If you have an SAP system with ADT enabled:
 # Quick smoke test
 ./vsp --url https://host:44300 --user dev --password secret --verbose
 
-# CLI mode
-./vsp -s dev search "ZCL_*"
-./vsp -s dev source CLAS ZCL_SOMETHING
+# Named system profile
+./vsp --system dev --verbose
+
+# Utility commands
+./vsp systems
+./vsp config show
 
 # Safety sandbox
 ./vsp --url ... --user ... --password ... --read-only --verbose
 # Then try to write something through MCP - should be blocked
-
-# Export a package
-./vsp -s dev export '$TMP' -o tmp-backup.zip
 ```
 
 **What to spotlight:**

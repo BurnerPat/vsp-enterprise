@@ -8,25 +8,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
-
-// AsyncTask represents a background task status.
-type AsyncTask struct {
-	ID        string      `json:"id"`
-	Type      string      `json:"type"`   // "report", "export", etc.
-	Status    string      `json:"status"` // "running", "completed", "error"
-	StartedAt time.Time   `json:"started_at"`
-	EndedAt   *time.Time  `json:"ended_at,omitempty"`
-	Result    interface{} `json:"result,omitempty"`
-	Error     string      `json:"error,omitempty"`
-}
 
 // System represents a configured destination to an SAP system.
 // It holds the connection (ADT client), WebSocket clients, sidecar manager,
@@ -39,11 +26,6 @@ type System struct {
 	featureProber *adt.FeatureProber        // Feature detection system (safety network)
 	featureConfig adt.FeatureConfig         // Feature configuration
 	sidecar       *adt.SidecarManager       // JCo sidecar (RFC mode only)
-
-	// Async task management
-	asyncTasks   map[string]*AsyncTask
-	asyncTasksMu sync.RWMutex
-	asyncTaskID  int64
 }
 
 // Ensure System implements types.System at compile time.
@@ -85,7 +67,7 @@ func (s *System) EnsureWSConnected(ctx context.Context, toolName string) *mcp.Ca
 // Shutdown gracefully stops system-level resources (sidecar, keep-alive, etc.).
 func (s *System) Shutdown() {
 	if s.sidecar != nil {
-		s.sidecar.Stop()
+		_ = s.sidecar.Stop()
 	}
 }
 
@@ -100,15 +82,6 @@ func (s *System) ensureWSConnected(ctx context.Context, toolName string) *mcp.Ca
 			s.amdpWSClient = nil
 			return newToolResultError(fmt.Sprintf("%s: WebSocket connect failed: %v", toolName, err))
 		}
-	}
-	return nil
-}
-
-// requireActiveAMDPSession checks if there's an active AMDP debug session.
-// Returns error result if no session, nil if session is active.
-func (s *System) requireActiveAMDPSession() *mcp.CallToolResult {
-	if s.amdpWSClient == nil || !s.amdpWSClient.IsActive() {
-		return newToolResultError("No active AMDP session. Use AMDPDebuggerStart first.")
 	}
 	return nil
 }
@@ -143,7 +116,6 @@ func newSystemInstance(cfg *Config) (*System, error) {
 		featureProber: adt.NewFeatureProber(adtClient, featureConfig, cfg.IsVerbose()),
 		featureConfig: featureConfig,
 		sidecar:       sidecar,
-		asyncTasks:    make(map[string]*AsyncTask),
 	}
 
 	// Start session keep-alive if configured

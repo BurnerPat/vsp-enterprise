@@ -44,32 +44,35 @@ var rootCmd = &cobra.Command{
 Single binary, 9 platforms, no dependencies. Download from GitHub releases,
 point your MCP config at it, done.
 
-Two modes of operation:
+Two ways to use vsp:
 
   MCP Server (default)  Connects Claude, Gemini CLI, Copilot, Codex, Qwen Code,
-                        and other MCP-compatible agents to SAP systems.
-                        81 tools (focused), 122 (expert), or 1 universal tool (hyperfocused).
+						and other MCP-compatible agents to SAP systems.
+						81 tools (focused), 122 (expert), or 1 universal tool (hyperfocused).
 
-  CLI Mode              Direct terminal access: search, source, export, debug.
-                        Multi-system profiles. Useful for scripts and pipelines.
+  CLI Utilities         Manage named system profiles, config files, and JCo setup
+						from the terminal. Use --system / --multi-system to pick
+						saved connections when starting the MCP server.
 
 Quick start:
   # 1. MCP server (reads .env or SAP_* env vars)
   vsp --url https://host:44300 --user dev --password secret
 
-  # 2. CLI mode with saved system profile
-  vsp -s dev search "ZCL_ORDER*"
-  vsp -s dev source CLAS ZCL_ORDER_PROCESSING
-  vsp -s dev export '$ZPACKAGE' -o backup.zip
+  # 2. Start the server with a saved system profile
+  vsp --system dev --verbose
 
-  # 3. Enterprise safety (hand to AI without fear)
+  # 3. Terminal utilities
+  vsp systems
+  vsp config show
+
+  # 4. Enterprise safety (hand to AI without fear)
   vsp --read-only                                    # no writes at all
   vsp --allowed-packages 'Z*,$TMP' --block-free-sql  # sandbox AI to custom code
   vsp --disallowed-ops CDUA                           # block create/delete/update/activate
 
 Configuration files:
   .env          Default SAP connection (MCP server mode). SAP_URL, SAP_USER, etc.
-  .vsp.json     Multi-system profiles for CLI mode (vsp -s dev, vsp -s prod).
+  .vsp.json     Named system profiles for --system and --multi-system operation.
   .mcp.json     MCP server entries for Claude Desktop / other MCP clients.
 
   vsp config init       Generate example files (.env.example, .vsp.json.example, .mcp.json.example)
@@ -233,7 +236,7 @@ func init() {
 	viper.SetEnvPrefix("SAP")
 }
 
-func runServer(cmd *cobra.Command, args []string) error {
+func runServer(cmd *cobra.Command, _ []string) error {
 	// Resolve configuration with priority: flags > env vars > defaults
 	resolveConfig(cmd)
 

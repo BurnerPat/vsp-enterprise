@@ -32,7 +32,7 @@ var configCmd = &cobra.Command{
 vsp supports three configuration methods:
 
 1. .env file (or SAP_* env vars) - Default system for MCP server mode
-2. .vsp.json - Multiple systems for CLI mode (vsp -s <system>)
+2. .vsp.json - Multiple named systems for --system / --multi-system usage
 3. .mcp.json - Claude Desktop MCP server configuration
 
 Priority (highest to lowest):
@@ -49,7 +49,7 @@ var configInitCmd = &cobra.Command{
 
 Files created:
   .env.example           - Environment variables for default system
-  .vsp.json.example      - Multiple systems for CLI mode
+  .vsp.json.example      - Multiple named systems and tool visibility
   .mcp.json.example      - Claude Desktop configuration
 
 These are created as .example files to avoid overwriting existing configs.
@@ -57,7 +57,7 @@ Copy and edit them to create your actual configuration.`,
 	RunE: runConfigInit,
 }
 
-func runConfigInit(cmd *cobra.Command, args []string) error {
+func runConfigInit(_ *cobra.Command, _ []string) error {
 	files := map[string]string{
 		".env.example":      envExample,
 		".vsp.json.example": vspSystemsExample,
@@ -81,7 +81,7 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nCreated %d example files.\n", created)
 	fmt.Println("\nNext steps:")
 	fmt.Println("  1. Copy .env.example to .env and fill in your SAP credentials")
-	fmt.Println("  2. Copy .vsp.json.example to .vsp.json for CLI mode")
+	fmt.Println("  2. Copy .vsp.json.example to .vsp.json for named system profiles")
 	fmt.Println("  3. Copy .mcp.json.example to .mcp.json for Claude Desktop")
 	fmt.Println("\nSee each file for detailed documentation.")
 
@@ -100,7 +100,7 @@ Shows:
 	RunE: runConfigShow,
 }
 
-func runConfigShow(cmd *cobra.Command, args []string) error {
+func runConfigShow(_ *cobra.Command, _ []string) error {
 	fmt.Println("=== vsp Configuration ===")
 	fmt.Println()
 
@@ -228,7 +228,7 @@ For each vsp-* server in .mcp.json, extracts:
 	RunE: runMcpToVsp,
 }
 
-func runMcpToVsp(cmd *cobra.Command, args []string) error {
+func runMcpToVsp(_ *cobra.Command, _ []string) error {
 	mcpCfg, err := loadMCPConfig()
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -456,7 +456,7 @@ Passwords are placed in the 'env' block (you need to fill them in).`,
 	RunE: runVspToMcp,
 }
 
-func runVspToMcp(cmd *cobra.Command, args []string) error {
+func runVspToMcp(_ *cobra.Command, _ []string) error {
 	vspCfg, path, err := config.LoadSystems()
 	if err != nil {
 		return fmt.Errorf("failed to load .vsp.json: %w", err)
@@ -638,7 +638,7 @@ func init() {
 	configToolsInitCmd.Flags().String("mode", "focused", "Mode to use for defaults (focused/expert/hyperfocused)")
 }
 
-func runConfigToolsInit(cmd *cobra.Command, args []string) error {
+func runConfigToolsInit(cmd *cobra.Command, _ []string) error {
 	mode, _ := cmd.Flags().GetString("mode")
 
 	// Load or create .vsp.json
@@ -711,7 +711,7 @@ func runConfigToolsInit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runConfigToolsList(cmd *cobra.Command, args []string) error {
+func runConfigToolsList(_ *cobra.Command, _ []string) error {
 	cfg, _, err := config.LoadSystems()
 	if err != nil {
 		return err
@@ -754,7 +754,7 @@ func runConfigToolsList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runConfigToolsEnable(cmd *cobra.Command, args []string) error {
+func runConfigToolsEnable(_ *cobra.Command, args []string) error {
 	toolName := args[0]
 
 	cfg, path, err := config.LoadSystems()
@@ -788,7 +788,7 @@ func runConfigToolsEnable(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runConfigToolsDisable(cmd *cobra.Command, args []string) error {
+func runConfigToolsDisable(_ *cobra.Command, args []string) error {
 	toolName := args[0]
 
 	cfg, path, err := config.LoadSystems()
@@ -1019,8 +1019,8 @@ var vspSystemsExample = func() string {
 	return fmt.Sprintf(`// vsp Systems Configuration
 // Copy this file to .vsp.json and edit for your systems.
 //
-// Usage: vsp -s <system> <command>
-// Example: vsp -s dev search "ZCL_*"
+// Usage: vsp --system <system> [flags]
+// Example: vsp --system dev --verbose
 //
 // Passwords are loaded from environment variables:
 //   VSP_<SYSTEM>_PASSWORD (e.g., VSP_DEV_PASSWORD, VSP_A4H_PASSWORD)

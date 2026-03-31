@@ -172,52 +172,31 @@ VSP works with **8 CLI coding agents** — not just Claude! Full setup guides wi
 
 **[Full setup guide with config examples](docs/cli-agents/README.md)** | [Русский](docs/cli-agents/README_RU.md) | [Українська](docs/cli-agents/README_UA.md) | [Español](docs/cli-agents/README_ES.md)
 
-## CLI Mode
+## CLI Utilities and Named System Profiles
 
-vsp works in two modes:
-1. **MCP Server Mode** (default) - Exposes tools via Model Context Protocol for Claude
-2. **CLI Mode** - Direct command-line operations without MCP
+vsp currently exposes:
+1. **MCP Server Mode** (default) - Exposes SAP tools via Model Context Protocol
+2. **CLI utilities** - Local commands for system/config management and JCo setup
 
-### CLI Commands
+Named systems from `.vsp.json` can still be selected with `--system` or `--multi-system`
+when starting the MCP server.
+
+### Available terminal commands
 
 ```bash
-# Source operations
-vsp -s a4h source CLAS ZCL_MY_CLASS              # read source
-vsp -s a4h source read CLAS ZCL_MY_CLASS          # same, explicit
-vsp -s a4h source write CLAS ZCL_FOO < file.abap  # write from stdin
-vsp -s a4h source edit CLAS ZCL_FOO --old "X" --new "Y"  # surgical edit
-vsp -s a4h source context CLAS ZCL_FOO            # source + dependency contracts
-vsp -s a4h context CLAS ZCL_FOO                   # shortcut for above
+# Named system profiles
+vsp --system a4h --verbose                        # start MCP server using saved profile
+vsp --multi-system                               # expose all systems from .vsp.json
 
-# Search
-vsp -s a4h search "ZCL_*"
-vsp -s dev search "Z*ORDER*" --type CLAS --max 50
-
-# Testing & code quality
-vsp -s a4h test CLAS ZCL_MY_CLASS                 # run unit tests
-vsp -s a4h test --package '$TMP'                  # package-level tests
-vsp -s a4h atc CLAS ZCL_MY_CLASS                  # ATC code check
-
-# Deployment
-vsp -s a4h deploy zcl_test.clas.abap '$TMP'       # deploy file to SAP
-vsp -s a4h export '$ZORK' '$ZLLM' -o packages.zip # export abapGit ZIP
-
-# Bootstrap SAP system (no SAP GUI needed)
-vsp -s a4h install abapgit                        # install abapGit
-vsp -s a4h install zadt-vsp                       # install ZADT_VSP handler
-vsp -s a4h install abapgit --edition full         # full dev edition (576 objects)
-vsp -s a4h install list                           # show installable components
-
-# Transport management
-vsp -s a4h transport list                         # list transports
-vsp -s a4h transport get A4HK900094               # transport details
-
-# System management
+# System/config management
 vsp systems                                       # list configured systems
 vsp config init                                   # create example configs
+vsp config show                                   # inspect effective configuration
+vsp config tools list                             # inspect per-tool visibility
 
-# Start ABAP LSP server (for Claude Code / editors)
-vsp lsp --stdio
+# JCo / RFC setup
+vsp jco status                                    # validate local JCo setup
+vsp jco setup --system a4h                        # configure RFC support for a saved system
 ```
 
 ### System Profiles (`.vsp.json`)
