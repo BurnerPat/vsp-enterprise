@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
@@ -32,6 +33,9 @@ import (
 //
 // Returns the fully-augmented ResolvedConfig ready for instantiation.
 func Bootstrap(cfg *config.ResolvedConfig, singleSys *config.SystemResolvedConfig, multiSystem bool, configFile, systemName string, cmd *cobra.Command) (*config.ResolvedConfig, error) {
+	// Resolve global configuration first (Config File < ENV < CLI).
+	resolveGlobalConfiguration(cfg, cmd)
+
 	// Load systems configuration (.vsp.json) for tool visibility and multi-system definitions
 	var systemsCfg *config.SystemsConfig
 	var systemsConfigPath string
@@ -168,7 +172,7 @@ func bootstrapSingleSystem(cfg *config.ResolvedConfig, singleSys *config.SystemR
 
 	// Resolve configuration with precedence: config file < env < CLI
 	// At this point, singleSys has config file defaults; now layer env and CLI
-	if err := resolveSystemConfiguration(singleSys, cfg, cmd); err != nil {
+	if err := resolveSystemConfiguration(singleSys, cmd); err != nil {
 		return err
 	}
 
@@ -257,7 +261,7 @@ func applySystemConfigDefaults(singleSys *config.SystemResolvedConfig, sys *conf
 
 // resolveSystemConfiguration applies environment variables and CLI flags
 // on top of config file defaults (precedence: config file < env < CLI).
-func resolveSystemConfiguration(singleSys *config.SystemResolvedConfig, globalCfg *config.ResolvedConfig, cmd *cobra.Command) error {
+func resolveSystemConfiguration(singleSys *config.SystemResolvedConfig, cmd *cobra.Command) error {
 	// Check if cookie auth is explicitly requested via CLI flags OR env vars
 	cookieAuthViaCLI := cmd.Flags().Changed("cookie-file") || cmd.Flags().Changed("cookie-string")
 	cookieAuthViaEnv := viper.GetString("COOKIE_FILE") != "" || viper.GetString("COOKIE_STRING") != ""
@@ -349,38 +353,6 @@ func resolveSystemConfiguration(singleSys *config.SystemResolvedConfig, globalCf
 		}
 	}
 
-	// Global JCo/RFC settings: CLI flag > env var > config file
-	if !cmd.Flags().Changed("jco-proxy-jar") && globalCfg.JcoProxyJar == "" {
-		if v := viper.GetString("JCO_PROXY_JAR"); v != "" {
-			globalCfg.JcoProxyJar = v
-		}
-	}
-	if !cmd.Flags().Changed("jco-libs-dir") && globalCfg.JcoLibsDir == "" {
-		if v := viper.GetString("JCO_LIBS_DIR"); v != "" {
-			globalCfg.JcoLibsDir = v
-		}
-	}
-	if !cmd.Flags().Changed("java-path") && globalCfg.JavaPath == "" {
-		if v := viper.GetString("JAVA_PATH"); v != "" {
-			globalCfg.JavaPath = v
-		}
-	}
-	if !cmd.Flags().Changed("rfc-proxy-port") && globalCfg.RfcProxyPort == 0 {
-		if v := viper.GetInt("RFC_PROXY_PORT"); v != 0 {
-			globalCfg.RfcProxyPort = v
-		}
-	}
-	if !cmd.Flags().Changed("rfc-max-concurrent") && globalCfg.RfcMaxConcurrent == 0 {
-		if v := viper.GetInt("RFC_MAX_CONCURRENT"); v != 0 {
-			globalCfg.RfcMaxConcurrent = v
-		}
-	}
-	if !cmd.Flags().Changed("jco-sidecar-transport") {
-		if v := viper.GetString("JCO_SIDECAR_TRANSPORT"); v != "" {
-			globalCfg.SidecarTransport = v
-		}
-	}
-
 	// SNC/SSO settings: CLI flag > env var > config file
 	if !cmd.Flags().Changed("snc") {
 		singleSys.SNC = viper.GetBool("SNC")
@@ -397,6 +369,160 @@ func resolveSystemConfiguration(singleSys *config.SystemResolvedConfig, globalCf
 	}
 
 	return nil
+}
+
+// resolveGlobalConfiguration resolves only global settings from env/CLI.
+// Per-system settings are intentionally handled in resolveSystemConfiguration.
+func resolveGlobalConfiguration(cfg *config.ResolvedConfig, cmd *cobra.Command) {
+	// Mode: CLI flag > env var > config/default value
+	if !cmd.Flags().Changed("mode") {
+		if envMode := viper.GetString("MODE"); envMode != "" {
+			cfg.Mode = envMode
+		}
+	}
+
+	// Disabled groups: CLI flag > env var > config/default value
+	if !cmd.Flags().Changed("disabled-groups") {
+		if envGroups := viper.GetString("DISABLED_GROUPS"); envGroups != "" {
+			cfg.DisabledGroups = envGroups
+		}
+	}
+
+	// Verbose: CLI flag > env var > config/default value
+	if !cmd.Flags().Changed("verbose") {
+		cfg.Verbose = viper.GetBool("VERBOSE")
+	}
+
+	// Safety settings (global)
+	if !cmd.Flags().Changed("read-only") {
+		cfg.ReadOnly = viper.GetBool("READ_ONLY")
+	}
+	if !cmd.Flags().Changed("block-free-sql") {
+		cfg.BlockFreeSQL = viper.GetBool("BLOCK_FREE_SQL")
+	}
+	if !cmd.Flags().Changed("allowed-ops") {
+		cfg.AllowedOps = viper.GetString("ALLOWED_OPS")
+	}
+	if !cmd.Flags().Changed("disallowed-ops") {
+		cfg.DisallowedOps = viper.GetString("DISALLOWED_OPS")
+	}
+	if !cmd.Flags().Changed("allowed-packages") {
+		if pkgStr := viper.GetString("ALLOWED_PACKAGES"); pkgStr != "" {
+			cfg.AllowedPackages = splitCommaSeparated(pkgStr)
+		}
+	}
+	if !cmd.Flags().Changed("enable-transports") {
+		cfg.EnableTransports = viper.GetBool("ENABLE_TRANSPORTS")
+	}
+	if !cmd.Flags().Changed("transport-read-only") {
+		cfg.TransportReadOnly = viper.GetBool("TRANSPORT_READ_ONLY")
+	}
+	if !cmd.Flags().Changed("allowed-transports") {
+		if transportStr := viper.GetString("ALLOWED_TRANSPORTS"); transportStr != "" {
+			cfg.AllowedTransports = splitCommaSeparated(transportStr)
+		}
+	}
+	if !cmd.Flags().Changed("allow-transportable-edits") {
+		cfg.AllowTransportableEdits = viper.GetBool("ALLOW_TRANSPORTABLE_EDITS")
+	}
+
+	// Feature settings (global)
+	if !cmd.Flags().Changed("feature-hana") {
+		if v := viper.GetString("FEATURE_HANA"); v != "" {
+			cfg.FeatureHANA = v
+		}
+	}
+	if !cmd.Flags().Changed("feature-abapgit") {
+		if v := viper.GetString("FEATURE_ABAPGIT"); v != "" {
+			cfg.FeatureAbapGit = v
+		}
+	}
+	if !cmd.Flags().Changed("feature-rap") {
+		if v := viper.GetString("FEATURE_RAP"); v != "" {
+			cfg.FeatureRAP = v
+		}
+	}
+	if !cmd.Flags().Changed("feature-amdp") {
+		if v := viper.GetString("FEATURE_AMDP"); v != "" {
+			cfg.FeatureAMDP = v
+		}
+	}
+	if !cmd.Flags().Changed("feature-ui5") {
+		if v := viper.GetString("FEATURE_UI5"); v != "" {
+			cfg.FeatureUI5 = v
+		}
+	}
+	if !cmd.Flags().Changed("feature-transport") {
+		if v := viper.GetString("FEATURE_TRANSPORT"); v != "" {
+			cfg.FeatureTransport = v
+		}
+	}
+
+	// Debugger setting (global)
+	if !cmd.Flags().Changed("terminal-id") {
+		if v := viper.GetString("TERMINAL_ID"); v != "" {
+			cfg.TerminalID = v
+		}
+	}
+
+	// Keepalive (global)
+	if !cmd.Flags().Changed("keepalive") {
+		if v := viper.GetString("KEEPALIVE"); v != "" {
+			if d, err := time.ParseDuration(v); err == nil {
+				cfg.KeepAliveInterval = d
+			}
+		}
+	} else {
+		cfg.KeepAliveInterval, _ = cmd.Flags().GetDuration("keepalive")
+	}
+
+	// JCo/RFC sidecar settings (global)
+	if !cmd.Flags().Changed("jco-proxy-jar") && cfg.JcoProxyJar == "" {
+		if v := viper.GetString("JCO_PROXY_JAR"); v != "" {
+			cfg.JcoProxyJar = v
+		}
+	}
+	if !cmd.Flags().Changed("jco-libs-dir") && cfg.JcoLibsDir == "" {
+		if v := viper.GetString("JCO_LIBS_DIR"); v != "" {
+			cfg.JcoLibsDir = v
+		}
+	}
+	if !cmd.Flags().Changed("java-path") && cfg.JavaPath == "" {
+		if v := viper.GetString("JAVA_PATH"); v != "" {
+			cfg.JavaPath = v
+		}
+	}
+	if !cmd.Flags().Changed("rfc-proxy-port") && cfg.RfcProxyPort == 0 {
+		if v := viper.GetInt("RFC_PROXY_PORT"); v != 0 {
+			cfg.RfcProxyPort = v
+		}
+	}
+	if !cmd.Flags().Changed("rfc-max-concurrent") && cfg.RfcMaxConcurrent == 0 {
+		if v := viper.GetInt("RFC_MAX_CONCURRENT"); v != 0 {
+			cfg.RfcMaxConcurrent = v
+		}
+	}
+	if !cmd.Flags().Changed("jco-sidecar-transport") {
+		if v := viper.GetString("JCO_SIDECAR_TRANSPORT"); v != "" {
+			cfg.SidecarTransport = v
+		}
+	}
+}
+
+// splitCommaSeparated splits comma-separated env values into a normalized slice.
+func splitCommaSeparated(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 // augmentSystemConfiguration augments a single system with derived/resolved data:

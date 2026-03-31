@@ -238,20 +238,16 @@ func init() {
 }
 
 func runServer(cmd *cobra.Command, _ []string) error {
-	// Resolve global configuration from CLI, env, and defaults
-	// Note: singleSys and global settings are populated during init() via flag defaults
-	resolveGlobalConfig(cmd)
-
-	// Set verbose log output for feature probing
-	if cfg.Verbose {
-		adt.SetLogOutput(os.Stderr)
-	}
-
 	// Bootstrap the configuration: layer config file < env < CLI,
 	// augment with JCo/RFC/SNC/auth data, validate, and return fully-prepared config
 	bootstrappedCfg, err := internal.Bootstrap(cfg, singleSys, multiSystem, configFile, systemName, cmd)
 	if err != nil {
 		return err
+	}
+
+	// Set verbose log output for feature probing once final global config is resolved.
+	if bootstrappedCfg.Verbose {
+		adt.SetLogOutput(os.Stderr)
 	}
 
 	// Handle browser-based SSO authentication (single-system mode only)
@@ -274,148 +270,6 @@ func runServer(cmd *cobra.Command, _ []string) error {
 	}
 	defer srv.Shutdown()
 	return srv.ServeStdio()
-}
-
-// resolveGlobalConfig resolves global configuration from CLI flags and environment variables.
-// Per-system configuration is handled by the Bootstrap function.
-func resolveGlobalConfig(cmd *cobra.Command) {
-
-	// --- Global settings (on cfg) ---
-
-	// Mode: flag > SAP_MODE env > default (focused)
-	if !cmd.Flags().Changed("mode") {
-		if envMode := viper.GetString("MODE"); envMode != "" {
-			cfg.Mode = envMode
-		}
-	}
-
-	// DisabledGroups: flag > SAP_DISABLED_GROUPS env
-	if !cmd.Flags().Changed("disabled-groups") {
-		if envGroups := viper.GetString("DISABLED_GROUPS"); envGroups != "" {
-			cfg.DisabledGroups = envGroups
-		}
-	}
-
-	// Verbose: flag > SAP_VERBOSE env
-	if !cmd.Flags().Changed("verbose") {
-		cfg.Verbose = viper.GetBool("VERBOSE")
-	}
-
-	// Safety options (global): flag > SAP_* env
-	if !cmd.Flags().Changed("read-only") {
-		cfg.ReadOnly = viper.GetBool("READ_ONLY")
-	}
-	if !cmd.Flags().Changed("block-free-sql") {
-		cfg.BlockFreeSQL = viper.GetBool("BLOCK_FREE_SQL")
-	}
-	if !cmd.Flags().Changed("allowed-ops") {
-		cfg.AllowedOps = viper.GetString("ALLOWED_OPS")
-	}
-	if !cmd.Flags().Changed("disallowed-ops") {
-		cfg.DisallowedOps = viper.GetString("DISALLOWED_OPS")
-	}
-	if !cmd.Flags().Changed("allowed-packages") {
-		if pkgStr := viper.GetString("ALLOWED_PACKAGES"); pkgStr != "" {
-			cfg.AllowedPackages = splitCommaSeparated(pkgStr)
-		}
-	}
-	if !cmd.Flags().Changed("enable-transports") {
-		cfg.EnableTransports = viper.GetBool("ENABLE_TRANSPORTS")
-	}
-	if !cmd.Flags().Changed("transport-read-only") {
-		cfg.TransportReadOnly = viper.GetBool("TRANSPORT_READ_ONLY")
-	}
-	if !cmd.Flags().Changed("allowed-transports") {
-		if transportStr := viper.GetString("ALLOWED_TRANSPORTS"); transportStr != "" {
-			cfg.AllowedTransports = splitCommaSeparated(transportStr)
-		}
-	}
-	if !cmd.Flags().Changed("allow-transportable-edits") {
-		cfg.AllowTransportableEdits = viper.GetBool("ALLOW_TRANSPORTABLE_EDITS")
-	}
-
-	// Feature configuration: flag > SAP_FEATURE_* env
-	if !cmd.Flags().Changed("feature-hana") {
-		if v := viper.GetString("FEATURE_HANA"); v != "" {
-			cfg.FeatureHANA = v
-		}
-	}
-	if !cmd.Flags().Changed("feature-abapgit") {
-		if v := viper.GetString("FEATURE_ABAPGIT"); v != "" {
-			cfg.FeatureAbapGit = v
-		}
-	}
-	if !cmd.Flags().Changed("feature-rap") {
-		if v := viper.GetString("FEATURE_RAP"); v != "" {
-			cfg.FeatureRAP = v
-		}
-	}
-	if !cmd.Flags().Changed("feature-amdp") {
-		if v := viper.GetString("FEATURE_AMDP"); v != "" {
-			cfg.FeatureAMDP = v
-		}
-	}
-	if !cmd.Flags().Changed("feature-ui5") {
-		if v := viper.GetString("FEATURE_UI5"); v != "" {
-			cfg.FeatureUI5 = v
-		}
-	}
-	if !cmd.Flags().Changed("feature-transport") {
-		if v := viper.GetString("FEATURE_TRANSPORT"); v != "" {
-			cfg.FeatureTransport = v
-		}
-	}
-
-	// Terminal ID for debugger: flag > SAP_TERMINAL_ID env
-	if !cmd.Flags().Changed("terminal-id") {
-		if v := viper.GetString("TERMINAL_ID"); v != "" {
-			cfg.TerminalID = v
-		}
-	}
-
-	// Keep-alive interval: flag > SAP_KEEPALIVE env
-	if !cmd.Flags().Changed("keepalive") {
-		if v := viper.GetString("KEEPALIVE"); v != "" {
-			if d, err := time.ParseDuration(v); err == nil {
-				cfg.KeepAliveInterval = d
-			}
-		}
-	} else {
-		cfg.KeepAliveInterval, _ = cmd.Flags().GetDuration("keepalive")
-	}
-
-	// RFC settings (per-system) moved to Bootstrap function in internal/bootstrap.go
-	// Global JCo settings: CLI flag > env var
-	if !cmd.Flags().Changed("jco-proxy-jar") && cfg.JcoProxyJar == "" {
-		if v := viper.GetString("JCO_PROXY_JAR"); v != "" {
-			cfg.JcoProxyJar = v
-		}
-	}
-	if !cmd.Flags().Changed("jco-libs-dir") && cfg.JcoLibsDir == "" {
-		if v := viper.GetString("JCO_LIBS_DIR"); v != "" {
-			cfg.JcoLibsDir = v
-		}
-	}
-	if !cmd.Flags().Changed("java-path") && cfg.JavaPath == "" {
-		if v := viper.GetString("JAVA_PATH"); v != "" {
-			cfg.JavaPath = v
-		}
-	}
-	if !cmd.Flags().Changed("rfc-proxy-port") && cfg.RfcProxyPort == 0 {
-		if v := viper.GetInt("RFC_PROXY_PORT"); v != 0 {
-			cfg.RfcProxyPort = v
-		}
-	}
-	if !cmd.Flags().Changed("rfc-max-concurrent") && cfg.RfcMaxConcurrent == 0 {
-		if v := viper.GetInt("RFC_MAX_CONCURRENT"); v != 0 {
-			cfg.RfcMaxConcurrent = v
-		}
-	}
-	if !cmd.Flags().Changed("jco-sidecar-transport") {
-		if v := viper.GetString("JCO_SIDECAR_TRANSPORT"); v != "" {
-			cfg.SidecarTransport = v
-		}
-	}
 }
 
 // processBrowserAuthSingleSystem handles browser-based SSO authentication for single-system mode.
@@ -545,23 +399,6 @@ func logFinalConfiguration(cfg *config.ResolvedConfig) {
 	if cfg.KeepAliveInterval > 0 {
 		_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Session keep-alive: %s\n", cfg.KeepAliveInterval)
 	}
-}
-
-// splitCommaSeparated splits a comma-separated string into a slice, trimming whitespace.
-// This is needed because viper.GetStringSlice doesn't properly split comma-separated env vars.
-func splitCommaSeparated(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	result := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
 }
 
 func main() {
