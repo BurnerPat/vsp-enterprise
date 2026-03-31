@@ -17,15 +17,13 @@ import (
 
 // System represents a configured destination to an SAP system.
 // It holds the connection (ADT client), WebSocket clients, sidecar manager,
-// feature prober, and async task state. System implements types.System.
+// feature prober, and per-system state. System implements types.System.
 type System struct {
 	adtClient     *adt.Client
-	amdpWSClient  *adt.AMDPWebSocketClient  // WebSocket-based AMDP client (ZADT_VSP)
-	debugWSClient *adt.DebugWebSocketClient // WebSocket-based debug client (ZADT_VSP)
-	config        *Config                   // Per-system configuration
-	featureProber *adt.FeatureProber        // Feature detection system (safety network)
-	featureConfig adt.FeatureConfig         // Feature configuration
-	sidecar       *adt.SidecarManager       // JCo sidecar (RFC mode only)
+	amdpWSClient  *adt.AMDPWebSocketClient // WebSocket-based AMDP client (ZADT_VSP)
+	config        *Config                  // Per-system configuration
+	featureProber *adt.FeatureProber       // Feature detection system (safety network)
+	sidecar       *adt.SidecarManager      // JCo sidecar (RFC mode only)
 }
 
 // Ensure System implements types.System at compile time.
@@ -36,27 +34,14 @@ func (s *System) ADT() *adt.Client {
 	return s.adtClient
 }
 
-// Config implements types.System.
-func (s *System) Config() any {
-	return s.config
-}
-
 // IsRfcMode implements types.System.
 func (s *System) IsRfcMode() bool {
 	return s.sidecar != nil
 }
 
-// Sidecar implements types.System.
-func (s *System) Sidecar() *adt.SidecarManager {
-	return s.sidecar
-}
-
-// RequireActiveAMDPSession implements types.System.
-func (s *System) RequireActiveAMDPSession() *mcp.CallToolResult {
-	if s.amdpWSClient == nil || !s.amdpWSClient.IsActive() {
-		return types.ErrorResult("No active AMDP debug session. Start one using StartAMDPDebugSession tool.")
-	}
-	return nil
+// FeatureProber implements types.System.
+func (s *System) FeatureProber() *adt.FeatureProber {
+	return s.featureProber
 }
 
 // EnsureWSConnected implements types.System.
@@ -114,7 +99,6 @@ func newSystemInstance(cfg *Config) (*System, error) {
 		adtClient:     adtClient,
 		config:        cfg,
 		featureProber: adt.NewFeatureProber(adtClient, featureConfig, cfg.IsVerbose()),
-		featureConfig: featureConfig,
 		sidecar:       sidecar,
 	}
 

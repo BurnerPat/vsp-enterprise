@@ -43,7 +43,7 @@ func SystemToolDefs() []types.ToolDef {
 
 // --- System Information Handlers ---
 
-func HandleGetSystemInfo(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleGetSystemInfo(ctx context.Context, sys types.System, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	info, err := sys.ADT().GetSystemInfo(ctx)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("Failed to get system info: %v", err)), nil
@@ -53,7 +53,7 @@ func HandleGetSystemInfo(ctx context.Context, sys types.System, request mcp.Call
 	return mcp.NewToolResultText(string(result)), nil
 }
 
-func HandleGetInstalledComponents(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleGetInstalledComponents(ctx context.Context, sys types.System, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	components, err := sys.ADT().GetInstalledComponents(ctx)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("Failed to get installed components: %v", err)), nil
@@ -63,7 +63,7 @@ func HandleGetInstalledComponents(ctx context.Context, sys types.System, request
 	return mcp.NewToolResultText(string(result)), nil
 }
 
-func HandleGetConnectionInfo(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleGetConnectionInfo(_ context.Context, _ types.System, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Return current connection info for introspection
 	info := map[string]interface{}{
 		"status": "connected",
@@ -73,8 +73,20 @@ func HandleGetConnectionInfo(ctx context.Context, sys types.System, request mcp.
 	return mcp.NewToolResultText(string(result)), nil
 }
 
-func HandleGetFeatures(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return mcp.NewToolResultText("Features info not yet available in new router architecture"), nil
+func HandleGetFeatures(ctx context.Context, sys types.System, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	prober := sys.FeatureProber()
+	if prober == nil {
+		return types.ErrorResult("feature prober is not available for this system"), nil
+	}
+
+	features := prober.ProbeAll(ctx)
+	result := map[string]interface{}{
+		"summary":  prober.FeatureSummary(ctx),
+		"features": features,
+	}
+
+	encoded, _ := json.MarshalIndent(result, "", "  ")
+	return mcp.NewToolResultText(string(encoded)), nil
 }
 
 func HandleGetAbapHelp(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -89,12 +101,12 @@ func HandleGetAbapHelp(ctx context.Context, sys types.System, request mcp.CallTo
 	}
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "ABAP Keyword: %s\n\n", helpResult.Keyword)
-	fmt.Fprintf(&sb, "Documentation URL:\n  %s\n\n", helpResult.URL)
-	fmt.Fprintf(&sb, "Search Query:\n  %s\n", helpResult.SearchQuery)
+	sb.WriteString(fmt.Sprintf("ABAP Keyword: %s\n\n", helpResult.Keyword))
+	sb.WriteString(fmt.Sprintf("Documentation URL:\n  %s\n\n", helpResult.URL))
+	sb.WriteString(fmt.Sprintf("Search Query:\n  %s\n", helpResult.SearchQuery))
 
 	if helpResult.Documentation != "" {
-		fmt.Fprintf(&sb, "\n---\nDocumentation from SAP system:\n\n%s", helpResult.Documentation)
+		sb.WriteString(fmt.Sprintf("\n---\nDocumentation from SAP system:\n\n%s", helpResult.Documentation))
 	}
 
 	return mcp.NewToolResultText(sb.String()), nil

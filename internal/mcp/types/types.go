@@ -12,17 +12,11 @@ type System interface {
 	// ADT returns the ADT client for the system.
 	ADT() *adt.Client
 
-	// Config returns the configuration for this system.
-	Config() any
-
 	// IsRfcMode returns true if the system is using RFC/JCo sidecar.
 	IsRfcMode() bool
 
-	// Sidecar returns the sidecar manager, if applicable (RFC mode).
-	Sidecar() *adt.SidecarManager
-
-	// RequireActiveAMDPSession checks for an active AMDP debug session and returns an error result if missing.
-	RequireActiveAMDPSession() *mcp.CallToolResult
+	// FeatureProber returns the feature prober for optional-capability detection.
+	FeatureProber() *adt.FeatureProber
 
 	// EnsureWSConnected ensures the WebSocket client for a tool is connected.
 	EnsureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult
