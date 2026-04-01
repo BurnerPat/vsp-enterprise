@@ -33,19 +33,19 @@ import (
 func Bootstrap(cfg *config.GlobalConfig, singleSys *config.SystemConfig, multiSystem bool, configFile, systemName string, cmd *cobra.Command) (*config.GlobalConfig, error) {
 	// Step 1: Load configuration file (.vsp.json) if available
 	// Config file is OPTIONAL - if not found, just continue with CLI/ENV config
-	var systemsCfg *config.GlobalConfig
-	var systemsConfigPath string
+	var configurationFromFile *config.GlobalConfig
+	var configurationFilePath string
 
 	if configFile != "" {
 		var err error
-		systemsCfg, err = config.LoadConfigurationFromFile(configFile)
+		configurationFromFile, err = config.LoadConfigurationFromFile(configFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load config from %s: %w", configFile, err)
 		}
-		systemsConfigPath = configFile
+		configurationFilePath = configFile
 	} else {
 		var err error
-		systemsCfg, systemsConfigPath, err = config.LoadConfiguration()
+		configurationFromFile, configurationFilePath, err = config.LoadConfiguration()
 		if err != nil {
 			// Config file not found - that's OK, continue with CLI/ENV config
 			if cfg.Verbose {
@@ -55,25 +55,21 @@ func Bootstrap(cfg *config.GlobalConfig, singleSys *config.SystemConfig, multiSy
 	}
 
 	// Apply tool visibility from .vsp.json (if it exists)
-	if systemsCfg != nil && systemsCfg.Tools != nil {
-		cfg.ToolsConfig = systemsCfg.Tools
+	if configurationFromFile != nil {
+		err := mergeConfiguration(cfg, configurationFromFile)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to merge configuration: %w", err)
+		}
+
 		if cfg.Verbose {
-			enabled := 0
-			disabled := 0
-			for _, v := range systemsCfg.Tools {
-				if v {
-					enabled++
-				} else {
-					disabled++
-				}
-			}
-			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Tool config loaded from %s: %d enabled, %d disabled\n", systemsConfigPath, enabled, disabled)
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Config loaded from %s\n", configurationFilePath)
 		}
 	}
 
 	// Step 2: Route to multi-system or single-system bootstrap
 	if multiSystem {
-		if err := bootstrapMultiSystem(cfg, systemsConfigPath); err != nil {
+		if err := bootstrapMultiSystem(cfg, configurationFilePath); err != nil {
 			return nil, err
 		}
 	} else {
@@ -175,10 +171,11 @@ func bootstrapSingleSystem(cfg *config.GlobalConfig, singleSys *config.SystemCon
 
 // mergeSystemConfiguration merges fileConfig into cliEnv with CLI/ENV taking precedence.
 // Uses mergo: zero-value fields in cliEnv are filled from fileConfig; non-zero fields are kept.
-func mergeSystemConfiguration(cliEnv, fileConfig *config.SystemConfig) error {
-	if err := mergo.Merge(cliEnv, fileConfig); err != nil {
+func mergeConfiguration(globalConfig *config.GlobalConfig, fileConfig *config.GlobalConfig) error {
+	if err := mergo.Merge(globalConfig, fileConfig); err != nil {
 		return fmt.Errorf("failed to merge system configuration: %w", err)
 	}
+
 	return nil
 }
 
