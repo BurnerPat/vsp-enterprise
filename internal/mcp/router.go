@@ -122,7 +122,7 @@ func (r *Router) addSystemIDToTool(tool mcp.Tool) mcp.Tool {
 }
 
 func (r *Router) resolvePermissionConfig(cfg *config.GlobalConfig) ([]*types.ToolDef, error) {
-	r.allTools = allToolDefs()
+	r.allTools = tools.AllToolDefs()
 
 	allToolDefs := make([]*types.ToolDef, len(r.allTools))
 
@@ -289,33 +289,4 @@ func (r *Router) logEffectivePermissions(allTools []*types.ToolDef, enabledTools
 			log.LogInfo("      - %s", tool.Tool.Name)
 		}
 	}
-}
-
-//goland:noinspection DuplicatedCode
-func allToolDefs() []types.ToolDef {
-	var defs []types.ToolDef
-	defs = append(defs, tools.SystemToolDefs()...)
-	defs = append(defs, tools.ReadToolDefs()...)
-	defs = append(defs, tools.UnifiedToolDefs()...)
-	defs = append(defs, tools.GrepSourceToolDefs()...)
-	defs = append(defs, tools.FileSourceToolDefs()...)
-	defs = append(defs, tools.AnalysisToolDefs()...)
-	defs = append(defs, tools.TransportToolDefs()...)
-	defs = append(defs, tools.ContextToolDefs()...)
-	defs = append(defs, tools.ATCToolDefs()...)
-	defs = append(defs, tools.ClassIncludeToolDefs()...)
-	defs = append(defs, tools.CodeIntelToolDefs()...)
-	defs = append(defs, tools.CRUDToolDefs()...)
-	defs = append(defs, tools.DevToolDefs()...)
-	defs = append(defs, tools.DumpToolDefs()...)
-	defs = append(defs, tools.FileToolDefs()...)
-	defs = append(defs, tools.GitToolDefs()...)
-	defs = append(defs, tools.GrepToolDefs()...)
-	defs = append(defs, tools.ReportToolDefs()...)
-	defs = append(defs, tools.ServiceBindingToolDefs()...)
-	defs = append(defs, tools.SQLTraceToolDefs()...)
-	defs = append(defs, tools.TraceToolDefs()...)
-	defs = append(defs, tools.WorkflowToolDefs()...)
-	defs = append(defs, tools.DebuggerLegacyToolDefs()...)
-	return defs
 }
