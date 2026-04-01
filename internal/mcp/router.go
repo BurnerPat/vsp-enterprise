@@ -66,6 +66,9 @@ func (r *Router) RegisterTools(cfg *config.GlobalConfig) {
 			return r.HandleToolCall(ctx, toolDef, request)
 		})
 	}
+
+	// Register discovery meta-tools (always available, bypass permission pipeline)
+	r.registerDiscoveryTools()
 }
 
 func (r *Router) HandleToolCall(ctx context.Context, td *types.ToolDef, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -82,12 +85,12 @@ func (r *Router) HandleToolCall(ctx context.Context, td *types.ToolDef, request 
 
 	sys, ok := r.systems[strings.ToLower(systemID)]
 	if !ok {
-		return types.ErrorResult(fmt.Sprintf("Unknown system: %s", systemID)), nil
+		return types.ErrorResult(fmt.Sprintf("Unknown system: %s. Available: %s", systemID, strings.Join(r.systemIDs, ", "))), nil
 	}
 
 	// 2. Permission check
 	if slices.IndexFunc(sys.EnabledTools, func(t *types.ToolDef) bool { return t.Tool.Name == td.Tool.Name }) == -1 {
-		return types.ErrorResult(fmt.Sprintf("Permission denied for tool %s on system %s", td.Tool.Name, systemID)), nil
+		return types.ErrorResult(r.permissionDeniedMessage(td.Tool.Name, systemID, sys.EnabledTools)), nil
 	}
 
 	// 3. Invoke handler
@@ -227,6 +230,34 @@ func simpleGlobMatch(pattern string, str string) bool {
 	}
 
 	return strings.HasSuffix(pattern, "*") || str == ""
+}
+
+const maxToolsInError = 10
+
+func (r *Router) permissionDeniedMessage(toolName, systemID string, enabledTools []*types.ToolDef) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Permission denied for tool %s on system %s.", toolName, systemID)
+
+	if len(enabledTools) == 0 {
+		b.WriteString(" No tools are enabled on this system.")
+		return b.String()
+	}
+
+	b.WriteString(" Available tools: ")
+	limit := min(len(enabledTools), maxToolsInError)
+
+	for i := 0; i < limit; i++ {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(enabledTools[i].Tool.Name)
+	}
+
+	if len(enabledTools) > maxToolsInError {
+		fmt.Fprintf(&b, " (and %d more — use ListAvailableTools for full list)", len(enabledTools)-maxToolsInError)
+	}
+
+	return b.String()
 }
 
 func (r *Router) logEffectivePermissions(allTools []*types.ToolDef, enabledTools []*types.ToolDef) {

@@ -1,0 +1,90 @@
+package mcp
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/mark3labs/mcp-go/mcp"
+)
+
+// registerDiscoveryTools registers meta-tools that allow Agents to introspect
+// available systems and their permitted tools. These tools bypass the normal
+// permission pipeline and are always available.
+func (r *Router) registerDiscoveryTools() {
+	tool := mcp.NewTool("ListAvailableTools",
+		mcp.WithDescription(
+			"List available SAP systems and their permitted tools. "+
+				"Use this to discover what operations are accessible on each system before calling them. "+
+				"Call without parameters to list all systems, or pass system_id to filter to one system.",
+		),
+		mcp.WithString("system_id",
+			mcp.Description(fmt.Sprintf("Optional: filter to a specific system. Available: %s", strings.Join(r.systemIDs, ", "))),
+		),
+	)
+
+	r.mcpServer.AddTool(tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return r.handleListAvailableTools(ctx, request)
+	})
+}
+
+type discoverySystemInfo struct {
+	SystemID     string   `json:"system_id"`
+	EnabledTools []string `json:"enabled_tools"`
+	TotalEnabled int      `json:"total_enabled"`
+}
+
+type discoveryResponse struct {
+	Systems             []discoverySystemInfo `json:"systems"`
+	TotalSystems        int                   `json:"total_systems"`
+	TotalToolsAvailable int                   `json:"total_tools_available"`
+}
+
+func (r *Router) handleListAvailableTools(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	filterID, _ := request.GetArguments()["system_id"].(string)
+
+	var systems []discoverySystemInfo
+
+	if filterID != "" {
+		sys, ok := r.systems[strings.ToLower(filterID)]
+		if !ok {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{mcp.NewTextContent(
+					fmt.Sprintf("Unknown system: %s. Available: %s", filterID, strings.Join(r.systemIDs, ", ")),
+				)},
+				IsError: true,
+			}, nil
+		}
+		systems = append(systems, buildSystemInfo(sys))
+	} else {
+		for _, id := range r.systemIDs {
+			sys := r.systems[strings.ToLower(id)]
+			systems = append(systems, buildSystemInfo(sys))
+		}
+	}
+
+	resp := discoveryResponse{
+		Systems:             systems,
+		TotalSystems:        len(r.systemIDs),
+		TotalToolsAvailable: len(r.allTools),
+	}
+
+	encoded, _ := json.MarshalIndent(resp, "", "  ")
+	return mcp.NewToolResultText(string(encoded)), nil
+}
+
+func buildSystemInfo(sys *SystemInRouter) discoverySystemInfo {
+	toolNames := make([]string, len(sys.EnabledTools))
+	for i, td := range sys.EnabledTools {
+		toolNames[i] = td.Tool.Name
+	}
+	sort.Strings(toolNames)
+
+	return discoverySystemInfo{
+		SystemID:     sys.ID,
+		EnabledTools: toolNames,
+		TotalEnabled: len(toolNames),
+	}
+}
