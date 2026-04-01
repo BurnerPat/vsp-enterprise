@@ -3,11 +3,16 @@ package mcp
 import "testing"
 
 func TestSimpleGlob(t *testing.T) {
-	if !simpleGlobMatch("Get*", "GetSource") {
+	if !simpleGlobMatch("Get*", "GetSource") ||
+		simpleGlobMatch("Get*", "WriteSource") ||
+		simpleGlobMatch("Get*", "DebuggerGetVariable") {
+
 		t.Error("prefix match failed")
 	}
 
-	if !simpleGlobMatch("*Source", "GetSource") {
+	if !simpleGlobMatch("*Source", "GetSource") ||
+		simpleGlobMatch("*Source", "GetSources") {
+
 		t.Error("suffix match failed")
 	}
 

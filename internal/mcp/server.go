@@ -70,7 +70,7 @@ func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[str
 		}
 
 		// Instantiate the system (pure allocation, no connection or activation)
-		sys, err := newSystemInstance(&sysCfg, cookies)
+		sys, err := newSystemInstance(sysCfg, cookies)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create system for %q: %w", sysID, err)
 		}

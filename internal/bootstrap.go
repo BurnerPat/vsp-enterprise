@@ -92,6 +92,7 @@ func bootstrapMultiSystem(cfg *config.GlobalConfig, systemsConfigPath string) er
 	}
 
 	rfcSystemCount := 0
+	activeSystems := make(map[string]config.SystemConfig, len(cfg.Systems))
 
 	for sysID, sysDef := range cfg.Systems {
 		if sysDef.Disabled {
@@ -116,7 +117,11 @@ func bootstrapMultiSystem(cfg *config.GlobalConfig, systemsConfigPath string) er
 		if strings.EqualFold(sysDef.ConnectionMode, "rfc") {
 			rfcSystemCount++
 		}
+
+		activeSystems[sysID] = sysDef
 	}
+
+	cfg.Systems = activeSystems
 
 	// Enforce stdio transport when multiple systems use RFC mode
 	if rfcSystemCount > 1 {
@@ -125,6 +130,7 @@ func bootstrapMultiSystem(cfg *config.GlobalConfig, systemsConfigPath string) er
 				"Each RFC system needs its own sidecar process, which is only supported via stdio transport. "+
 				"Add --jco-sidecar-transport=stdio", rfcSystemCount)
 		}
+
 		if cfg.Verbose {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: %d RFC systems detected, using stdio sidecar transport\n", rfcSystemCount)
 		}
@@ -132,6 +138,7 @@ func bootstrapMultiSystem(cfg *config.GlobalConfig, systemsConfigPath string) er
 
 	if cfg.Verbose {
 		_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system mode: %d systems loaded from %s\n", len(cfg.Systems), systemsConfigPath)
+
 		for id := range cfg.Systems {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   - %s\n", id)
 		}

@@ -128,7 +128,7 @@ func (s *System) ensureWSConnected(ctx context.Context, toolName string) *mcp.Ca
 // newSystemInstance creates a System with an ADT client, feature prober, and optional sidecar.
 // This is a pure allocation step with no network I/O or eager connection setup.
 // Call System.Connect() to validate credentials, then System.Start() to activate runtime behavior.
-func newSystemInstance(cfg *config.SystemConfig, cookies map[string]string) (*System, error) {
+func newSystemInstance(cfg config.SystemConfig, cookies map[string]string) (*System, error) {
 	opts := cfg.BuildADTOptions()
 
 	// Cookies are a runtime concern owned by the System, not the config struct.
@@ -138,7 +138,7 @@ func newSystemInstance(cfg *config.SystemConfig, cookies map[string]string) (*Sy
 		opts = append(opts, adt.WithCookies(cookies))
 	}
 
-	adtClient, sidecar, err := createADTClient(cfg, opts)
+	adtClient, sidecar, err := createADTClient(&cfg, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func newSystemInstance(cfg *config.SystemConfig, cookies map[string]string) (*Sy
 
 	sys := &System{
 		adtClient:     adtClient,
-		config:        cfg,
+		config:        &cfg,
 		cookies:       cookies,
 		featureProber: adt.NewFeatureProber(adtClient, featureConfig, cfg.IsVerbose()),
 		sidecar:       sidecar,

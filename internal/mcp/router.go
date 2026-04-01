@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/oisee/vibing-steampunk/internal/config"
+	"github.com/oisee/vibing-steampunk/internal/log"
 	"github.com/oisee/vibing-steampunk/internal/mcp/tools"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 )
@@ -16,25 +17,26 @@ import (
 type SystemInRouter struct {
 	System       types.System
 	ID           string
-	EnabledTools []types.ToolDef
+	EnabledTools []*types.ToolDef
 }
 
 // Router handles tool call routing and system management.
 type Router struct {
 	mcpServer *server.MCPServer
-	systems   map[string]SystemInRouter
+	systems   map[string]*SystemInRouter
 	systemIDs []string
+	allTools  []types.ToolDef
 }
 
 func NewRouter(mcpServer *server.MCPServer) *Router {
 	return &Router{
 		mcpServer: mcpServer,
-		systems:   make(map[string]SystemInRouter),
+		systems:   make(map[string]*SystemInRouter),
 	}
 }
 
 func (r *Router) AddSystem(id string, sys types.System) {
-	r.systems[strings.ToLower(id)] = SystemInRouter{
+	r.systems[strings.ToLower(id)] = &SystemInRouter{
 		System: sys,
 		ID:     id,
 	}
@@ -66,7 +68,7 @@ func (r *Router) RegisterTools(cfg *config.GlobalConfig) {
 	}
 }
 
-func (r *Router) HandleToolCall(ctx context.Context, td types.ToolDef, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (r *Router) HandleToolCall(ctx context.Context, td *types.ToolDef, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// 1. Determine target system
 	systemID, _ := request.GetArguments()["system_id"].(string)
 
@@ -84,7 +86,7 @@ func (r *Router) HandleToolCall(ctx context.Context, td types.ToolDef, request m
 	}
 
 	// 2. Permission check
-	if slices.IndexFunc(sys.EnabledTools, func(t types.ToolDef) bool { return t.Tool.Name == td.Tool.Name }) == -1 {
+	if slices.IndexFunc(sys.EnabledTools, func(t *types.ToolDef) bool { return t.Tool.Name == td.Tool.Name }) == -1 {
 		return types.ErrorResult(fmt.Sprintf("Permission denied for tool %s on system %s", td.Tool.Name, systemID)), nil
 	}
 
@@ -116,20 +118,26 @@ func (r *Router) addSystemIDToTool(tool mcp.Tool) mcp.Tool {
 	return tool
 }
 
-func (r *Router) resolvePermissionConfig(cfg *config.GlobalConfig) ([]types.ToolDef, error) {
-	allToolDefs := r.allToolDefs()
+func (r *Router) resolvePermissionConfig(cfg *config.GlobalConfig) ([]*types.ToolDef, error) {
+	r.allTools = allToolDefs()
+
+	allToolDefs := make([]*types.ToolDef, len(r.allTools))
+
+	for i, td := range r.allTools {
+		allToolDefs[i] = &td
+	}
 
 	// Identify which tools are enabled globally (in the config root permissions)
-	enabledTools, err := resolvePermissions(&cfg.Permissions, &allToolDefs)
+	enabledTools, err := resolvePermissions(&cfg.Permissions, allToolDefs)
 
 	// Calculate effective enabled tools for all SystemClasses
-	var toolsPerSystemClass = make(map[string][]types.ToolDef)
+	var toolsPerSystemClass = make(map[string][]*types.ToolDef)
 
 	if cfg.SystemClasses != nil {
 		var allSystemClassTools = make([]string, 0)
 
 		for name, systemClass := range cfg.SystemClasses {
-			systemClassTools, err := resolvePermissions(&systemClass.Permissions, &enabledTools)
+			systemClassTools, err := resolvePermissions(&systemClass.Permissions, enabledTools)
 
 			if err != nil {
 				return nil, err
@@ -141,51 +149,55 @@ func (r *Router) resolvePermissionConfig(cfg *config.GlobalConfig) ([]types.Tool
 				allSystemClassTools = append(allSystemClassTools, tool.Tool.Name)
 			}
 		}
-
-		enabledTools = slices.DeleteFunc(enabledTools, func(tool types.ToolDef) bool {
-			return !slices.Contains(allSystemClassTools, tool.Tool.Name)
-		})
 	}
 
 	// Calculate effective enabled tools for each system
-	for name, system := range cfg.Systems {
-		var allSystemTools = make([]string, 0)
+	var allSystemTools = make([]string, 0)
 
-		var effectiveTools []types.ToolDef
+	for name, system := range cfg.Systems {
+		var effectiveTools []*types.ToolDef
 
 		if system.SystemClass != "" {
-			effectiveTools = toolsPerSystemClass[system.SystemClass]
+			effectiveTools = append([]*types.ToolDef(nil), toolsPerSystemClass[system.SystemClass]...)
 
 			if effectiveTools == nil {
 				return nil, fmt.Errorf("system class %q not found", system.SystemClass)
 			}
 		} else {
-			effectiveTools = enabledTools
+			effectiveTools = append([]*types.ToolDef(nil), enabledTools...)
 		}
 
-		systemTools, err := resolvePermissions(&system.Permissions, &enabledTools)
+		systemTools, err := resolvePermissions(&system.Permissions, effectiveTools)
 
 		if err != nil {
 			return nil, err
 		}
 
-		sys := r.systems[name]
+		sys := r.systems[strings.ToLower(name)]
 		sys.EnabledTools = systemTools
 
 		for _, tool := range systemTools {
 			allSystemTools = append(allSystemTools, tool.Tool.Name)
 		}
-
-		enabledTools = slices.DeleteFunc(enabledTools, func(tool types.ToolDef) bool {
-			return !slices.Contains(allSystemTools, tool.Tool.Name)
-		})
 	}
+
+	enabledTools = slices.DeleteFunc(append([]*types.ToolDef(nil), enabledTools...), func(tool *types.ToolDef) bool {
+		return !slices.Contains(allSystemTools, tool.Tool.Name)
+	})
+
+	r.logEffectivePermissions(allToolDefs, enabledTools)
 
 	return enabledTools, err
 }
 
-func resolvePermissions(permissions *config.PermissionConfig, availableTools *[]types.ToolDef) ([]types.ToolDef, error) {
-	return slices.DeleteFunc(*availableTools, func(tool types.ToolDef) bool {
+func resolvePermissions(permissions *config.PermissionConfig, availableTools []*types.ToolDef) ([]*types.ToolDef, error) {
+	if !permissions.DenyToolsByDefault && len(permissions.Tools) == 0 {
+		return availableTools, nil
+	}
+
+	toolsCopy := append([]*types.ToolDef(nil), availableTools...)
+
+	return slices.DeleteFunc(toolsCopy, func(tool *types.ToolDef) bool {
 		for pattern, enabled := range permissions.Tools {
 			if simpleGlobMatch(pattern, tool.Tool.Name) {
 				return !enabled
@@ -204,10 +216,10 @@ func simpleGlobMatch(pattern string, str string) bool {
 
 	parts := strings.Split(pattern, "*")
 
-	for _, part := range parts {
+	for í, part := range parts {
 		idx := strings.Index(str, part)
 
-		if idx == -1 {
+		if idx == -1 || (í == 0 && idx != 0 && !strings.HasPrefix(pattern, "*")) {
 			return false
 		}
 
@@ -217,8 +229,39 @@ func simpleGlobMatch(pattern string, str string) bool {
 	return strings.HasSuffix(pattern, "*") || str == ""
 }
 
+func (r *Router) logEffectivePermissions(allTools []*types.ToolDef, enabledTools []*types.ToolDef) {
+	if !config.GetInstance().Verbose {
+		return
+	}
+
+	if len(config.GetInstance().Permissions.Tools) > 0 {
+		log.LogInfo("Globally enabled tools (%d/%d)", len(enabledTools), len(allTools))
+
+		for _, tool := range enabledTools {
+			log.LogInfo("  - %s", tool.Tool.Name)
+		}
+	} else {
+		log.LogInfo("All tools globally enabled (%d)", len(enabledTools))
+	}
+
+	log.LogInfo("Effective permissions per system:")
+
+	for name, sys := range r.systems {
+		if len(sys.EnabledTools) == len(enabledTools) {
+			log.LogInfo("  - System %q: All tools enabled", name)
+			continue
+		}
+
+		log.LogInfo("  - System %q: %d/%d tools enabled", name, len(sys.EnabledTools), len(enabledTools))
+
+		for _, tool := range sys.EnabledTools {
+			log.LogInfo("      - %s", tool.Tool.Name)
+		}
+	}
+}
+
 //goland:noinspection DuplicatedCode
-func (r *Router) allToolDefs() []types.ToolDef {
+func allToolDefs() []types.ToolDef {
 	var defs []types.ToolDef
 	defs = append(defs, tools.SystemToolDefs()...)
 	defs = append(defs, tools.ReadToolDefs()...)
