@@ -66,16 +66,16 @@ func TestConfig(t *testing.T) {
 }
 
 func TestNewServer(t *testing.T) {
-	globalCfg := &config.GlobalConfig{
-		Systems: map[string]*config.SystemConfig{
-			config.DefaultSystemID: {
-				ConnectionConfig: config.ConnectionConfig{
-					URL:      "https://sap.example.com:44300",
-					User:     "testuser",
-					Password: "testpass",
-					Client:   "001",
-					Language: "EN",
-				},
+	globalCfg := &config.GlobalConfig{}
+
+	globalCfg.Systems = map[string]config.SystemConfig{
+		config.DefaultSystemID: {
+			ConnectionConfig: config.ConnectionConfig{
+				URL:      "https://sap.example.com:44300",
+				User:     "testuser",
+				Password: "testpass",
+				Client:   "001",
+				Language: "EN",
 			},
 		},
 	}
@@ -99,10 +99,11 @@ func TestNewServer(t *testing.T) {
 	}
 	// Verify the default system has a non-nil ADT client
 	sys, ok := srv.router.systems["default"]
+
 	if !ok {
 		t.Fatal("Expected 'default' system in router")
 	}
-	if sys.ADT() == nil {
+	if sys.System.ADT() == nil {
 		t.Error("ADT client on default system should not be nil")
 	}
 
@@ -119,16 +120,16 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestDebuggerGetVariablesSchemaIncludesItems(t *testing.T) {
-	globalCfg := &config.GlobalConfig{
-		Systems: map[string]*config.SystemConfig{
-			config.DefaultSystemID: {
-				ConnectionConfig: config.ConnectionConfig{
-					URL:      "https://sap.example.com:44300",
-					User:     "testuser",
-					Password: "testpass",
-					Client:   "001",
-					Language: "EN",
-				},
+	globalCfg := &config.GlobalConfig{}
+
+	globalCfg.Systems = map[string]config.SystemConfig{
+		config.DefaultSystemID: {
+			ConnectionConfig: config.ConnectionConfig{
+				URL:      "https://sap.example.com:44300",
+				User:     "testuser",
+				Password: "testpass",
+				Client:   "001",
+				Language: "EN",
 			},
 		},
 	}

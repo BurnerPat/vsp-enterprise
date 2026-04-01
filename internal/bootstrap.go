@@ -2,6 +2,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -32,19 +33,19 @@ import (
 func Bootstrap(cfg *config.GlobalConfig, singleSys *config.SystemConfig, multiSystem bool, configFile, systemName string, cmd *cobra.Command) (*config.GlobalConfig, error) {
 	// Step 1: Load configuration file (.vsp.json) if available
 	// Config file is OPTIONAL - if not found, just continue with CLI/ENV config
-	var systemsCfg *config.SystemsConfig
+	var systemsCfg *config.GlobalConfig
 	var systemsConfigPath string
 
 	if configFile != "" {
 		var err error
-		systemsCfg, err = config.LoadSystemsFromFile(configFile)
+		systemsCfg, err = config.LoadConfigurationFromFile(configFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load config from %s: %w", configFile, err)
 		}
 		systemsConfigPath = configFile
 	} else {
 		var err error
-		systemsCfg, systemsConfigPath, err = config.LoadSystems()
+		systemsCfg, systemsConfigPath, err = config.LoadConfiguration()
 		if err != nil {
 			// Config file not found - that's OK, continue with CLI/ENV config
 			if cfg.Verbose {
@@ -70,16 +71,13 @@ func Bootstrap(cfg *config.GlobalConfig, singleSys *config.SystemConfig, multiSy
 		}
 	}
 
-	// Step 2: Initialize the Systems map
-	cfg.Systems = make(map[string]*config.SystemConfig)
-
-	// Step 3: Route to multi-system or single-system bootstrap
+	// Step 2: Route to multi-system or single-system bootstrap
 	if multiSystem {
-		if err := bootstrapMultiSystem(cfg, systemsCfg, systemsConfigPath); err != nil {
+		if err := bootstrapMultiSystem(cfg, systemsConfigPath); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := bootstrapSingleSystem(cfg, singleSys, systemsCfg, systemName); err != nil {
+		if err := bootstrapSingleSystem(cfg, singleSys, systemName); err != nil {
 			return nil, err
 		}
 	}
@@ -88,17 +86,18 @@ func Bootstrap(cfg *config.GlobalConfig, singleSys *config.SystemConfig, multiSy
 }
 
 // bootstrapMultiSystem populates cfg.Systems from .vsp.json and augments each system.
-func bootstrapMultiSystem(cfg *config.GlobalConfig, systemsCfg *config.SystemsConfig, systemsConfigPath string) error {
-	if systemsCfg == nil {
+func bootstrapMultiSystem(cfg *config.GlobalConfig, systemsConfigPath string) error {
+	if systemsConfigPath == "" {
 		return fmt.Errorf("--multi-system requires a .vsp.json configuration file. Use --config to specify path or create one with 'vsp config init'")
 	}
-	if len(systemsCfg.Systems) == 0 {
+
+	if len(cfg.Systems) == 0 {
 		return fmt.Errorf("--multi-system: no systems defined in configuration file %s", systemsConfigPath)
 	}
 
 	rfcSystemCount := 0
 
-	for sysID, sysDef := range systemsCfg.Systems {
+	for sysID, sysDef := range cfg.Systems {
 		if sysDef.Disabled {
 			if cfg.Verbose {
 				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: skipping disabled system %q\n", sysID)
@@ -107,21 +106,20 @@ func bootstrapMultiSystem(cfg *config.GlobalConfig, systemsCfg *config.SystemsCo
 		}
 
 		// GetSystem returns *config.SystemConfig directly — no conversion needed
-		sys, err := systemsCfg.GetSystem(sysID)
+		err := fillSystemLogonDataFromEnvOrConfig(sysID, &sysDef)
+
 		if err != nil {
 			return fmt.Errorf("--multi-system: failed to resolve system %q: %w", sysID, err)
 		}
 
-		if err := augmentSystemConfiguration(sys, cfg); err != nil {
+		if err := augmentSystemConfiguration(&sysDef, cfg); err != nil {
 			return fmt.Errorf("--multi-system: failed to augment system %q: %w", sysID, err)
 		}
 
 		// Count RFC systems (explicit or via SNC)
-		if strings.EqualFold(sys.ConnectionMode, "rfc") {
+		if strings.EqualFold(sysDef.ConnectionMode, "rfc") {
 			rfcSystemCount++
 		}
-
-		cfg.Systems[sysID] = sys
 	}
 
 	// Enforce stdio transport when multiple systems use RFC mode
@@ -147,26 +145,15 @@ func bootstrapMultiSystem(cfg *config.GlobalConfig, systemsCfg *config.SystemsCo
 }
 
 // bootstrapSingleSystem resolves single-system configuration from CLI/ENV and .vsp.json profile.
-func bootstrapSingleSystem(cfg *config.GlobalConfig, singleSys *config.SystemConfig, systemsCfg *config.SystemsConfig, systemName string) error {
+func bootstrapSingleSystem(cfg *config.GlobalConfig, singleSys *config.SystemConfig, systemName string) error {
 	// If --system flag is specified, load system config from .vsp.json first
 	// System profile values act as base defaults; CLI/ENV values override them via merging
 	if systemName != "" {
-		if systemsCfg == nil {
-			_, _ = fmt.Fprintf(os.Stderr, "[WARN] --system '%s' specified but no .vsp.json found\n", systemName)
-		} else {
-			// GetSystem returns *config.SystemConfig directly — no conversion needed
-			sys, err := systemsCfg.GetSystem(systemName)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "[WARN] %v\n", err)
-			} else {
-				if cfg.Verbose {
-					_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Loading system '%s' from .vsp.json\n", systemName)
-				}
-				// Merge config file profile into singleSys; CLI/ENV values win
-				if err := mergeSystemConfiguration(singleSys, sys); err != nil {
-					return fmt.Errorf("failed to merge system profile: %w", err)
-				}
-			}
+		// GetSystem returns *config.SystemConfig directly — no conversion needed
+		err := fillSystemLogonDataFromEnvOrConfig(systemName, singleSys)
+
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "[WARN] %v\n", err)
 		}
 	}
 
@@ -180,7 +167,9 @@ func bootstrapSingleSystem(cfg *config.GlobalConfig, singleSys *config.SystemCon
 		return err
 	}
 
-	cfg.Systems[config.DefaultSystemID] = singleSys
+	cfg.Systems = make(map[string]config.SystemConfig)
+	cfg.Systems[config.DefaultSystemID] = *singleSys
+
 	return nil
 }
 
@@ -222,6 +211,71 @@ func augmentSystemConfiguration(sys *config.SystemConfig, globalCfg *config.Glob
 	}
 
 	return nil
+}
+
+// GetSystem retrieves a system configuration by name, resolving password from env.
+func fillSystemLogonDataFromEnvOrConfig(name string, sys *config.SystemConfig) error {
+	if sys.Disabled {
+		return fmt.Errorf("system '%s' is disabled", name)
+	}
+
+	// Resolve password from environment variable if not set
+	if sys.Password == "" {
+		// Try VSP_<SYSTEM>_PASSWORD (e.g., VSP_A4H_PASSWORD)
+		envKey := fmt.Sprintf("VSP_%s_PASSWORD", strings.ToUpper(name))
+		if pwd := os.Getenv(envKey); pwd != "" {
+			sys.Password = pwd
+		}
+	}
+
+	// Fallback: resolve password from .mcp.json env block
+	if sys.Password == "" {
+		envKey := fmt.Sprintf("VSP_%s_PASSWORD", strings.ToUpper(name))
+		if pwd := loadMcpEnvVar(envKey); pwd != "" {
+			sys.Password = pwd
+		}
+	}
+
+	// Apply defaults
+	if sys.Client == "" {
+		sys.Client = "001"
+	}
+
+	if sys.Language == "" {
+		sys.Language = "EN"
+	}
+
+	return nil
+}
+
+// mcpConfig represents the structure of .mcp.json for env var extraction.
+type mcpConfig struct {
+	McpServers map[string]struct {
+		Env map[string]string `json:"env"`
+	} `json:"mcpServers"`
+}
+
+// loadMcpEnvVar searches .mcp.json env blocks for a given variable name.
+func loadMcpEnvVar(key string) string {
+	for _, path := range []string{".mcp.json"} {
+		data, err := os.ReadFile(path)
+
+		if err != nil {
+			continue
+		}
+
+		var cfg mcpConfig
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			continue
+		}
+
+		for _, server := range cfg.McpServers {
+			if val, ok := server.Env[key]; ok {
+				return val
+			}
+		}
+	}
+	return ""
 }
 
 // validateSystemConfiguration validates a system configuration for consistency.

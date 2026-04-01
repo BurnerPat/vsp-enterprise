@@ -135,14 +135,14 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 
 	// Systems config
 	fmt.Println("\nSystems Config (.vsp.json):")
-	cfg, path, err := config.LoadSystems()
+	cfg, path, err := config.LoadConfiguration()
 	if err != nil {
 		fmt.Printf("  Error: %v\n", err)
 	} else if cfg == nil {
 		fmt.Println("  Not found")
 	} else {
 		fmt.Printf("  Found: %s\n", path)
-		fmt.Printf("  Default: %s\n", cfg.Default)
+		fmt.Printf("  Default: %s\n", cfg.DefaultSystem)
 		fmt.Println("  Systems:")
 		for name, sys := range cfg.Systems {
 			pwdStatus := "env"
@@ -155,7 +155,7 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 				pwdStatus = "env ✗ (need " + envKey + ")"
 			}
 			marker := ""
-			if name == cfg.Default {
+			if name == cfg.DefaultSystem {
 				marker = " (default)"
 			}
 			fmt.Printf("    %s: %s [%s@%s] pwd:%s%s\n", name, sys.URL, sys.User, sys.Client, pwdStatus, marker)
@@ -243,11 +243,11 @@ func runMcpToVsp(_ *cobra.Command, _ []string) error {
 	}
 
 	// Load existing .vsp.json or create new
-	vspCfg, _, _ := config.LoadSystems()
+	vspCfg, _, _ := config.LoadConfiguration()
+
 	if vspCfg == nil {
-		vspCfg = &config.SystemsConfig{
-			Systems: make(map[string]config.SystemConfig),
-		}
+		vspCfg = &config.GlobalConfig{}
+		vspCfg.Systems = make(map[string]config.SystemConfig)
 	}
 
 	imported := 0
@@ -287,8 +287,8 @@ func runMcpToVsp(_ *cobra.Command, _ []string) error {
 		imported++
 
 		// Set first system as default if none set
-		if vspCfg.Default == "" {
-			vspCfg.Default = sysName
+		if vspCfg.DefaultSystem == "" {
+			vspCfg.DefaultSystem = sysName
 		}
 	}
 
@@ -358,7 +358,7 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 				sys.Insecure = true
 				continue // insecure is a flag, not key-value
 			case "--read-only":
-				sys.ReadOnly = true
+				sys.Permissions.ReadOnly = true
 				continue
 			}
 		}
@@ -368,7 +368,7 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 			case "--insecure":
 				sys.Insecure = true
 			case "--read-only":
-				sys.ReadOnly = true
+				sys.Permissions.ReadOnly = true
 			}
 		}
 	}
@@ -457,7 +457,7 @@ Passwords are placed in the 'env' block (you need to fill them in).`,
 }
 
 func runVspToMcp(_ *cobra.Command, _ []string) error {
-	vspCfg, path, err := config.LoadSystems()
+	vspCfg, path, err := config.LoadConfiguration()
 	if err != nil {
 		return fmt.Errorf("failed to load .vsp.json: %w", err)
 	}
@@ -489,7 +489,7 @@ func runVspToMcp(_ *cobra.Command, _ []string) error {
 	for name, sys := range vspCfg.Systems {
 		// Build server entry
 		serverName := "vsp"
-		if name != "default" && name != vspCfg.Default {
+		if name != "default" && name != vspCfg.DefaultSystem {
 			serverName = "vsp-" + name
 		}
 
@@ -540,11 +540,11 @@ func runVspToMcp(_ *cobra.Command, _ []string) error {
 		if sys.Insecure {
 			serverArgs = append(serverArgs, "--insecure")
 		}
-		if sys.ReadOnly {
+		if sys.Permissions.ReadOnly {
 			serverArgs = append(serverArgs, "--read-only")
 		}
-		if len(sys.AllowedPackages) > 0 {
-			serverArgs = append(serverArgs, "--allowed-packages", strings.Join(sys.AllowedPackages, ","))
+		if len(sys.Permissions.AllowedPackages) > 0 {
+			serverArgs = append(serverArgs, "--allowed-packages", strings.Join(sys.Permissions.AllowedPackages, ","))
 		}
 
 		// Build env block - only add password placeholder if using user auth
@@ -642,14 +642,14 @@ func runConfigToolsInit(cmd *cobra.Command, _ []string) error {
 	mode, _ := cmd.Flags().GetString("mode")
 
 	// Load or create .vsp.json
-	cfg, path, err := config.LoadSystems()
+	cfg, path, err := config.LoadConfiguration()
 	if err != nil {
 		return err
 	}
 	if cfg == nil {
-		cfg = &config.SystemsConfig{
-			Systems: make(map[string]config.SystemConfig),
-		}
+		cfg = &config.GlobalConfig{}
+		cfg.Systems = make(map[string]config.SystemConfig)
+
 		path = ".vsp.json"
 	}
 
@@ -712,7 +712,7 @@ func runConfigToolsInit(cmd *cobra.Command, _ []string) error {
 }
 
 func runConfigToolsList(_ *cobra.Command, _ []string) error {
-	cfg, _, err := config.LoadSystems()
+	cfg, _, err := config.LoadConfiguration()
 	if err != nil {
 		return err
 	}
@@ -757,7 +757,7 @@ func runConfigToolsList(_ *cobra.Command, _ []string) error {
 func runConfigToolsEnable(_ *cobra.Command, args []string) error {
 	toolName := args[0]
 
-	cfg, path, err := config.LoadSystems()
+	cfg, path, err := config.LoadConfiguration()
 	if err != nil {
 		return err
 	}
@@ -791,7 +791,7 @@ func runConfigToolsEnable(_ *cobra.Command, args []string) error {
 func runConfigToolsDisable(_ *cobra.Command, args []string) error {
 	toolName := args[0]
 
-	cfg, path, err := config.LoadSystems()
+	cfg, path, err := config.LoadConfiguration()
 	if err != nil {
 		return err
 	}
@@ -971,8 +971,8 @@ SAP_MODE=focused
 `
 
 var vspSystemsExample = func() string {
-	cfg := config.SystemsConfig{
-		Default: "dev",
+	cfg := config.GlobalConfigJSON{
+		DefaultSystem: "dev",
 		Systems: map[string]config.SystemConfig{
 			"dev": {
 				ConnectionConfig: config.ConnectionConfig{
@@ -996,7 +996,7 @@ var vspSystemsExample = func() string {
 					User:   "READONLY",
 					Client: "100",
 				},
-				SafetySettings: config.SafetySettings{
+				Permissions: config.PermissionConfig{
 					ReadOnly:        true,
 					AllowedPackages: []string{"Z*", "Y*"},
 				},

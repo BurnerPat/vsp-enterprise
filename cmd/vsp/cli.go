@@ -41,7 +41,7 @@ func init() {
 }
 
 func runSystems(_ *cobra.Command, _ []string) error {
-	cfg, path, err := config.LoadSystems()
+	cfg, path, err := config.LoadConfiguration()
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func runSystems(_ *cobra.Command, _ []string) error {
 	fmt.Println("Systems:")
 	for name, sys := range cfg.Systems {
 		defaultMark := ""
-		if name == cfg.Default {
+		if name == cfg.DefaultSystem {
 			defaultMark = " (default)"
 		}
 

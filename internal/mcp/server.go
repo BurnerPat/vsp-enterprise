@@ -64,13 +64,13 @@ func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[str
 		}
 
 		// Resolve runtime cookies (file, string, or browser auth)
-		cookies, err := resolveSystemCookies(sysID, sysCfg, globalCfg.Verbose, runtimeCookies)
+		cookies, err := resolveSystemCookies(sysID, &sysCfg, globalCfg.Verbose, runtimeCookies)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve cookies for system %q: %w", sysID, err)
 		}
 
 		// Instantiate the system (pure allocation, no connection or activation)
-		sys, err := newSystemInstance(sysCfg, cookies)
+		sys, err := newSystemInstance(&sysCfg, cookies)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create system for %q: %w", sysID, err)
 		}
@@ -91,7 +91,7 @@ func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[str
 	}
 
 	// Register tools on the router
-	router.RegisterTools(globalCfg.Mode, globalCfg.DisabledGroups, globalCfg.ToolsConfig)
+	router.RegisterTools(globalCfg)
 
 	return &Server{
 		mcpServer: mcpSrv,
@@ -108,7 +108,9 @@ func (s *Server) Connect(ctx context.Context) error {
 		return fmt.Errorf("server router not initialized")
 	}
 
-	for sysID, sys := range s.router.systems {
+	for sysID, sysItem := range s.router.systems {
+		sys := sysItem.System
+
 		if s.config.Verbose {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Connecting to system %q...\n", sysID)
 		}
@@ -133,7 +135,9 @@ func (s *Server) Start(ctx context.Context) error {
 		return fmt.Errorf("server router not initialized")
 	}
 
-	for sysID, sys := range s.router.systems {
+	for sysID, sysItem := range s.router.systems {
+		sys := sysItem.System
+
 		if s.config.Verbose {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Starting runtime for system %q...\n", sysID)
 		}
@@ -267,7 +271,7 @@ func (s *Server) Shutdown() error {
 
 	var firstErr error
 	for sysID, sys := range s.router.systems {
-		if err := sys.Shutdown(); err != nil {
+		if err := sys.System.Shutdown(); err != nil {
 			if s.config.Verbose {
 				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Warning: shutdown error for system %q: %v\n", sysID, err)
 			}

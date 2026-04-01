@@ -32,13 +32,34 @@ func GetInstance() *GlobalConfig {
 // Top-level (global) configuration — the singleton.
 // ---------------------------------------------------------------------------
 
+// PermissionConfig Configuration for tool permissions
+type PermissionConfig struct {
+	DenyToolsByDefault bool            `json:"deny_tools_by_default"`
+	Tools              map[string]bool `json:"tools"`
+	ReadOnly           bool            `json:"read_only,omitempty"`
+	AllowedPackages    []string        `json:"allowed_packages,omitempty"`
+}
+
+// GlobalConfigJSON is the part of the global configuration that can be (un)marshalled
+type GlobalConfigJSON struct {
+	Systems       map[string]SystemConfig `json:"systems"`
+	DefaultSystem string                  `json:"default,omitempty"`
+
+	// Tools configuration - granular tool visibility control
+	// Key: tool name, Value: true=enabled, false=disabled
+	// Tools not listed are enabled by default
+	Tools map[string]bool `json:"tools,omitempty"`
+
+	Permissions   PermissionConfig             `json:"permissions,omitempty"`
+	SystemClasses map[string]SystemClassConfig `json:"system_classes,omitempty"`
+}
+
 // GlobalConfig is the top-level runtime configuration.
 // It holds global settings and all resolved system configurations.
 // In single-system mode the CLI stores the system under key "default".
 // Access it from anywhere via config.GetInstance().
 type GlobalConfig struct {
-	// All resolved systems, keyed by system ID.
-	Systems map[string]*SystemConfig
+	GlobalConfigJSON
 
 	// Global server settings
 	Verbose        bool            // Global verbose flag
@@ -119,11 +140,12 @@ func (c *SystemConfig) BuildSafetyConfig() adt.SafetyConfig {
 	safety := adt.UnrestrictedSafetyConfig()
 
 	// ReadOnly / AllowedPackages: per-system OR global
-	if c.SafetySettings.ReadOnly || g.ReadOnly {
+	if c.Permissions.ReadOnly || g.ReadOnly {
 		safety.ReadOnly = true
 	}
-	if len(c.SafetySettings.AllowedPackages) > 0 {
-		safety.AllowedPackages = c.SafetySettings.AllowedPackages
+
+	if len(c.Permissions.AllowedPackages) > 0 {
+		safety.AllowedPackages = c.Permissions.AllowedPackages
 	} else if len(g.AllowedPackages) > 0 {
 		safety.AllowedPackages = g.AllowedPackages
 	}

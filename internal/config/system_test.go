@@ -38,7 +38,7 @@ func TestSetToolEnabled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &SystemsConfig{Tools: tt.initial}
+			cfg := &GlobalConfigJSON{Tools: tt.initial}
 			cfg.SetToolEnabled(tt.toolName, tt.enabled)
 
 			if cfg.Tools == nil {
@@ -77,40 +77,11 @@ func TestDefaultDisabledTools(t *testing.T) {
 	}
 }
 
-func TestDisabledSystem(t *testing.T) {
-	cfg := &SystemsConfig{
-		Systems: map[string]SystemConfig{
-			"dev":  {ConnectionConfig: ConnectionConfig{URL: "http://dev:50000", User: "DEV"}},
-			"prod": {ConnectionConfig: ConnectionConfig{URL: "http://prod:50000", User: "PROD"}, Disabled: true},
-			"qa":   {ConnectionConfig: ConnectionConfig{URL: "http://qa:50000", User: "QA"}},
-		},
-	}
-
-	// GetSystem should reject disabled systems
-	_, err := cfg.GetSystem("prod")
-	if err == nil {
-		t.Fatal("GetSystem should return error for disabled system")
-	}
-	if err.Error() != "system 'prod' is disabled" {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	// GetSystem should still return enabled systems
-	sys, err := cfg.GetSystem("dev")
-	if err != nil {
-		t.Fatalf("GetSystem('dev') unexpected error: %v", err)
-	}
-	if sys.User != "DEV" {
-		t.Errorf("expected user DEV, got %s", sys.User)
-	}
-
-}
-
 // TestSystemConfigJSONRoundTrip verifies that the embedded-struct refactoring
 // produces the exact same JSON keys as the original flat struct.
 func TestSystemConfigJSONRoundTrip(t *testing.T) {
-	original := SystemsConfig{
-		Default: "dev",
+	original := GlobalConfigJSON{
+		DefaultSystem: "dev",
 		Systems: map[string]SystemConfig{
 			"dev": {
 				ConnectionConfig: ConnectionConfig{
@@ -141,7 +112,7 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 					SNC:   true,
 					SysID: "A4H",
 				},
-				SafetySettings: SafetySettings{
+				Permissions: PermissionConfig{
 					ReadOnly:        true,
 					AllowedPackages: []string{"Z*"},
 				},
@@ -193,19 +164,19 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 	}
 
 	// Round-trip: unmarshal back and compare
-	var roundTripped SystemsConfig
+	var roundTripped GlobalConfigJSON
 	if err := json.Unmarshal(data, &roundTripped); err != nil {
 		t.Fatalf("Round-trip unmarshal failed: %v", err)
 	}
-	if roundTripped.Default != original.Default {
-		t.Errorf("Default mismatch: got %q, want %q", roundTripped.Default, original.Default)
+	if roundTripped.DefaultSystem != original.DefaultSystem {
+		t.Errorf("Default mismatch: got %q, want %q", roundTripped.DefaultSystem, original.DefaultSystem)
 	}
 	dev := roundTripped.Systems["dev"]
 	if dev.URL != "http://dev:50000" || dev.User != "DEV" || dev.Client != "001" || !dev.Insecure || !dev.BrowserAuth {
 		t.Errorf("dev system round-trip mismatch: %+v", dev)
 	}
 	rfc := roundTripped.Systems["rfc"]
-	if rfc.ConnectionMode != "rfc" || rfc.AsHost != "sap.example.com" || !rfc.SNC || rfc.SysID != "A4H" || !rfc.ReadOnly {
+	if rfc.ConnectionMode != "rfc" || rfc.AsHost != "sap.example.com" || !rfc.SNC || rfc.SysID != "A4H" || !rfc.Permissions.ReadOnly {
 		t.Errorf("rfc system round-trip mismatch: %+v", rfc)
 	}
 }

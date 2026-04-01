@@ -168,15 +168,15 @@ func runJcoSetup(cmd *cobra.Command, args []string) error {
 	if systemFlag != "" {
 		fmt.Printf("\nStep 6: Updating .vsp.json system '%s'...\n", systemFlag)
 
-		sysCfg, configPath, loadErr := config.LoadSystems()
+		sysCfg, configPath, loadErr := config.LoadConfiguration()
 		if loadErr != nil {
 			fmt.Printf("  WARNING: Failed to load .vsp.json: %v\n", loadErr)
 			fmt.Println("  Skipping config update.")
 		} else if sysCfg == nil {
 			// Create new config
-			sysCfg = &config.SystemsConfig{
-				Systems: make(map[string]config.SystemConfig),
-			}
+			sysCfg = &config.GlobalConfig{}
+			sysCfg.Systems = make(map[string]config.SystemConfig)
+
 			configPath = ".vsp.json"
 			fmt.Printf("  Creating new %s\n", configPath)
 		}
