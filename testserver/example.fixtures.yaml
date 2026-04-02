@@ -1,0 +1,71 @@
+# Example fixtures file for adt-testserver
+# Run with: go run ./testserver --fixtures testserver/example.fixtures.yaml
+
+# Pre-load ABAP source code.
+# The key is the exact ADT path (including /source/main).
+# Use YAML literal block scalars (|) to preserve line breaks.
+#
+# Keys may contain {placeholder} segments matching any single path segment.
+# Use ${placeholder} in the template body to substitute the matched value
+# (always uppercased). Exact keys take precedence over pattern keys.
+sources:
+  # Pattern: matches any program — ${name} is replaced with the object name.
+  /sap/bc/adt/programs/programs/{name}/source/main: |
+    REPORT ${name}.
+
+    START-OF-SELECTION.
+      WRITE: / '${name} loaded via pattern'.
+
+  # Exact key: overrides the pattern above for this specific program.
+  /sap/bc/adt/programs/programs/ZTEST/source/main: |
+    REPORT ztest.
+
+    START-OF-SELECTION.
+      WRITE: / 'Hello from fixture'.
+
+  /sap/bc/adt/oo/classes/ZCL_DEMO/source/main: |
+    CLASS zcl_demo DEFINITION PUBLIC FINAL CREATE PUBLIC.
+      PUBLIC SECTION.
+        METHODS run RETURNING VALUE(rv_result) TYPE string.
+    ENDCLASS.
+
+    CLASS zcl_demo IMPLEMENTATION.
+      METHOD run.
+        rv_result = 'Demo from fixture'.
+      ENDMETHOD.
+    ENDCLASS.
+
+  /sap/bc/adt/ddic/ddl/sources/ZI_DEMO/source/main: |
+    @EndUserText.label: 'Demo CDS view'
+    @AccessControl.authorizationCheck: #CHECK
+    define view entity ZI_DEMO
+      as select from t000
+    {
+      key mandt as Client,
+          mtext as Description
+    }
+
+# Pre-locked objects: objectURL -> lock handle.
+# Useful for testing unlock and conflict scenarios.
+locks:
+  /sap/bc/adt/programs/programs/ZLOCKED: FIXTURE_LOCK_HANDLE_001
+
+# Exact SQL query -> result rows (1-to-1 mapping).
+# The POST body of a datapreview request is matched verbatim against these keys.
+datapreview:
+  "SELECT * FROM T000 WHERE MANDT = '001'":
+    - MANDT: "001"
+      MTEXT: "Test Client"
+      LOGSYS: "TSTCLNT001"
+
+  "SELECT MANDT, MTEXT, LOGSYS FROM T000":
+    - MANDT: "001"
+      MTEXT: "Test Client"
+      LOGSYS: "TSTCLNT001"
+
+  "SELECT BNAME, USTYP FROM USR02 WHERE MANDT = '001'":
+    - BNAME: "DEVELOPER"
+      USTYP: "A"
+    - BNAME: "TESTER"
+      USTYP: "A"
+
