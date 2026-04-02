@@ -6,7 +6,9 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -51,7 +53,9 @@ func (s *System) EnsureWSConnected(ctx context.Context, toolName string) *mcp.Ca
 }
 
 // Connect implements types.System by validating credentials and establishing transport connection.
-// For HTTP mode, performs an explicit GetSystemInfo call to validate authentication and establish session.
+// For HTTP mode, performs a GetSystemInfo call to validate authentication and establish session.
+// HTTP 400 from GetSystemInfo is treated as non-fatal (e.g., missing authorization for T000 query)
+// since the session was still established and other tools may work fine.
 // For RFC/SNC mode, is a silent no-op (logon validation via explicit RFC call is a future enhancement).
 // Connect is idempotent and safe to call multiple times.
 func (s *System) Connect(ctx context.Context) error {
@@ -64,6 +68,15 @@ func (s *System) Connect(ctx context.Context) error {
 
 	// HTTP mode: validate credentials via GetSystemInfo (establishes session and validates auth)
 	if _, err := s.adtClient.GetSystemInfo(ctx); err != nil {
+		// If the server responded with HTTP 400, the session was established but the
+		// SQL query (e.g., SELECT FROM T000) failed — likely missing authorization.
+		// Warn and continue; other tools may still work.
+		var apiErr *adt.APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == 400 {
+			_, _ = fmt.Fprintf(os.Stderr, "[WARN] System info unavailable (missing authorization?), connection continues: %v\n", err)
+			return nil
+		}
+
 		return fmt.Errorf("failed to connect to system: %w", err)
 	}
 
