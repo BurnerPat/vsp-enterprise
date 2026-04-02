@@ -51,7 +51,7 @@ SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./vsp
 | Variable / Flag | Description |
 |-----------------|-------------|
 | `SAP_URL` / `--url` | SAP system URL (e.g., `http://host:50000`) |
-| `SAP_USER` / `--user` | SAP username |
+| `SAP_USER` / `--user` | SAP username (default: OS login name, uppercased) |
 | `SAP_PASSWORD` / `--password` | SAP password |
 | `SAP_CLIENT` / `--client` | SAP client number (default: 001) |
 | `SAP_LANGUAGE` / `--language` | SAP language (default: EN) |

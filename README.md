@@ -193,6 +193,8 @@ Tool permissions can be configured at three levels:
 
 For per-system passwords with named systems, use environment variables such as `VSP_DEV_PASSWORD`.
 
+When no username is provided via `--user`, `SAP_USER`, or a system's `user` field, `vsp` automatically defaults to the current OS login name (uppercased). Override it at any level to use a different SAP account.
+
 ## Contribution
 
 Contributions are welcome.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/user"
 	"strings"
 
 	"dario.cat/mergo"
@@ -217,6 +218,22 @@ func augmentSystemConfiguration(sys *config.SystemConfig, globalCfg *config.Glob
 	return nil
 }
 
+// resolveOSUsername returns the current OS login name, uppercased to match
+// SAP conventions. On Windows, any DOMAIN\user prefix is stripped.
+// Returns an empty string if the lookup fails (non-fatal).
+func resolveOSUsername() string {
+	u, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	name := u.Username
+	// Windows may return DOMAIN\user — strip the domain prefix
+	if i := strings.LastIndex(name, "\\"); i >= 0 {
+		name = name[i+1:]
+	}
+	return strings.ToUpper(name)
+}
+
 // GetSystem retrieves a system configuration by name, resolving password from env.
 func fillSystemLogonDataFromEnvOrConfig(name string, sys *config.SystemConfig) error {
 	if sys.Disabled {
@@ -247,6 +264,14 @@ func fillSystemLogonDataFromEnvOrConfig(name string, sys *config.SystemConfig) e
 
 	if sys.Language == "" {
 		sys.Language = "EN"
+	}
+
+	// Default username to OS login name if not set by any source.
+	// Skip when using browser-based or cookie-based auth (no username needed).
+	if sys.User == "" && !sys.BrowserAuth && sys.CookieFile == "" && sys.CookieString == "" {
+		if osUser := resolveOSUsername(); osUser != "" {
+			sys.User = osUser
+		}
 	}
 
 	return nil
