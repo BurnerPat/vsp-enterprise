@@ -1,0 +1,51 @@
+{
+  "default": "dev",
+  "roles": {
+    "read_only": {
+      "description": "Read-only access to custom packages",
+      "tools": {
+        "Get*": {},
+        "Search*": {},
+        "List*": {}
+      }
+    },
+    "table_metadata": {
+      "description": "Inspect table definitions and metadata",
+      "tools": {
+        "GetTableDefinition": { "allowed_objects": ["*"] },
+        "GetTableExtensions": { "allowed_objects": ["*"] },
+        "GetFieldInfo": { "allowed_objects": ["*"] }
+      }
+    },
+    "cloud_production": {
+      "description": "Production cloud-safe role combining read + metadata inspection",
+      "nested_roles": ["read_only", "table_metadata"],
+      "tools": {
+        "DataPreview": {
+          "blocked_objects": ["T001", "T000", "USR*", "ZCDS_*"]
+        },
+        "RunQuery": { "enabled": false }
+      },
+      "safety": {
+        "block_free_sql": true,
+        "allowed_operations": ["R", "S", "Q"],
+        "block_transports": true
+      }
+    }
+  },
+  "systems": {
+    "dev": {
+      "url": "https://dev.example.com:44300",
+      "user": "DEVELOPER",
+      "client": "001",
+      "roles": ["read_only"]
+    },
+    "prod": {
+      "url": "https://prod.example.com:44300",
+      "user": "READONLY",
+      "client": "100",
+      "roles": ["cloud_production"]
+    }
+  }
+}
+

@@ -58,8 +58,8 @@ type SystemConfig struct {
 	RfcConfig
 	SncConfig
 
-	SystemClass string           `json:"system_class,omitempty"`
-	Permissions PermissionConfig `json:"permissions,omitempty"`
+	// Role-based access control: array of role names to apply to this system
+	Roles []string `json:"roles,omitempty"`
 
 	// Per-system output settings
 	Verbose bool `json:"verbose,omitempty"` // Enable verbose logging for this system
@@ -68,10 +68,6 @@ type SystemConfig struct {
 	// Stored here so they can be passed to the JCo sidecar and, in future,
 	// also be specified directly in the config file.
 	JcoProperties map[string]string `json:"jco_properties,omitempty"`
-}
-
-type SystemClassConfig struct {
-	Permissions PermissionConfig `json:"permissions,omitempty"`
 }
 
 // SetToolEnabled sets the enabled state for a tool.

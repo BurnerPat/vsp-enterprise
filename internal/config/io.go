@@ -72,21 +72,26 @@ func (c *GlobalConfig) SaveToFile(path string) error {
 
 // ExampleConfig returns an example configuration for documentation.
 func ExampleConfig() string {
+	disabled := false
 	example := GlobalConfigJSON{
 		DefaultSystem: "dev",
-		SystemClasses: map[string]SystemClassConfig{
-			"dev_test": {
-				Permissions: PermissionConfig{
-					AllowedPackages: []string{"Z*", "Y*"},
+		Roles: map[string]RoleDefinition{
+			"read_only": {
+				Description: "Read-only access to custom packages",
+				Tools: map[string]ToolPermission{
+					"Get*":    {},
+					"Search*": {},
+					"List*":   {},
 				},
 			},
-			"prod": {
-				Permissions: PermissionConfig{
-					DenyToolsByDefault: true,
-					Tools: map[string]bool{
-						"Get*":          true,
-						"GetSystemInfo": true,
+			"cloud_production": {
+				Description: "Production cloud-safe role",
+				NestedRoles: []string{"read_only"},
+				Tools: map[string]ToolPermission{
+					"DataPreview": {
+						BlockedObjects: []string{"T001", "T000", "USR*"},
 					},
+					"RunQuery": {Enabled: &disabled},
 				},
 			},
 		},
@@ -97,7 +102,7 @@ func ExampleConfig() string {
 					User:   "DEVELOPER",
 					Client: "001",
 				},
-				SystemClass: "dev_test",
+				// No roles → uses built-in "default" role (all tools enabled)
 			},
 			"a4h": {
 				ConnectionConfig: ConnectionConfig{
@@ -106,10 +111,7 @@ func ExampleConfig() string {
 					Client:   "001",
 					Insecure: true,
 				},
-				SystemClass: "dev_test",
-				Permissions: PermissionConfig{
-					AllowedPackages: []string{"Z*"},
-				},
+				Roles: []string{"read_only"},
 			},
 			"prod": {
 				ConnectionConfig: ConnectionConfig{
@@ -117,7 +119,7 @@ func ExampleConfig() string {
 					User:   "READONLY_USER",
 					Client: "100",
 				},
-				SystemClass: "prod",
+				Roles: []string{"cloud_production"},
 			},
 			"rfc-direct": {
 				ConnectionConfig: ConnectionConfig{

@@ -112,10 +112,7 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 					SNC:   true,
 					SysID: "A4H",
 				},
-				Permissions: PermissionConfig{
-					ReadOnly:        true,
-					AllowedPackages: []string{"Z*"},
-				},
+				Roles: []string{"reader"},
 			},
 		},
 		Tools: map[string]bool{"GetSource": true, "DeleteObject": false},
@@ -176,8 +173,11 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 		t.Errorf("dev system round-trip mismatch: %+v", dev)
 	}
 	rfc := roundTripped.Systems["rfc"]
-	if rfc.ConnectionMode != "rfc" || rfc.AsHost != "sap.example.com" || !rfc.SNC || rfc.SysID != "A4H" || !rfc.Permissions.ReadOnly {
+	if rfc.ConnectionMode != "rfc" || rfc.AsHost != "sap.example.com" || !rfc.SNC || rfc.SysID != "A4H" {
 		t.Errorf("rfc system round-trip mismatch: %+v", rfc)
+	}
+	if len(rfc.Roles) != 1 || rfc.Roles[0] != "reader" {
+		t.Errorf("rfc roles round-trip mismatch: got %v, want [reader]", rfc.Roles)
 	}
 }
 

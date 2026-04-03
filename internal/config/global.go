@@ -32,12 +32,35 @@ func GetInstance() *GlobalConfig {
 // Top-level (global) configuration — the singleton.
 // ---------------------------------------------------------------------------
 
-// PermissionConfig Configuration for tool permissions
-type PermissionConfig struct {
-	DenyToolsByDefault bool            `json:"deny_tools_by_default"`
-	Tools              map[string]bool `json:"tools"`
-	ReadOnly           bool            `json:"read_only,omitempty"`
-	AllowedPackages    []string        `json:"allowed_packages,omitempty"`
+// ToolPermission defines access control for a specific tool within a role.
+type ToolPermission struct {
+	// nil = inherit from role/system defaults
+	// true = explicitly allow
+	// false = explicitly block (takes precedence)
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Object-level restrictions (evaluated at runtime)
+	AllowedPackages []string `json:"allowed_packages,omitempty"` // Whitelist packages
+	AllowedObjects  []string `json:"allowed_objects,omitempty"`  // Whitelist object names
+	BlockedObjects  []string `json:"blocked_objects,omitempty"`  // Blacklist object names
+}
+
+// RoleDefinition defines a set of permissions that can be assigned to systems.
+type RoleDefinition struct {
+	Description string                    `json:"description,omitempty"`
+	NestedRoles []string                  `json:"nested_roles,omitempty"`
+	Tools       map[string]ToolPermission `json:"tools"`
+	Safety      *adt.SafetyConfig         `json:"safety,omitempty"`
+}
+
+// ResolvedToolPermission is the computed result after merging all roles for a tool.
+type ResolvedToolPermission struct {
+	GloballyDisabled bool
+	ObjectRestricted bool
+	AllowedPackages  []string
+	AllowedObjects   []string
+	BlockedObjects   []string
+	Safety           *adt.SafetyConfig
 }
 
 // GlobalConfigJSON is the part of the global configuration that can be (un)marshalled
@@ -50,8 +73,8 @@ type GlobalConfigJSON struct {
 	// Tools not listed are enabled by default
 	Tools map[string]bool `json:"tools,omitempty"`
 
-	Permissions   PermissionConfig             `json:"permissions,omitempty"`
-	SystemClasses map[string]SystemClassConfig `json:"system_classes,omitempty"`
+	// Role-based access control
+	Roles map[string]RoleDefinition `json:"roles,omitempty"`
 }
 
 // GlobalConfig is the top-level runtime configuration.
@@ -133,20 +156,17 @@ func (c *SystemConfig) BuildADTOptions() []adt.Option {
 	return opts
 }
 
-// BuildSafetyConfig constructs an adt.SafetyConfig by merging per-system
-// SafetySettings with global safety flags from the singleton.
+// BuildSafetyConfig constructs an adt.SafetyConfig from global safety flags.
 func (c *SystemConfig) BuildSafetyConfig() adt.SafetyConfig {
 	g := GetInstance()
 	safety := adt.UnrestrictedSafetyConfig()
 
-	// ReadOnly / AllowedPackages: per-system OR global
-	if c.Permissions.ReadOnly || g.ReadOnly {
+	// Global safety flags
+	if g.ReadOnly {
 		safety.ReadOnly = true
 	}
 
-	if len(c.Permissions.AllowedPackages) > 0 {
-		safety.AllowedPackages = c.Permissions.AllowedPackages
-	} else if len(g.AllowedPackages) > 0 {
+	if len(g.AllowedPackages) > 0 {
 		safety.AllowedPackages = g.AllowedPackages
 	}
 

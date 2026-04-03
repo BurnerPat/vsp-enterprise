@@ -358,7 +358,7 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 				sys.Insecure = true
 				continue // insecure is a flag, not key-value
 			case "--read-only":
-				sys.Permissions.ReadOnly = true
+				cfg.ReadOnly = true
 				continue
 			}
 		}
@@ -368,7 +368,7 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 			case "--insecure":
 				sys.Insecure = true
 			case "--read-only":
-				sys.Permissions.ReadOnly = true
+				cfg.ReadOnly = true
 			}
 		}
 	}
@@ -540,11 +540,11 @@ func runVspToMcp(_ *cobra.Command, _ []string) error {
 		if sys.Insecure {
 			serverArgs = append(serverArgs, "--insecure")
 		}
-		if sys.Permissions.ReadOnly {
+		if cfg.ReadOnly {
 			serverArgs = append(serverArgs, "--read-only")
 		}
-		if len(sys.Permissions.AllowedPackages) > 0 {
-			serverArgs = append(serverArgs, "--allowed-packages", strings.Join(sys.Permissions.AllowedPackages, ","))
+		if len(cfg.AllowedPackages) > 0 {
+			serverArgs = append(serverArgs, "--allowed-packages", strings.Join(cfg.AllowedPackages, ","))
 		}
 
 		// Build env block - only add password placeholder if using user auth
@@ -996,10 +996,7 @@ var vspSystemsExample = func() string {
 					User:   "READONLY",
 					Client: "100",
 				},
-				Permissions: config.PermissionConfig{
-					ReadOnly:        true,
-					AllowedPackages: []string{"Z*", "Y*"},
-				},
+				Roles: []string{"read_only"},
 			},
 			"rfc-direct": {
 				ConnectionConfig: config.ConnectionConfig{
