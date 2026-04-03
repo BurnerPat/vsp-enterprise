@@ -1,10 +1,10 @@
 // Command adt-testserver is a standalone HTTP server that emulates the SAP ADT REST API
-// for testing purposes. It requires no SAP system and returns hardcoded XML responses
-// with object-name placeholders.
+// for testing purposes. Routes and fixture data are loaded from YAML fixture files
+// specified as mandatory positional glob patterns.
 //
 // Usage:
 //
-//	go run ./testserver [flags]
+//	go run ./testserver [flags] <glob> [<glob>...]
 //
 // Flags:
 //
@@ -13,7 +13,6 @@
 //	--user      Expected Basic Auth username (default: developer)
 //	--password  Expected Basic Auth password (default: secret)
 //	--port      TCP port to listen on (default: 8080)
-//	--fixtures  Optional path to a YAML fixtures file
 package main
 
 import (
@@ -21,8 +20,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-
-	"adt-testserver/endpoints"
 )
 
 // csrfToken is the static token issued and validated by the server.
@@ -36,35 +33,32 @@ func main() {
 	user := flag.String("user", "developer", "SAP Username")
 	password := flag.String("password", "secret", "SAP Password")
 	port := flag.Int("port", 8080, "HTTP port to listen on")
-	fixtures := flag.String("fixtures", "", "Path to YAML fixtures file (optional)")
 	flag.Parse()
 
-	state := endpoints.NewState(*sysID, *client, *user, *password)
-
-	if *fixtures != "" {
-		if err := loadFixtures(*fixtures, state); err != nil {
-			log.Fatalf("loading fixtures %q: %v", *fixtures, err)
-		}
-		log.Printf("Loaded fixtures from %s", *fixtures)
+	globs := flag.Args()
+	if len(globs) == 0 {
+		log.Fatal("usage: adt-testserver [flags] <glob> [<glob>...]\n  at least one fixture glob pattern is required")
 	}
 
-	mux := http.NewServeMux()
+	state := NewState(*sysID, *client, *user, *password)
+	routes, err := loadGlobs(globs, state)
+	if err != nil {
+		log.Fatalf("loading fixtures: %v", err)
+	}
+	log.Printf("Loaded %d routes", len(routes))
 
-	endpoints.RegisterCore(mux, state, csrfToken)
-	endpoints.RegisterPrograms(mux, state)
-	endpoints.RegisterOO(mux, state)
-	endpoints.RegisterFunctions(mux, state)
-	endpoints.RegisterDDIC(mux, state)
-	endpoints.RegisterCheckruns(mux, state)
-	endpoints.RegisterActivation(mux, state)
-	endpoints.RegisterAbapunit(mux, state)
-	endpoints.RegisterATC(mux, state)
-	endpoints.RegisterRepository(mux, state)
-	endpoints.RegisterDatapreview(mux, state)
-	endpoints.RegisterRuntime(mux, state)
-
-	// Wrap with auth (outermost) → CSRF → mux
-	handler := authMiddleware(*user, *password, csrfMiddleware(csrfToken, mux))
+	handler := authMiddleware(*user, *password,
+		csrfMiddleware(csrfToken,
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				rt, vars := matchRoute(routes, r)
+				if rt == nil {
+					http.NotFound(w, r)
+					return
+				}
+				serveRoute(w, r, rt, vars, state, csrfToken)
+			}),
+		),
+	)
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("ADT test server listening on http://localhost%s  (sys=%s  client=%s  user=%s)",

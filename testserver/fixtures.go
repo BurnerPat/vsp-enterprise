@@ -3,66 +3,89 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
-
-	"adt-testserver/endpoints"
 
 	"gopkg.in/yaml.v3"
 )
 
-// fixtureFile mirrors the YAML fixture format.
-type fixtureFile struct {
-	// Sources maps ADT path to ABAP source content.
-	// Example:
-	//   sources:
-	//     /sap/bc/adt/programs/programs/ZTEST/source/main: |
-	//       REPORT ztest.
-	//       WRITE: / 'Hello'.
-	Sources map[string]string `yaml:"sources"`
-
-	// Locks maps object URL to a pre-existing lock handle.
-	// Example:
-	//   locks:
-	//     /sap/bc/adt/programs/programs/ZLOCKED: MY_LOCK_HANDLE
-	Locks map[string]string `yaml:"locks"`
-
-	// DataPreview maps an exact SQL query string to a slice of column→value rows.
-	// Example:
-	//   datapreview:
-	//     "SELECT * FROM T000 WHERE MANDT = '001'":
-	//       - MANDT: "001"
-	//         MTEXT: "Test Client"
-	//         LOGSYS: "T01CLNT001"
+// RouteFile mirrors the top-level YAML fixture format.
+// A single file may contain any combination of routes, sources, locks, and datapreview.
+type RouteFile struct {
+	Routes      []Route                        `yaml:"routes"`
+	Sources     map[string]string              `yaml:"sources"`
+	Locks       map[string]string              `yaml:"locks"`
 	DataPreview map[string][]map[string]string `yaml:"datapreview"`
 }
 
-// loadFixtures reads a YAML fixture file and populates the shared state.
-func loadFixtures(path string, s *endpoints.State) error {
+// loadGlobs expands each glob pattern via filepath.Glob, loads and merges all
+// matching files in order, and returns the combined route list.
+// At least one file must match across all patterns; the server fails fast otherwise.
+func loadGlobs(patterns []string, state *State) ([]Route, error) {
+	var routes []Route
+	loaded := 0
+
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid glob pattern %q: %w", pattern, err)
+		}
+		for _, path := range matches {
+			rs, err := loadFile(path, state)
+			if err != nil {
+				return nil, fmt.Errorf("loading %q: %w", path, err)
+			}
+			routes = append(routes, rs...)
+			loaded++
+		}
+	}
+
+	if loaded == 0 {
+		return nil, fmt.Errorf("no fixture files matched any of the patterns: %s",
+			strings.Join(patterns, ", "))
+	}
+
+	return routes, nil
+}
+
+// loadFile reads a single YAML fixture file, seeds state from the sources/locks/datapreview
+// sections, compiles routes, and returns them.
+func loadFile(path string, state *State) ([]Route, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("reading fixture file: %w", err)
+		return nil, fmt.Errorf("reading: %w", err)
 	}
 
-	var f fixtureFile
+	var f RouteFile
 	if err := yaml.Unmarshal(data, &f); err != nil {
-		return fmt.Errorf("parsing fixture file: %w", err)
+		return nil, fmt.Errorf("parsing YAML: %w", err)
 	}
 
-	for path, src := range f.Sources {
-		if strings.Contains(path, "{") {
-			if err := s.AddPatternSource(path, src); err != nil {
-				return fmt.Errorf("compiling source pattern %q: %w", path, err)
+	// Seed state — sources (pattern keys use {name} syntax), locks, datapreview.
+	for p, src := range f.Sources {
+		if strings.Contains(p, "{") {
+			if err := state.AddPatternSource(p, src); err != nil {
+				return nil, fmt.Errorf("compiling source pattern %q: %w", p, err)
 			}
 		} else {
-			s.SetSource(path, src)
+			state.SetSource(p, src)
 		}
 	}
 	for objectURL, handle := range f.Locks {
-		s.AcquireLock(objectURL, handle)
+		state.AcquireLock(objectURL, handle)
 	}
 	for query, rows := range f.DataPreview {
-		s.SetDataPreview(query, rows)
+		state.SetDataPreview(query, rows)
 	}
 
-	return nil
+	// Compile routes.
+	routes := make([]Route, len(f.Routes))
+	for i, r := range f.Routes {
+		routes[i] = r
+		if err := compileRoute(&routes[i]); err != nil {
+			return nil, fmt.Errorf("route %d (%s %s): %w", i+1, r.Method, r.Path, err)
+		}
+	}
+
+	return routes, nil
 }
