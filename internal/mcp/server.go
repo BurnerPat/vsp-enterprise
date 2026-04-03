@@ -108,9 +108,7 @@ func (s *Server) Connect(ctx context.Context) error {
 		return fmt.Errorf("server router not initialized")
 	}
 
-	for sysID, sysItem := range s.router.systems {
-		sys := sysItem.System
-
+	for sysID, sys := range s.router.systems {
 		if s.config.Verbose {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Connecting to system %q...\n", sysID)
 		}
@@ -135,9 +133,7 @@ func (s *Server) Start(ctx context.Context) error {
 		return fmt.Errorf("server router not initialized")
 	}
 
-	for sysID, sysItem := range s.router.systems {
-		sys := sysItem.System
-
+	for sysID, sys := range s.router.systems {
 		if s.config.Verbose {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Starting runtime for system %q...\n", sysID)
 		}
@@ -271,7 +267,7 @@ func (s *Server) Shutdown() error {
 
 	var firstErr error
 	for sysID, sys := range s.router.systems {
-		if err := sys.System.Shutdown(); err != nil {
+		if err := sys.Shutdown(); err != nil {
 			if s.config.Verbose {
 				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Warning: shutdown error for system %q: %v\n", sysID, err)
 			}

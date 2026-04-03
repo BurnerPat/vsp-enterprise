@@ -32,21 +32,35 @@ func newTestRouter(systemIDs []string, toolsPerSystem map[string][]string) *Rout
 	r.allTools = allDefs
 
 	for _, id := range systemIDs {
-		r.systems[strings.ToLower(id)] = &SystemInRouter{ID: id}
+		r.systems[strings.ToLower(id)] = nil // no real System needed for these tests
 		r.systemIDs = append(r.systemIDs, id)
 	}
 
-	// Assign enabled tools per system
-	for id, names := range toolsPerSystem {
-		sys := r.systems[strings.ToLower(id)]
-		for _, name := range names {
-			for i := range allDefs {
-				if allDefs[i].Tool.Name == name {
-					sys.EnabledTools = append(sys.EnabledTools, &allDefs[i])
-				}
+	// Build a PermissionManager with the given tool assignments
+	pm := &PermissionManager{
+		systemPermissions: make(map[string]*SystemPermissions),
+		allTools:          allDefs,
+	}
+
+	for _, id := range systemIDs {
+		sp := &SystemPermissions{
+			SystemID:      id,
+			DisabledTools: make(map[string]bool),
+		}
+		enabledSet := make(map[string]bool)
+		for _, name := range toolsPerSystem[id] {
+			enabledSet[name] = true
+		}
+		for i := range allDefs {
+			if enabledSet[allDefs[i].Tool.Name] {
+				sp.EnabledTools = append(sp.EnabledTools, &allDefs[i])
+			} else {
+				sp.DisabledTools[allDefs[i].Tool.Name] = true
 			}
 		}
+		pm.systemPermissions[strings.ToLower(id)] = sp
 	}
+	r.permissionManager = pm
 
 	return r
 }
@@ -227,7 +241,7 @@ func TestPermissionDeniedMessage_ShowsAvailableTools(t *testing.T) {
 		map[string][]string{"DEV": {"ReadObject", "SearchObjects", "GetSystemInfo"}},
 	)
 
-	msg := r.permissionDeniedMessage("DeleteObject", "DEV", r.systems["dev"].EnabledTools)
+	msg := r.permissionDeniedMessage("DeleteObject", "DEV", r.permissionManager.GetEnabledToolsForSystem("DEV"))
 
 	if !strings.Contains(msg, "Permission denied for tool DeleteObject on system DEV") {
 		t.Errorf("message %q missing denial statement", msg)
@@ -246,7 +260,7 @@ func TestPermissionDeniedMessage_NoTools(t *testing.T) {
 		map[string][]string{"DEV": {}},
 	)
 
-	msg := r.permissionDeniedMessage("ReadObject", "DEV", r.systems["dev"].EnabledTools)
+	msg := r.permissionDeniedMessage("ReadObject", "DEV", r.permissionManager.GetEnabledToolsForSystem("DEV"))
 
 	if !strings.Contains(msg, "No tools are enabled") {
 		t.Errorf("message %q should indicate no tools enabled", msg)
@@ -260,7 +274,7 @@ func TestPermissionDeniedMessage_CapsAt10(t *testing.T) {
 	}
 
 	r := newTestRouter([]string{"SYS"}, map[string][]string{"SYS": tools})
-	msg := r.permissionDeniedMessage("Blocked", "SYS", r.systems["sys"].EnabledTools)
+	msg := r.permissionDeniedMessage("Blocked", "SYS", r.permissionManager.GetEnabledToolsForSystem("SYS"))
 
 	if !strings.Contains(msg, "and 5 more") {
 		t.Errorf("message %q should indicate truncated list", msg)

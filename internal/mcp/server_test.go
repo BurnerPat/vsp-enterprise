@@ -103,7 +103,7 @@ func TestNewServer(t *testing.T) {
 	if !ok {
 		t.Fatal("Expected 'default' system in router")
 	}
-	if sys.System.ADT() == nil {
+	if sys.ADT() == nil {
 		t.Error("ADT client on default system should not be nil")
 	}
 

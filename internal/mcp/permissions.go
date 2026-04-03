@@ -148,6 +148,16 @@ func (pm *PermissionManager) GetEnabledToolsForSystem(systemID string) []*types.
 	return sp.EnabledTools
 }
 
+// GetEnabledToolNames returns sorted tool names enabled for a system (for discovery).
+func (pm *PermissionManager) GetEnabledToolNames(systemID string) []string {
+	tools := pm.GetEnabledToolsForSystem(systemID)
+	names := make([]string, len(tools))
+	for i, td := range tools {
+		names[i] = td.Tool.Name
+	}
+	return names
+}
+
 // GetGloballyEnabledTools returns all tools that are enabled for at least one system.
 // This is used to determine which tools to register with the MCP server.
 func (pm *PermissionManager) GetGloballyEnabledTools() []*types.ToolDef {

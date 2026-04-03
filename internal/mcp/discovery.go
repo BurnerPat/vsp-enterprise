@@ -48,8 +48,7 @@ func (r *Router) handleListAvailableTools(_ context.Context, request mcp.CallToo
 	var systems []discoverySystemInfo
 
 	if filterID != "" {
-		sys, ok := r.systems[strings.ToLower(filterID)]
-		if !ok {
+		if _, ok := r.systems[strings.ToLower(filterID)]; !ok {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{mcp.NewTextContent(
 					fmt.Sprintf("Unknown system: %s. Available: %s", filterID, strings.Join(r.systemIDs, ", ")),
@@ -57,11 +56,10 @@ func (r *Router) handleListAvailableTools(_ context.Context, request mcp.CallToo
 				IsError: true,
 			}, nil
 		}
-		systems = append(systems, buildSystemInfo(sys))
+		systems = append(systems, r.buildSystemInfo(filterID))
 	} else {
 		for _, id := range r.systemIDs {
-			sys := r.systems[strings.ToLower(id)]
-			systems = append(systems, buildSystemInfo(sys))
+			systems = append(systems, r.buildSystemInfo(id))
 		}
 	}
 
@@ -75,15 +73,12 @@ func (r *Router) handleListAvailableTools(_ context.Context, request mcp.CallToo
 	return mcp.NewToolResultText(string(encoded)), nil
 }
 
-func buildSystemInfo(sys *SystemInRouter) discoverySystemInfo {
-	toolNames := make([]string, len(sys.EnabledTools))
-	for i, td := range sys.EnabledTools {
-		toolNames[i] = td.Tool.Name
-	}
+func (r *Router) buildSystemInfo(systemID string) discoverySystemInfo {
+	toolNames := r.permissionManager.GetEnabledToolNames(systemID)
 	sort.Strings(toolNames)
 
 	return discoverySystemInfo{
-		SystemID:     sys.ID,
+		SystemID:     systemID,
 		EnabledTools: toolNames,
 		TotalEnabled: len(toolNames),
 	}

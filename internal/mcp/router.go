@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -13,84 +12,53 @@ import (
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 )
 
-type SystemInRouter struct {
-	System       types.System
-	ID           string
-	EnabledTools []*types.ToolDef
-}
-
 // Router handles tool call routing and system management.
 type Router struct {
 	mcpServer         *server.MCPServer
-	systems           map[string]*SystemInRouter
-	systemIDs         []string
+	systems           map[string]types.System // keyed by lowercase system ID
+	systemIDs         []string                // original-cased IDs in insertion order
 	allTools          []types.ToolDef
-	permissionManager *PermissionManager // Role-based permission system
+	permissionManager *PermissionManager
 }
 
 func NewRouter(mcpServer *server.MCPServer) *Router {
 	return &Router{
 		mcpServer: mcpServer,
-		systems:   make(map[string]*SystemInRouter),
+		systems:   make(map[string]types.System),
 	}
 }
 
 func (r *Router) AddSystem(id string, sys types.System) {
-	r.systems[strings.ToLower(id)] = &SystemInRouter{
-		System: sys,
-		ID:     id,
-	}
-
+	r.systems[strings.ToLower(id)] = sys
 	r.systemIDs = append(r.systemIDs, id)
 }
 
 // RegisterTools registers all available tools from all packages.
 func (r *Router) RegisterTools(cfg *config.GlobalConfig) {
-	// Initialize PermissionManager for role-based permissions
 	var err error
 	r.permissionManager, err = NewPermissionManager(cfg, tools.AllToolDefs())
 	if err != nil {
 		panic(err)
 	}
 
-	allDefs := r.resolveRoleBasedPermissions(cfg)
+	r.allTools = tools.AllToolDefs()
+	r.permissionManager.LogEffectivePermissions()
 
-	// In the new architecture, we register each tool once with a central handler
-	for _, td := range allDefs {
+	// Register each globally-enabled tool once with a central handler
+	for _, td := range r.permissionManager.GetGloballyEnabledTools() {
 		tool := td.Tool
-		// If multiple systems, inject system_id
 		if len(r.systemIDs) > 1 {
 			tool = r.addSystemIDToTool(tool)
 		}
 
-		// Capture td for the closure
 		toolDef := td
 		r.mcpServer.AddTool(tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return r.HandleToolCall(ctx, toolDef, request)
 		})
 	}
 
-	// Register discovery meta-tools (always available, bypass permission pipeline)
+	// Discovery meta-tools (always available, bypass permission pipeline)
 	r.registerDiscoveryTools()
-}
-
-// resolveRoleBasedPermissions uses the PermissionManager to resolve tools per system.
-func (r *Router) resolveRoleBasedPermissions(cfg *config.GlobalConfig) []*types.ToolDef {
-	r.allTools = tools.AllToolDefs()
-
-	// Set per-system enabled tools from PermissionManager
-	for sysID := range cfg.Systems {
-		sys := r.systems[strings.ToLower(sysID)]
-		if sys != nil {
-			sys.EnabledTools = r.permissionManager.GetEnabledToolsForSystem(sysID)
-		}
-	}
-
-	// Log effective permissions
-	r.permissionManager.LogEffectivePermissions()
-
-	// Return globally enabled tools (enabled for at least one system)
-	return r.permissionManager.GetGloballyEnabledTools()
 }
 
 func (r *Router) HandleToolCall(ctx context.Context, td *types.ToolDef, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -111,23 +79,22 @@ func (r *Router) HandleToolCall(ctx context.Context, td *types.ToolDef, request 
 	}
 
 	// 2. Permission check (tool-level)
-	if slices.IndexFunc(sys.EnabledTools, func(t *types.ToolDef) bool { return t.Tool.Name == td.Tool.Name }) == -1 {
-		return types.ErrorResult(r.permissionDeniedMessage(td.Tool.Name, systemID, sys.EnabledTools)), nil
+	if !r.permissionManager.IsToolEnabledForSystem(systemID, td.Tool.Name) {
+		enabledTools := r.permissionManager.GetEnabledToolsForSystem(systemID)
+		return types.ErrorResult(r.permissionDeniedMessage(td.Tool.Name, systemID, enabledTools)), nil
 	}
 
 	// 3. Object-level permission check
-	if r.permissionManager != nil {
-		objectName := extractObjectName(request)
-		if objectName != "" {
-			objectPackage, _ := request.GetArguments()["package"].(string)
-			if err := r.permissionManager.IsObjectAllowedForTool(systemID, td.Tool.Name, objectName, objectPackage); err != nil {
-				return types.ErrorResult(err.Error()), nil
-			}
+	objectName := extractObjectName(request)
+	if objectName != "" {
+		objectPackage, _ := request.GetArguments()["package"].(string)
+		if err := r.permissionManager.IsObjectAllowedForTool(systemID, td.Tool.Name, objectName, objectPackage); err != nil {
+			return types.ErrorResult(err.Error()), nil
 		}
 	}
 
 	// 4. Invoke handler
-	return td.Handler(ctx, sys.System, request)
+	return td.Handler(ctx, sys, request)
 }
 
 // extractObjectName tries to extract the object name from request arguments.
@@ -135,7 +102,6 @@ func (r *Router) HandleToolCall(ctx context.Context, td *types.ToolDef, request 
 func extractObjectName(request mcp.CallToolRequest) string {
 	args := request.GetArguments()
 
-	// Check common object name parameters
 	for _, key := range []string{"object_name", "name", "table_name", "table", "class_name", "program_name", "object"} {
 		if v, ok := args[key].(string); ok && v != "" {
 			return v
@@ -149,9 +115,7 @@ func (r *Router) addSystemIDToTool(tool mcp.Tool) mcp.Tool {
 		tool.InputSchema.Properties = make(map[string]interface{})
 	}
 
-	// Create a new map for properties to avoid modifying original
 	newProps := make(map[string]interface{})
-
 	for k, v := range tool.InputSchema.Properties {
 		newProps[k] = v
 	}
