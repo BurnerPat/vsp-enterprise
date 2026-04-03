@@ -158,6 +158,40 @@ func (pm *PermissionManager) GetEnabledToolNames(systemID string) []string {
 	return names
 }
 
+// DiscoveryToolInfo describes a single tool's resolved object-level restrictions for discovery output.
+type DiscoveryToolInfo struct {
+	Name            string   `json:"name"`
+	AllowedPackages []string `json:"allowed_packages,omitempty"`
+	AllowedObjects  []string `json:"allowed_objects,omitempty"`
+	BlockedObjects  []string `json:"blocked_objects,omitempty"`
+}
+
+// GetRestrictedTools returns the list of tools that have object-level restrictions for a system.
+// Returns nil when no tools have restrictions.
+func (pm *PermissionManager) GetRestrictedTools(systemID string) []DiscoveryToolInfo {
+	sp, exists := pm.systemPermissions[strings.ToLower(systemID)]
+	if !exists {
+		return nil
+	}
+
+	var result []DiscoveryToolInfo
+	for _, td := range sp.EnabledTools {
+		resolved, ok := sp.ToolPermissions[td.Tool.Name]
+		if !ok || !resolved.ObjectRestricted {
+			continue
+		}
+
+		result = append(result, DiscoveryToolInfo{
+			Name:            td.Tool.Name,
+			AllowedPackages: resolved.AllowedPackages,
+			AllowedObjects:  resolved.AllowedObjects,
+			BlockedObjects:  resolved.BlockedObjects,
+		})
+	}
+
+	return result
+}
+
 // GetGloballyEnabledTools returns all tools that are enabled for at least one system.
 // This is used to determine which tools to register with the MCP server.
 func (pm *PermissionManager) GetGloballyEnabledTools() []*types.ToolDef {
