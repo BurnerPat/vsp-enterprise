@@ -1,0 +1,14 @@
+routes:
+  # Both endpoints share the same datapreview action:
+  #   1. Exact SQL match against state (seeded via datapreview: section)
+  #   2. T000 fallback when the query mentions T000
+  #   3. Empty result set otherwise
+
+  - method: POST
+    path: /sap/bc/adt/datapreview/ddic
+    action: datapreview
+
+  - method: POST
+    path: /sap/bc/adt/datapreview/freestyle
+    action: datapreview
+
