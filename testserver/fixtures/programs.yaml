@@ -1,0 +1,92 @@
+routes:
+  # --- Programs ---
+
+  - method: GET
+    path: /sap/bc/adt/programs/programs/{name}/source/main
+    action: get-source
+    response:
+      content-type: text/plain; charset=utf-8
+      body: |
+        REPORT ${name}.
+
+        START-OF-SELECTION.
+          WRITE: / 'Hello from ${name}'.
+
+  - method: PUT
+    path: /sap/bc/adt/programs/programs/{name}/source/main
+    action: store-source
+
+  # Lock — client sends Accept: application/vnd.sap.as+xml;...;dataname=com.sap.adt.lock.result
+  - method: POST
+    path: /sap/bc/adt/programs/programs/{name}
+    match:
+      query:
+        _action: LOCK
+      accept: application/vnd.sap.as+xml
+    action: lock
+
+  - method: POST
+    path: /sap/bc/adt/programs/programs/{name}
+    match:
+      query:
+        _action: UNLOCK
+    action: unlock
+
+  # Create program — fallback when no _action query param is present.
+  - method: POST
+    path: /sap/bc/adt/programs/programs/{name}
+    response:
+      status: 201
+      headers:
+        Location: "/sap/bc/adt/programs/programs/${name}"
+
+  # Create via collection endpoint.
+  - method: POST
+    path: /sap/bc/adt/programs/programs
+    response:
+      status: 201
+      headers:
+        Location: "/sap/bc/adt/programs/programs/ZNEW"
+
+  - method: DELETE
+    path: /sap/bc/adt/programs/programs/{name}
+    action: delete
+
+  # --- Includes ---
+
+  - method: GET
+    path: /sap/bc/adt/programs/includes/{name}/source/main
+    action: get-source
+    response:
+      content-type: text/plain; charset=utf-8
+      body: |
+        *----------------------------------------------------------------------*
+        * Include ${name}
+        *----------------------------------------------------------------------*
+
+  - method: PUT
+    path: /sap/bc/adt/programs/includes/{name}/source/main
+    action: store-source
+
+  - method: POST
+    path: /sap/bc/adt/programs/includes/{name}
+    match:
+      query:
+        _action: LOCK
+      accept: application/vnd.sap.as+xml
+    action: lock
+
+  - method: POST
+    path: /sap/bc/adt/programs/includes/{name}
+    match:
+      query:
+        _action: UNLOCK
+    action: unlock
+
+  - method: POST
+    path: /sap/bc/adt/programs/includes/{name}
+    response:
+      status: 201
+      headers:
+        Location: "/sap/bc/adt/programs/includes/${name}"
+
