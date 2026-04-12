@@ -1,0 +1,22 @@
+{
+  "systems": {
+    "dev": {
+      "url": "http://localhost:3000",
+      "username": "developer",
+      "password": "secret",
+      "client": "001"
+    },
+    "test": {
+      "url": "http://localhost:3000",
+      "username": "developer",
+      "password": "secret",
+      "client": "001"
+    },
+    "prod": {
+      "url": "http://localhost:3000",
+      "username": "developer",
+      "password": "secret",
+      "client": "001"
+    }
+  }
+}

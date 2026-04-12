@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "vsp": {
+      "transport": "stdio",
+      "command": "go",
+      "args": [
+        "run",
+        "cmd/vsp",
+        "--multi-server",
+        "--config",
+        "testserver/util/vsp.json"
+      ]
+    }
+  }
+}
