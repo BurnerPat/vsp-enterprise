@@ -5,12 +5,12 @@ go 1.24
 toolchain go1.24.10
 
 require (
+	dario.cat/mergo v1.0.2
 	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d
 	github.com/chromedp/chromedp v0.14.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v0.46.0
-	dario.cat/mergo v1.0.2
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
 	golang.org/x/sys v0.34.0
