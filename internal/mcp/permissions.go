@@ -50,7 +50,7 @@ func NewPermissionManager(cfg *config.GlobalConfig, allTools []types.ToolDef) (*
 	// Step 1: Validate role configuration
 	warnings := config.ValidateRolesConfig(cfg.Roles)
 	for _, w := range warnings {
-		log.LogWarning("%s", w)
+		log.Warning("%s", w)
 	}
 
 	// Step 2: Build all tool names for permission resolution
@@ -91,7 +91,7 @@ func (pm *PermissionManager) resolveSystemPermissions(
 
 	// Log role resolution
 	if len(sysCfg.Roles) == 0 {
-		log.LogWarning("System %q: no roles specified, using built-in 'default' role", sysID)
+		log.Warning("System %q: no roles specified, using built-in 'default' role", sysID)
 		sp.RoleNames = []string{"default"}
 	} else {
 		sp.RoleNames = sysCfg.Roles
@@ -283,21 +283,21 @@ func (pm *PermissionManager) ObjectNotAllowedMessage(
 func (pm *PermissionManager) LogEffectivePermissions() {
 	for _, sp := range pm.systemPermissions {
 		roleStr := strings.Join(sp.RoleNames, ", ")
-		log.LogInfo("System %q (roles: [%s]):", sp.SystemID, roleStr)
+		log.Info("System %q (roles: [%s]):", sp.SystemID, roleStr)
 
 		for _, td := range sp.EnabledTools {
 			toolName := td.Tool.Name
 			resolved := sp.ToolPermissions[toolName]
 			if resolved != nil && resolved.ObjectRestricted {
-				log.LogInfo("  ✓ %s (with object restrictions)", toolName)
+				log.Info("  ✓ %s (with object restrictions)", toolName)
 			} else {
-				log.LogInfo("  ✓ %s", toolName)
+				log.Info("  ✓ %s", toolName)
 			}
 		}
 
 		// Log disabled tools
 		for toolName := range sp.DisabledTools {
-			log.LogInfo("  ✗ %s", toolName)
+			log.Info("  ✗ %s", toolName)
 		}
 	}
 }

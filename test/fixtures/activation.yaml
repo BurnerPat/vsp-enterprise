@@ -1,0 +1,18 @@
+routes:
+  # POST activate — empty 200 body signals success to the ADT client.
+  - method: POST
+    path: /sap/bc/adt/activation
+    response:
+      status: 200
+
+  # GET inactive objects — empty list means nothing is pending activation.
+  - method: GET
+    path: /sap/bc/adt/activation/inactiveobjects
+    response:
+      content-type: application/xml; charset=utf-8
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <ioc:inactiveObjects xmlns:ioc="http://www.sap.com/adt/activation/inactivectsobjects/v1"
+                             xmlns:adtcore="http://www.sap.com/adt/core">
+        </ioc:inactiveObjects>
+
