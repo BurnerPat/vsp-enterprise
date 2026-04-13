@@ -78,7 +78,7 @@ func runSystems(_ *cobra.Command, _ []string) error {
 			}
 		}
 
-		userInfo := sys.User
+		userInfo := sys.Username
 		if userInfo == "" {
 			userInfo = "(cookie)"
 		}

@@ -98,16 +98,16 @@ func ExampleConfig() string {
 		Systems: map[string]SystemConfig{
 			"dev": {
 				ConnectionConfig: ConnectionConfig{
-					URL:    "http://dev.example.com:50000",
-					User:   "DEVELOPER",
-					Client: "001",
+					URL:      "http://dev.example.com:50000",
+					Username: "DEVELOPER",
+					Client:   "001",
 				},
 				// No roles → uses built-in "default" role (all tools enabled)
 			},
 			"a4h": {
 				ConnectionConfig: ConnectionConfig{
 					URL:      "http://a4h.local:50000",
-					User:     "ADMIN",
+					Username: "ADMIN",
 					Client:   "001",
 					Insecure: true,
 				},
@@ -115,16 +115,16 @@ func ExampleConfig() string {
 			},
 			"prod": {
 				ConnectionConfig: ConnectionConfig{
-					URL:    "https://prod.example.com:44300",
-					User:   "READONLY_USER",
-					Client: "100",
+					URL:      "https://prod.example.com:44300",
+					Username: "READONLY_USER",
+					Client:   "100",
 				},
 				Roles: []string{"cloud_production"},
 			},
 			"rfc-direct": {
 				ConnectionConfig: ConnectionConfig{
-					User:   "RFC_USER",
-					Client: "001",
+					Username: "RFC_USER",
+					Client:   "001",
 				},
 				RfcConfig: RfcConfig{
 					ConnectionMode: "rfc",

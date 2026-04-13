@@ -86,7 +86,7 @@ func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[str
 				}
 			}
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Instantiated system %q → %s (user: %s)\n",
-				sysID, connInfo, sysCfg.User)
+				sysID, connInfo, sysCfg.Username)
 		}
 	}
 

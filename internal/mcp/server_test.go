@@ -37,7 +37,7 @@ func TestConfig(t *testing.T) {
 	cfg := &config.SystemConfig{
 		ConnectionConfig: config.ConnectionConfig{
 			URL:      "https://sap.example.com:44300",
-			User:     "testuser",
+			Username: "testuser",
 			Password: "testpass",
 			Client:   "100",
 			Language: "DE",
@@ -48,8 +48,8 @@ func TestConfig(t *testing.T) {
 	if cfg.URL != "https://sap.example.com:44300" {
 		t.Errorf("URL = %v, want https://sap.example.com:44300", cfg.URL)
 	}
-	if cfg.User != "testuser" {
-		t.Errorf("User = %v, want testuser", cfg.User)
+	if cfg.Username != "testuser" {
+		t.Errorf("User = %v, want testuser", cfg.Username)
 	}
 	if cfg.Password != "testpass" {
 		t.Errorf("Password = %v, want testpass", cfg.Password)
@@ -72,7 +72,7 @@ func TestNewServer(t *testing.T) {
 		config.DefaultSystemID: {
 			ConnectionConfig: config.ConnectionConfig{
 				URL:      "https://sap.example.com:44300",
-				User:     "testuser",
+				Username: "testuser",
 				Password: "testpass",
 				Client:   "001",
 				Language: "EN",
@@ -126,7 +126,7 @@ func TestDebuggerGetVariablesSchemaIncludesItems(t *testing.T) {
 		config.DefaultSystemID: {
 			ConnectionConfig: config.ConnectionConfig{
 				URL:      "https://sap.example.com:44300",
-				User:     "testuser",
+				Username: "testuser",
 				Password: "testpass",
 				Client:   "001",
 				Language: "EN",

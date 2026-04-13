@@ -11,7 +11,7 @@ package config
 // ConnectionConfig holds core SAP connection settings.
 type ConnectionConfig struct {
 	URL      string `json:"url"`
-	User     string `json:"user,omitempty"`
+	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"` // Not recommended, use env var
 	Client   string `json:"client,omitempty"`
 	Language string `json:"language,omitempty"`

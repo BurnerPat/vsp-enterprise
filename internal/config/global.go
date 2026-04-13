@@ -230,7 +230,7 @@ func (c *SystemConfig) BuildSidecarConfig() *adt.SidecarConfig {
 		R3Name:        c.R3Name,
 		Group:         c.Group,
 		Client:        c.Client,
-		Username:      c.User,
+		Username:      c.Username,
 		Password:      c.Password,
 		Language:      c.Language,
 		JcoProperties: c.JcoProperties,

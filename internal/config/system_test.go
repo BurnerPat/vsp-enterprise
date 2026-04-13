@@ -86,7 +86,7 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 			"dev": {
 				ConnectionConfig: ConnectionConfig{
 					URL:      "http://dev:50000",
-					User:     "DEV",
+					Username: "DEV",
 					Password: "secret",
 					Client:   "001",
 					Language: "EN",
@@ -100,8 +100,8 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 			},
 			"rfc": {
 				ConnectionConfig: ConnectionConfig{
-					User:   "RFC_USER",
-					Client: "100",
+					Username: "RFC_USER",
+					Client:   "100",
 				},
 				RfcConfig: RfcConfig{
 					ConnectionMode: "rfc",
@@ -169,7 +169,7 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 		t.Errorf("Default mismatch: got %q, want %q", roundTripped.DefaultSystem, original.DefaultSystem)
 	}
 	dev := roundTripped.Systems["dev"]
-	if dev.URL != "http://dev:50000" || dev.User != "DEV" || dev.Client != "001" || !dev.Insecure || !dev.BrowserAuth {
+	if dev.URL != "http://dev:50000" || dev.Username != "DEV" || dev.Client != "001" || !dev.Insecure || !dev.BrowserAuth {
 		t.Errorf("dev system round-trip mismatch: %+v", dev)
 	}
 	rfc := roundTripped.Systems["rfc"]
