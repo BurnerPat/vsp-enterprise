@@ -15,6 +15,7 @@ abap-adt-api/
 
 # Binaries
 /build/
+/testserver/build/
 *.exe
 *.exe~
 *.dll

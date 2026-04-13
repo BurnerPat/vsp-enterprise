@@ -86,7 +86,7 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 			"dev": {
 				ConnectionConfig: ConnectionConfig{
 					URL:      "http://dev:50000",
-					User:     "DEV",
+					Username: "DEV",
 					Password: "secret",
 					Client:   "001",
 					Language: "EN",
@@ -100,8 +100,8 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 			},
 			"rfc": {
 				ConnectionConfig: ConnectionConfig{
-					User:   "RFC_USER",
-					Client: "100",
+					Username: "RFC_USER",
+					Client:   "100",
 				},
 				RfcConfig: RfcConfig{
 					ConnectionMode: "rfc",
@@ -112,10 +112,7 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 					SNC:   true,
 					SysID: "A4H",
 				},
-				Permissions: PermissionConfig{
-					ReadOnly:        true,
-					AllowedPackages: []string{"Z*"},
-				},
+				Roles: []string{"reader"},
 			},
 		},
 		Tools: map[string]bool{"GetSource": true, "DeleteObject": false},
@@ -172,12 +169,15 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 		t.Errorf("Default mismatch: got %q, want %q", roundTripped.DefaultSystem, original.DefaultSystem)
 	}
 	dev := roundTripped.Systems["dev"]
-	if dev.URL != "http://dev:50000" || dev.User != "DEV" || dev.Client != "001" || !dev.Insecure || !dev.BrowserAuth {
+	if dev.URL != "http://dev:50000" || dev.Username != "DEV" || dev.Client != "001" || !dev.Insecure || !dev.BrowserAuth {
 		t.Errorf("dev system round-trip mismatch: %+v", dev)
 	}
 	rfc := roundTripped.Systems["rfc"]
-	if rfc.ConnectionMode != "rfc" || rfc.AsHost != "sap.example.com" || !rfc.SNC || rfc.SysID != "A4H" || !rfc.Permissions.ReadOnly {
+	if rfc.ConnectionMode != "rfc" || rfc.AsHost != "sap.example.com" || !rfc.SNC || rfc.SysID != "A4H" {
 		t.Errorf("rfc system round-trip mismatch: %+v", rfc)
+	}
+	if len(rfc.Roles) != 1 || rfc.Roles[0] != "reader" {
+		t.Errorf("rfc roles round-trip mismatch: got %v, want [reader]", rfc.Roles)
 	}
 }
 

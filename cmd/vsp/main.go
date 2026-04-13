@@ -101,7 +101,7 @@ func init() {
 	rootCmd.Flags().StringVar(&singleSys.URL, "service", "", "SAP system URL (alias for --url)")
 
 	// Authentication flags
-	rootCmd.Flags().StringVarP(&singleSys.User, "user", "u", "", "SAP username")
+	rootCmd.Flags().StringVarP(&singleSys.Username, "user", "u", "", "SAP username")
 	rootCmd.Flags().StringVarP(&singleSys.Password, "password", "p", "", "SAP password")
 	rootCmd.Flags().StringVar(&singleSys.Password, "pass", "", "SAP password (alias for --password)")
 
@@ -393,8 +393,8 @@ func logFinalConfiguration(cfg *config.GlobalConfig) {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   SAP URL: %s\n", sys.URL)
 		}
 		_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   Client: %s, Language: %s\n", sys.Client, sys.Language)
-		if sys.User != "" {
-			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   Auth: Basic (user: %s)\n", sys.User)
+		if sys.Username != "" {
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   Auth: Basic (user: %s)\n", sys.Username)
 		} else if sys.SNC {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   Auth: SNC/SSO\n")
 		} else if c := runtimeCookies[sysID]; len(c) > 0 {

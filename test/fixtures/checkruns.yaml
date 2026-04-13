@@ -1,0 +1,13 @@
+routes:
+  - method: POST
+    path: /sap/bc/adt/checkruns
+    response:
+      content-type: application/xml; charset=utf-8
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun">
+          <chkrun:checkReport chkrun:reporter="abapCheckRun" chkrun:status="finished">
+            <chkrun:checkMessageList/>
+          </chkrun:checkReport>
+        </chkrun:checkRunReports>
+

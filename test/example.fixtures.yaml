@@ -1,0 +1,177 @@
+# Example fixture file for adt-testserver.
+#
+# Run with:
+#   go run ./testserver fixtures/*.yaml
+#
+# Or mix built-in fixtures with project-specific overrides:
+#   go run ./testserver fixtures/*.yaml my-project.fixtures.yaml
+#
+# A fixture file may contain any combination of the four top-level sections:
+#   routes:       YAML-driven route definitions
+#   sources:      Pre-loaded ABAP source content, keyed by ADT path
+#   locks:        Pre-existing lock handles, keyed by object URL
+#   datapreview:  Pre-configured SQL query results
+
+routes:
+  # ── Static response ───────────────────────────────────────────────────────────
+  - method: GET
+    path: /sap/bc/adt/example/static
+    response:
+      content-type: text/plain
+      body: "Hello from a static fixture route."
+
+  # ── get-source / store-source ─────────────────────────────────────────────────
+  # GET checks state (from a previous PUT or from the sources: section) first,
+  # then falls back to response.body with placeholder substitution.
+  - method: GET
+    path: /sap/bc/adt/programs/programs/{name}/source/main
+    action: get-source
+    response:
+      content-type: text/plain; charset=utf-8
+      body: |
+        REPORT ${name}.
+
+        START-OF-SELECTION.
+          WRITE: / 'Hello from ${name} (example fixture)'.
+
+  - method: PUT
+    path: /sap/bc/adt/programs/programs/{name}/source/main
+    action: store-source
+
+  # ── lock / unlock ─────────────────────────────────────────────────────────────
+  # match.accept uses substring matching — catches the full ADT vendor media type:
+  #   application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result
+  - method: POST
+    path: /sap/bc/adt/programs/programs/{name}
+    match:
+      query:
+        _action: LOCK
+      accept: application/vnd.sap.as+xml
+    action: lock
+
+  - method: POST
+    path: /sap/bc/adt/programs/programs/{name}
+    match:
+      query:
+        _action: UNLOCK
+    action: unlock
+
+  # ── ${guid}: per-request hex ID, same value in headers and body ───────────────
+  # ${guid} is generated once per request and substituted everywhere in that
+  # response — useful when the same ID must appear in a Location header and body.
+  - method: POST
+    path: /sap/bc/adt/atc/runs
+    response:
+      status: 201
+      content-type: application/xml; charset=utf-8
+      headers:
+        Location: "/sap/bc/adt/atc/worklists/${guid}"
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <atcworklist:worklistRun xmlns:atcworklist="http://www.sap.com/adt/atc/worklist">
+          <atcworklist:worklistId>${guid}</atcworklist:worklistId>
+          <atcworklist:worklistTimestamp>2026-04-02T12:00:00Z</atcworklist:worklistTimestamp>
+        </atcworklist:worklistRun>
+
+  # ── Query-param capture ───────────────────────────────────────────────────────
+  # A match.query value of the form {varname} captures the actual query-param
+  # value into ${varname} for use in response headers/body.
+  # An absent or empty param is a non-match — the fallback route fires instead.
+  - method: GET
+    path: /sap/bc/adt/repository/informationsystem/search
+    match:
+      query:
+        query: "{q}"    # captures ?query=ZTEST → ${q} == "ZTEST"
+    response:
+      content-type: application/xml; charset=utf-8
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+          <adtcore:objectReference
+            adtcore:uri="/sap/bc/adt/programs/programs/${q}"
+            adtcore:type="PROG/P"
+            adtcore:name="${q}"
+            adtcore:packageName="$TMP"
+            adtcore:description="Test program matching ${q}"/>
+        </adtcore:objectReferences>
+
+  # Fallback — no query param present (specificity 0, matched after the route above).
+  - method: GET
+    path: /sap/bc/adt/repository/informationsystem/search
+    response:
+      content-type: application/xml; charset=utf-8
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+          <adtcore:objectReference
+            adtcore:uri="/sap/bc/adt/programs/programs/ZTEST"
+            adtcore:type="PROG/P"
+            adtcore:name="ZTEST"
+            adtcore:packageName="$TMP"
+            adtcore:description="Default test program"/>
+        </adtcore:objectReferences>
+
+  # ── match.accept: vary response by Accept header (substring match) ────────────
+  # Higher-specificity route (score 1) wins when client requests v2 object structure.
+  - method: GET
+    path: /sap/bc/adt/oo/classes/{name}/objectstructure
+    match:
+      accept: application/vnd.sap.adt.objectstructure.v2+xml
+    response:
+      content-type: application/vnd.sap.adt.objectstructure.v2+xml
+      body: |
+        <?xml version="1.0" encoding="utf-8"?>
+        <adtcore:objectStructure xmlns:adtcore="http://www.sap.com/adt/core"
+          adtcore:uri="/sap/bc/adt/oo/classes/${name}"
+          adtcore:type="CLAS/OC" adtcore:name="${name}"/>
+
+  # Fallback — no Accept constraint (specificity 0).
+  - method: GET
+    path: /sap/bc/adt/oo/classes/{name}/objectstructure
+    response:
+      content-type: application/xml; charset=utf-8
+      body: |
+        <?xml version="1.0" encoding="utf-8"?>
+        <adtcore:objectStructure xmlns:adtcore="http://www.sap.com/adt/core"
+          adtcore:uri="/sap/bc/adt/oo/classes/${name}"
+          adtcore:type="CLAS/OC" adtcore:name="${name}"/>
+
+  # ── ${csrf-token}: substituted with the static compile-time constant ──────────
+  - method: HEAD
+    path: /sap/bc/adt/core/discovery
+    response:
+      headers:
+        X-CSRF-Token: "${csrf-token}"
+        Set-Cookie: "sap-contextid=testserver-session-001; Path=/; HttpOnly"
+
+# ── State seeding ──────────────────────────────────────────────────────────────
+
+# Pre-loaded ABAP sources.
+# Exact keys take precedence over {placeholder} pattern keys.
+# ${placeholder} in the value body is substituted with the matched path segment.
+sources:
+  # Exact key — returned verbatim for this specific program.
+  /sap/bc/adt/programs/programs/ZFIXTURE/source/main: |
+    REPORT zfixture.
+
+    START-OF-SELECTION.
+      WRITE: / 'Loaded from the example sources: section'.
+
+  # Pattern key — matches any program not covered by an exact key.
+  /sap/bc/adt/programs/programs/{name}/source/main: |
+    REPORT ${name}.
+
+    START-OF-SELECTION.
+      WRITE: / '${name} loaded via pattern source key'.
+
+# Pre-existing lock handles (object already locked when server starts).
+locks:
+  /sap/bc/adt/programs/programs/ZLOCKED: EXAMPLE_LOCK_HANDLE_001
+
+# Pre-configured data-preview results (exact SQL string → row set).
+datapreview:
+  "SELECT * FROM T000 WHERE MANDT = '001'":
+    - MANDT: "001"
+      MTEXT: "Test Client 001"
+      LOGSYS: "T01CLNT001"
+

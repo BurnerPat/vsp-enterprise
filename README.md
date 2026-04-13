@@ -103,7 +103,7 @@ make build
 ### Config files
 
 - `.env` for default connection values (`SAP_URL`, `SAP_USER`, `SAP_PASSWORD`, `SAP_CLIENT`, ...)
-- `.vsp.json` for named systems and permissions
+- `.vsp.json` for named systems, roles, and permissions
 
 `vsp` searches for `.vsp.json` in this order:
 
@@ -133,36 +133,73 @@ make build
 }
 ```
 
-### Hierarchical permissions
+### Role-based permissions
 
-Tool permissions can be configured at three levels:
+Permissions are managed through **roles** — named sets of tool and object access rules defined at the top level and assigned to systems. Each system lists the roles it uses, and `vsp` merges them at startup to compute the effective permissions.
 
-1. Root `permissions`
-2. `system_classes.<name>.permissions`
-3. `systems.<id>.permissions`
+#### Key concepts
 
-`tools` supports wildcard matching (`*`).
+- **Roles** are defined under `roles` in `.vsp.json`. Each role lists tool patterns and optional object-level restrictions.
+- **Systems** reference roles by name via the `roles` array. A system can combine multiple roles.
+- **Nested roles** — a role can include other roles via `nested_roles` for composition.
+- **Built-in `default` role** — when a system has no `roles` array, it receives the built-in `default` role which grants unrestricted access to all tools. You can override the `default` role by defining your own.
+- **Deny wins** — if any role explicitly disables a tool (`"enabled": false`), the tool is blocked regardless of other roles.
+- **Object restrictions** use union semantics: `allowed_objects` and `allowed_packages` from all roles are merged; `blocked_objects` from any role always blocks.
 
-- `deny_tools_by_default: true` means deny unless explicitly allowed.
-- `deny_tools_by_default: false` means allow unless explicitly denied.
+#### Tool patterns
+
+Tool patterns in roles support `*` as a wildcard:
+
+| Pattern | Matches |
+|---|---|
+| `*` | All tools |
+| `Get*` | All tools starting with `Get` |
+| `*Source*` | All tools containing `Source` |
+| `RunQuery` | Exact match |
+
+#### Tool permission fields
+
+Each tool entry in a role can specify:
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Explicitly allow (`true`) or deny (`false`). Omit to inherit. |
+| `allowed_packages` | `string[]` | Only allow operations on objects in these packages (glob patterns). |
+| `allowed_objects` | `string[]` | Only allow operations on these objects (glob patterns). |
+| `blocked_objects` | `string[]` | Block operations on these objects (glob patterns, deny wins). |
+
+#### Example `.vsp.json` with roles
 
 ```json
 {
   "default": "dev",
-  "permissions": {
-    "deny_tools_by_default": true,
-    "tools": {
-      "Get*": true,
-      "GetSystemInfo": true
-    }
-  },
-  "system_classes": {
-    "dev_test": {
-      "permissions": {
-        "deny_tools_by_default": false,
-        "tools": {
-          "Delete*": false,
-          "Write*": true
+  "roles": {
+    "reader": {
+      "description": "Read-only access to ABAP sources",
+      "tools": {
+        "Get*": {},
+        "Search*": {},
+        "List*": {}
+      }
+    },
+    "developer": {
+      "description": "Full development access with package restrictions",
+      "nested_roles": ["reader"],
+      "tools": {
+        "Write*": { "allowed_packages": ["Z*", "Y*"] },
+        "Create*": { "allowed_packages": ["Z*", "Y*"] },
+        "Delete*": { "enabled": false },
+        "Activate*": {},
+        "Run*": {}
+      }
+    },
+    "prod_auditor": {
+      "description": "Production read-only with sensitive table protection",
+      "tools": {
+        "Get*": {},
+        "Search*": {},
+        "DataPreview": {
+          "blocked_objects": ["USR*", "T000", "RFCDES"]
         }
       }
     }
@@ -172,24 +209,21 @@ Tool permissions can be configured at three levels:
       "url": "https://sap-dev.example.com:44300",
       "user": "DEVELOPER",
       "client": "001",
-      "system_class": "dev_test"
+      "roles": ["developer"]
     },
     "prod": {
       "url": "https://sap-prod.example.com:44300",
       "user": "READONLY",
       "client": "100",
-      "permissions": {
-        "deny_tools_by_default": true,
-        "tools": {
-          "Get*": true,
-          "Write*": false,
-          "Delete*": false
-        }
-      }
+      "roles": ["prod_auditor"]
     }
   }
 }
 ```
+
+#### Discovery
+
+Use the `ListAvailableTools` meta-tool (always available, bypasses permissions) to inspect what each system can access. The response includes enabled tools and any object-level restrictions per system.
 
 For per-system passwords with named systems, use environment variables such as `VSP_DEV_PASSWORD`.
 

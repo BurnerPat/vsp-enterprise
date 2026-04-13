@@ -158,7 +158,7 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 			if name == cfg.DefaultSystem {
 				marker = " (default)"
 			}
-			fmt.Printf("    %s: %s [%s@%s] pwd:%s%s\n", name, sys.URL, sys.User, sys.Client, pwdStatus, marker)
+			fmt.Printf("    %s: %s [%s@%s] pwd:%s%s\n", name, sys.URL, sys.Username, sys.Client, pwdStatus, marker)
 		}
 	}
 
@@ -283,7 +283,7 @@ func runMcpToVsp(_ *cobra.Command, _ []string) error {
 		if sys.Password != "" {
 			pwdInfo = " (pwd:imported)"
 		}
-		fmt.Printf("  %s %s: %s [%s@%s]%s\n", action, sysName, sys.URL, sys.User, sys.Client, pwdInfo)
+		fmt.Printf("  %s %s: %s [%s@%s]%s\n", action, sysName, sys.URL, sys.Username, sys.Client, pwdInfo)
 		imported++
 
 		// Set first system as default if none set
@@ -327,7 +327,7 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 			case "--url", "-u":
 				sys.URL = val
 			case "--user":
-				sys.User = val
+				sys.Username = val
 			case "--client":
 				sys.Client = val
 			case "--language":
@@ -358,7 +358,7 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 				sys.Insecure = true
 				continue // insecure is a flag, not key-value
 			case "--read-only":
-				sys.Permissions.ReadOnly = true
+				cfg.ReadOnly = true
 				continue
 			}
 		}
@@ -368,7 +368,7 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 			case "--insecure":
 				sys.Insecure = true
 			case "--read-only":
-				sys.Permissions.ReadOnly = true
+				cfg.ReadOnly = true
 			}
 		}
 	}
@@ -380,9 +380,9 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 				sys.URL = url
 			}
 		}
-		if sys.User == "" {
+		if sys.Username == "" {
 			if user, ok := env["SAP_USER"].(string); ok {
-				sys.User = user
+				sys.Username = user
 			}
 		}
 		// Import password from env block (if it's a real value, not a placeholder)
@@ -531,8 +531,8 @@ func runVspToMcp(_ *cobra.Command, _ []string) error {
 			serverArgs = append(serverArgs, "--cookie-file", sys.CookieFile)
 		} else if sys.CookieString != "" {
 			serverArgs = append(serverArgs, "--cookie-string", sys.CookieString)
-		} else if sys.User != "" {
-			serverArgs = append(serverArgs, "--user", sys.User)
+		} else if sys.Username != "" {
+			serverArgs = append(serverArgs, "--user", sys.Username)
 		}
 
 		serverArgs = append(serverArgs, "--client", sys.Client)
@@ -540,11 +540,11 @@ func runVspToMcp(_ *cobra.Command, _ []string) error {
 		if sys.Insecure {
 			serverArgs = append(serverArgs, "--insecure")
 		}
-		if sys.Permissions.ReadOnly {
+		if cfg.ReadOnly {
 			serverArgs = append(serverArgs, "--read-only")
 		}
-		if len(sys.Permissions.AllowedPackages) > 0 {
-			serverArgs = append(serverArgs, "--allowed-packages", strings.Join(sys.Permissions.AllowedPackages, ","))
+		if len(cfg.AllowedPackages) > 0 {
+			serverArgs = append(serverArgs, "--allowed-packages", strings.Join(cfg.AllowedPackages, ","))
 		}
 
 		// Build env block - only add password placeholder if using user auth
@@ -567,7 +567,7 @@ func runVspToMcp(_ *cobra.Command, _ []string) error {
 		}
 
 		servers[serverName] = server
-		fmt.Printf("  %s %s: %s [%s]\n", action, serverName, sys.URL, sys.User)
+		fmt.Printf("  %s %s: %s [%s]\n", action, serverName, sys.URL, sys.Username)
 		exported++
 	}
 
@@ -977,7 +977,7 @@ var vspSystemsExample = func() string {
 			"dev": {
 				ConnectionConfig: config.ConnectionConfig{
 					URL:      "http://dev-sap.example.com:50000",
-					User:     "DEVELOPER",
+					Username: "DEVELOPER",
 					Client:   "001",
 					Language: "EN",
 				},
@@ -985,26 +985,23 @@ var vspSystemsExample = func() string {
 			"a4h": {
 				ConnectionConfig: config.ConnectionConfig{
 					URL:      "http://a4h.local:50000",
-					User:     "ADMIN",
+					Username: "ADMIN",
 					Client:   "001",
 					Insecure: true,
 				},
 			},
 			"prod": {
 				ConnectionConfig: config.ConnectionConfig{
-					URL:    "https://prod-sap.example.com:44300",
-					User:   "READONLY",
-					Client: "100",
+					URL:      "https://prod-sap.example.com:44300",
+					Username: "READONLY",
+					Client:   "100",
 				},
-				Permissions: config.PermissionConfig{
-					ReadOnly:        true,
-					AllowedPackages: []string{"Z*", "Y*"},
-				},
+				Roles: []string{"read_only"},
 			},
 			"rfc-direct": {
 				ConnectionConfig: config.ConnectionConfig{
-					User:   "RFC_USER",
-					Client: "001",
+					Username: "RFC_USER",
+					Client:   "001",
 				},
 				RfcConfig: config.RfcConfig{
 					ConnectionMode: "rfc",

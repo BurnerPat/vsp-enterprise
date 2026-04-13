@@ -268,9 +268,9 @@ func fillSystemLogonDataFromEnvOrConfig(name string, sys *config.SystemConfig) e
 
 	// Default username to OS login name if not set by any source.
 	// Skip when using browser-based or cookie-based auth (no username needed).
-	if sys.User == "" && !sys.BrowserAuth && sys.CookieFile == "" && sys.CookieString == "" {
+	if sys.Username == "" && !sys.BrowserAuth && sys.CookieFile == "" && sys.CookieString == "" {
 		if osUser := resolveOSUsername(); osUser != "" {
-			sys.User = osUser
+			sys.Username = osUser
 		}
 	}
 

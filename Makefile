@@ -51,6 +51,12 @@ build: ## Build the binary for current platform
 	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)
 	@echo "Built: $(BUILD_DIR)/$(BINARY_NAME)"
 
+build-testserver: ## Build the testserver
+	@mkdir -p $(BUILD_DIR)
+	@cd testserver
+	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/testserver ./
+	@echo "Built: $(BUILD_DIR)/testserver"
+
 build-all: ## Build for common platforms (linux-amd64, darwin-arm64, windows-amd64) + local ./build/vsp
 	@mkdir -p $(BUILD_DIR)
 	@for platform in $(PLATFORMS_COMMON); do \

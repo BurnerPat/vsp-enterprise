@@ -1,0 +1,55 @@
+{
+  "roles": {
+    "default": {
+      "tools": {
+        "Get*": {},
+        "Search*": {},
+        "List*": {}
+      }
+    },
+    "cloud": {
+      "tools": {
+        "GetTableContents": {
+          "blocked_objects": [
+            "*"
+          ],
+          "allowed_objects": [
+            "Z*"
+          ]
+        }
+      }
+    }
+  },
+  "systems": {
+    "dev": {
+      "url": "http://localhost:3000",
+      "username": "developer",
+      "password": "secret",
+      "client": "001",
+      "roles": [
+        "default",
+        "cloud"
+      ]
+    },
+    "test": {
+      "url": "http://localhost:3000",
+      "username": "developer",
+      "password": "secret",
+      "client": "001",
+      "roles": [
+        "default",
+        "cloud"
+      ]
+    },
+    "prod": {
+      "url": "http://localhost:3000",
+      "username": "developer",
+      "password": "secret",
+      "client": "001",
+      "roles": [
+        "default",
+        "cloud"
+      ]
+    }
+  }
+}

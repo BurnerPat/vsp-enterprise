@@ -1,0 +1,76 @@
+routes:
+  # Short dumps list (Atom feed).
+  - method: GET
+    path: /sap/bc/adt/runtime/dumps
+    response:
+      content-type: application/atom+xml; charset=utf-8
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <title>Runtime Errors</title>
+          <entry>
+            <id>/sap/bc/adt/vit/runtime/dumps/TST001</id>
+            <title>COMPUTE_INT_ZERODIVIDE</title>
+            <updated>2026-04-02T10:00:00Z</updated>
+            <link href="/sap/bc/adt/vit/runtime/dumps/TST001"/>
+            <category term="ABAP"/>
+            <content type="application/xml">
+              <source program="ZTEST_PROGRAM" include="" line="42"/>
+              <exception type="CX_SY_ZERODIVIDE"/>
+              <runtime user="DEVELOPER" client="001" host="testserver"/>
+            </content>
+          </entry>
+        </feed>
+
+  # Single dump detail — ${id} echoed from the path.
+  - method: GET
+    path: /sap/bc/adt/runtime/dump/{id}
+    response:
+      content-type: text/html; charset=utf-8
+      body: |
+        <html><head><title>Runtime Error ${id}</title></head>
+        <body>
+        <h1>Runtime Error: COMPUTE_INT_ZERODIVIDE</h1>
+        <p>Program: ZTEST_PROGRAM, Line: 42</p>
+        <p>Error ID: ${id}</p>
+        </body></html>
+
+  # ABAP traces list (Atom feed).
+  - method: GET
+    path: /sap/bc/adt/runtime/traces/abaptraces
+    response:
+      content-type: application/atom+xml; charset=utf-8
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <title>ABAP Traces</title>
+          <entry>
+            <id>TS_TRACE_001</id>
+            <title>Trace 2026-04-02 10:00:00</title>
+            <updated>2026-04-02T10:00:00Z</updated>
+            <link href="/sap/bc/adt/runtime/traces/abaptraces/TS_TRACE_001"/>
+            <author><name>DEVELOPER</name></author>
+            <content type="application/xml">
+              <trace startTime="2026-04-02T10:00:00Z" endTime="2026-04-02T10:00:01Z"
+                     duration="1000000" processType="DIALOG" objectType="PROG/P" status="finished"/>
+            </content>
+          </entry>
+        </feed>
+
+  # Trace analysis — ${id} and ${toolType} echoed from path segments.
+  - method: GET
+    path: /sap/bc/adt/runtime/traces/abaptraces/{id}/{toolType}
+    response:
+      content-type: application/xml; charset=utf-8
+      body: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <traceAnalysis xmlns="http://www.sap.com/adt/runtime/trace"
+                       traceId="${id}" toolType="${toolType}" totalTime="1000000" totalCalls="42">
+          <entries>
+            <entry program="ZTEST_PROGRAM" event="MODULE" line="10"
+                   grossTime="500000" netTime="400000" calls="1" percentage="50.0"/>
+            <entry program="ZTEST_PROGRAM" event="PERFORM" line="25"
+                   grossTime="200000" netTime="200000" calls="5" percentage="20.0"/>
+          </entries>
+        </traceAnalysis>
+

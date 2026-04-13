@@ -124,7 +124,7 @@ func (s *System) Shutdown() error {
 func (s *System) ensureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult {
 	if s.amdpWSClient == nil || !s.amdpWSClient.IsConnected() {
 		s.amdpWSClient = adt.NewAMDPWebSocketClient(
-			s.config.URL, s.config.Client, s.config.User, s.config.Password, s.config.Insecure,
+			s.config.URL, s.config.Client, s.config.Username, s.config.Password, s.config.Insecure,
 		)
 		if err := s.amdpWSClient.Connect(ctx); err != nil {
 			s.amdpWSClient = nil
@@ -163,7 +163,7 @@ func newSystemInstance(cfg config.SystemConfig, cookies map[string]string) (*Sys
 	if globalCfg.TerminalID != "" {
 		adt.SetTerminalID(globalCfg.TerminalID)
 	}
-	adt.SetTerminalIDUser(cfg.User)
+	adt.SetTerminalIDUser(cfg.Username)
 
 	featureConfig := cfg.BuildFeatureConfig()
 
@@ -190,12 +190,12 @@ func createADTClient(cfg *config.SystemConfig, opts []adt.Option) (*adt.Client, 
 	if strings.EqualFold(cfg.ConnectionMode, "rfc") {
 		return createRFCADTClient(cfg, opts)
 	}
-	return adt.NewClient(cfg.URL, cfg.User, cfg.Password, opts...), nil, nil
+	return adt.NewClient(cfg.URL, cfg.Username, cfg.Password, opts...), nil, nil
 }
 
 // createRFCADTClient creates an ADT client using RFC mode with a JCo sidecar.
 func createRFCADTClient(cfg *config.SystemConfig, opts []adt.Option) (*adt.Client, *adt.SidecarManager, error) {
-	adtCfg := adt.NewConfig("", cfg.User, cfg.Password, opts...)
+	adtCfg := adt.NewConfig("", cfg.Username, cfg.Password, opts...)
 
 	sidecarCfg := cfg.BuildSidecarConfig()
 	sidecar := adt.NewSidecarManager(sidecarCfg)
