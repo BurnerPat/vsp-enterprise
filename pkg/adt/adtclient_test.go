@@ -1,0 +1,253 @@
+package adt
+
+import (
+	"context"
+	"net/http"
+	"testing"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/transport"
+)
+
+// --------------------------------------------------------------------------
+// mockAdtConnection implements transport.AdtConnection for testing.
+// --------------------------------------------------------------------------
+
+type mockAdtConnection struct {
+	sendFn  func(ctx context.Context, req *transport.AdtRequest) (*transport.AdtResponse, error)
+	pingErr error
+	closed  bool
+}
+
+func (m *mockAdtConnection) SendRequest(ctx context.Context, req *transport.AdtRequest) (*transport.AdtResponse, error) {
+	if m.sendFn != nil {
+		return m.sendFn(ctx, req)
+	}
+	return transport.NewAdtResponseFromMap(200, nil, []byte("mock")), nil
+}
+func (m *mockAdtConnection) Ping(_ context.Context) error { return m.pingErr }
+func (m *mockAdtConnection) Close() error                 { m.closed = true; return nil }
+
+// --------------------------------------------------------------------------
+// AdtClient interface tests via NewClientWithConnection
+// --------------------------------------------------------------------------
+
+func TestNewClientWithConnection_ImplementsAdtClient(t *testing.T) {
+	cfg := NewConfig("https://sap.example.com", "user", "pass")
+	conn := &mockAdtConnection{}
+
+	var client AdtClient = NewClientWithConnection(cfg, conn)
+	if client == nil {
+		t.Fatal("NewClientWithConnection returned nil")
+	}
+}
+
+func TestClient_SendRequest_ViaNativeConnection(t *testing.T) {
+	cfg := NewConfig("https://sap.example.com", "user", "pass")
+	conn := &mockAdtConnection{
+		sendFn: func(_ context.Context, req *transport.AdtRequest) (*transport.AdtResponse, error) {
+			return transport.NewAdtResponseFromMap(200, nil, []byte("native-response")), nil
+		},
+	}
+	client := NewClientWithConnection(cfg, conn)
+
+	resp, err := client.SendRequest(context.Background(), &transport.AdtRequest{
+		Path:   "/sap/bc/adt/test",
+		Method: http.MethodGet,
+	})
+	if err != nil {
+		t.Fatalf("SendRequest: %v", err)
+	}
+	if string(resp.Body) != "native-response" {
+		t.Errorf("Body = %q, want native-response", string(resp.Body))
+	}
+}
+
+func TestClient_Close_ClosesConnection(t *testing.T) {
+	cfg := NewConfig("https://sap.example.com", "user", "pass")
+	conn := &mockAdtConnection{}
+	client := NewClientWithConnection(cfg, conn)
+
+	if err := client.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if !conn.closed {
+		t.Error("Close should have called connection.Close()")
+	}
+}
+
+func TestClient_Connect_PingsConnection(t *testing.T) {
+	cfg := NewConfig("https://sap.example.com", "user", "pass")
+	conn := &mockAdtConnection{}
+	client := NewClientWithConnection(cfg, conn)
+
+	if err := client.Connect(context.Background()); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+}
+
+func TestClient_ServiceAccessors_ReturnNonNil(t *testing.T) {
+	cfg := NewConfig("https://sap.example.com", "user", "pass")
+	conn := &mockAdtConnection{}
+	client := NewClientWithConnection(cfg, conn)
+
+	if client.Source() == nil {
+		t.Error("Source() should not return nil")
+	}
+	if client.System() == nil {
+		t.Error("System() should not return nil")
+	}
+	if client.DevTools() == nil {
+		t.Error("DevTools() should not return nil")
+	}
+	if client.Crud() == nil {
+		t.Error("Crud() should not return nil")
+	}
+	if client.CodeIntel() == nil {
+		t.Error("CodeIntel() should not return nil")
+	}
+	if client.Debugger() == nil {
+		t.Error("Debugger() should not return nil")
+	}
+	if client.Transport() == nil {
+		t.Error("Transport() should not return nil")
+	}
+	if client.Analysis() == nil {
+		t.Error("Analysis() should not return nil")
+	}
+	if client.Trace() == nil {
+		t.Error("Trace() should not return nil")
+	}
+	if client.UI5() == nil {
+		t.Error("UI5() should not return nil")
+	}
+	if client.Workflow() == nil {
+		t.Error("Workflow() should not return nil")
+	}
+}
+
+func TestClient_ServiceAccessors_AreLazyAndCached(t *testing.T) {
+	cfg := NewConfig("https://sap.example.com", "user", "pass")
+	conn := &mockAdtConnection{}
+	client := NewClientWithConnection(cfg, conn)
+
+	// First call initializes.
+	src1 := client.Source()
+	// Second call should return the same instance.
+	src2 := client.Source()
+	if src1 != src2 {
+		t.Error("Source() should return the same cached instance")
+	}
+}
+
+func TestClient_GetConfig(t *testing.T) {
+	cfg := NewConfig("https://sap.example.com", "user", "pass", WithClient("100"))
+	client := NewClientWithConnection(cfg, &mockAdtConnection{})
+
+	if client.GetConfig().Client != "100" {
+		t.Errorf("GetConfig().Client = %q, want 100", client.GetConfig().Client)
+	}
+}
+
+func TestClient_Connection(t *testing.T) {
+	conn := &mockAdtConnection{}
+	client := NewClientWithConnection(NewConfig("https://sap.example.com", "user", "pass"), conn)
+
+	if client.Connection() != conn {
+		t.Error("Connection() should return the injected connection")
+	}
+}
+
+// --------------------------------------------------------------------------
+// Legacy Client (NewClient) still works — backward compatibility
+// --------------------------------------------------------------------------
+
+func TestClient_LegacyClient_SendRequest(t *testing.T) {
+	// Legacy client created without an AdtConnection should still support SendRequest
+	// via the legacy Requester path.
+	cfg := NewConfig("https://sap.example.com", "user", "pass")
+	mockHTTP := &mockTransportClient{
+		responses: map[string]*http.Response{
+			"/sap/bc/adt/test": newTestResponse("legacy-body"),
+		},
+	}
+	legacyTransport := NewTransportWithClient(cfg, mockHTTP)
+	client := NewClientWithTransport(cfg, legacyTransport)
+
+	// SendRequest should work through the legacy fallback path.
+	resp, err := client.SendRequest(context.Background(), &transport.AdtRequest{
+		Path:   "/sap/bc/adt/test",
+		Method: http.MethodGet,
+	})
+	if err != nil {
+		t.Fatalf("SendRequest on legacy client: %v", err)
+	}
+	if string(resp.Body) != "legacy-body" {
+		t.Errorf("Body = %q, want legacy-body", string(resp.Body))
+	}
+}
+
+func TestClient_LegacyClient_ConnectionIsNil(t *testing.T) {
+	client := NewClient("https://sap.example.com", "user", "pass")
+	if client.Connection() != nil {
+		t.Error("Legacy client should have nil Connection()")
+	}
+}
+
+// --------------------------------------------------------------------------
+// connectionRequesterAdapter tests
+// --------------------------------------------------------------------------
+
+func TestConnectionRequesterAdapter_BridgesNewToLegacy(t *testing.T) {
+	conn := &mockAdtConnection{
+		sendFn: func(_ context.Context, req *transport.AdtRequest) (*transport.AdtResponse, error) {
+			return transport.NewAdtResponseFromMap(200, map[string]string{
+				"X-Custom": "header-val",
+			}, []byte("bridged")), nil
+		},
+	}
+	client := NewClientWithConnection(NewConfig("https://sap.example.com", "user", "pass"), conn)
+
+	// Use legacy path (c.transport.Request) by calling an existing Client method
+	// that hasn't been migrated yet.
+	source, err := client.GetProgram(context.Background(), "ZTEST")
+	if err != nil {
+		t.Fatalf("GetProgram via bridge: %v", err)
+	}
+	if source != "bridged" {
+		t.Errorf("source = %q, want bridged", source)
+	}
+}
+
+// --------------------------------------------------------------------------
+// SafetyChecker adapter
+// --------------------------------------------------------------------------
+
+func TestSafetyCheckerAdapter(t *testing.T) {
+	cfg := SafetyConfig{
+		ReadOnly:     true,
+		BlockFreeSQL: true,
+	}
+	checker := NewSafetyChecker(&cfg)
+
+	// Read should be allowed even in read-only mode.
+	if err := checker.CheckOp('R', "read"); err != nil {
+		t.Errorf("read should be allowed: %v", err)
+	}
+
+	// Create should be blocked in read-only mode.
+	if err := checker.CheckOp('C', "create"); err == nil {
+		t.Error("create should be blocked in read-only mode")
+	}
+
+	// Free SQL should be blocked.
+	if err := checker.CheckOp('F', "RunQuery"); err == nil {
+		t.Error("free SQL should be blocked")
+	}
+}
+
+func TestSafetyCheckerAdapter_NilConfig(t *testing.T) {
+	checker := NewSafetyChecker(nil)
+	if err := checker.CheckOp('C', "test"); err != nil {
+		t.Errorf("nil config should return NoopSafety: %v", err)
+	}
+}

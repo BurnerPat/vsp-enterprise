@@ -148,7 +148,7 @@ func TestSystemConfigJSONRoundTrip(t *testing.T) {
 		t.Fatalf("Unmarshal dev system failed: %v", err)
 	}
 	// These must be flat JSON keys, not nested under ConnectionConfig etc.
-	for _, key := range []string{"url", "user", "password", "client", "language", "insecure", "browser_auth", "browser_auth_timeout", "verbose"} {
+	for _, key := range []string{"url", "username", "password", "client", "language", "insecure", "browser_auth", "browser_auth_timeout", "verbose"} {
 		if _, ok := devMap[key]; !ok {
 			t.Errorf("expected flat key %q in dev system JSON, got keys: %v", key, keysOf(devMap))
 		}
