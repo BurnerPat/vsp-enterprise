@@ -102,3 +102,69 @@ func TestBrowserLogin_InvalidURL(t *testing.T) {
 		t.Error("expected error for invalid URL")
 	}
 }
+
+func TestBuildBrowserAuthTargetURL(t *testing.T) {
+	base := "https://sap.example.com:44300"
+
+	t.Run("default target", func(t *testing.T) {
+		got, err := buildBrowserAuthTargetURL(base, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := "https://sap.example.com:44300/sap/bc/adt/"
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("absolute path override", func(t *testing.T) {
+		got, err := buildBrowserAuthTargetURL(base, "/sap/public/ping")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := "https://sap.example.com:44300/sap/public/ping"
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("root path override", func(t *testing.T) {
+		got, err := buildBrowserAuthTargetURL(base, "/")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := "https://sap.example.com:44300/"
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("relative path override", func(t *testing.T) {
+		got, err := buildBrowserAuthTargetURL(base, "sap/public/ping")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := "https://sap.example.com:44300/sap/public/ping"
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("absolute URL override", func(t *testing.T) {
+		got, err := buildBrowserAuthTargetURL(base, "https://idp.example.com/login")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := "https://idp.example.com/login"
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("invalid override URL", func(t *testing.T) {
+		_, err := buildBrowserAuthTargetURL(base, "https://")
+		if err == nil {
+			t.Fatal("expected error for invalid override URL")
+		}
+	})
+}

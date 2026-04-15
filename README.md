@@ -80,6 +80,31 @@ make build
 ./build/vsp --multi-system
 ```
 
+### Authentication methods
+
+`vsp` supports multiple authentication flows, depending on connection mode and enterprise setup:
+
+- **Username/password (HTTP ADT)** for standard Basic auth.
+- **Cookie auth (HTTP ADT)** using either `--cookie-file` (Netscape format) or `--cookie-string`.
+- **Browser-based SSO (HTTP ADT)** via `--browser-auth` for Kerberos/SAML/Keycloak flows; by default it opens `URL + /sap/bc/adt/`, and you can override the target with `--browser-auth-url` or `SAP_BROWSER_AUTH_URL`.
+- **SNC/SSO (RFC mode)** using `--connection-mode rfc --snc --sysid <SID>` with SAP UI Landscape/JCo settings.
+
+Examples:
+
+```bash
+# 1) Username/password (HTTP ADT)
+./build/vsp --url https://sap-host:44300 --user DEVELOPER --password secret --client 001
+
+# 2) Cookie file (HTTP ADT)
+./build/vsp --url https://sap-host:44300 --cookie-file ./cookies.txt
+
+# 3) Browser SSO with custom login target (HTTP ADT)
+./build/vsp --url https://sap-host:44300 --browser-auth --browser-auth-url /sap/bc/ui2/flp
+
+# 4) SNC/SSO (RFC mode)
+./build/vsp --connection-mode rfc --snc --sysid QAS --client 200
+```
+
 ### Useful CLI utilities
 
 ```bash

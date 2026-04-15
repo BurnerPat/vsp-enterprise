@@ -118,6 +118,7 @@ func init() {
 	rootCmd.Flags().Bool("browser-auth", false, "Open browser for SSO login (Kerberos, SAML, Keycloak)")
 	rootCmd.Flags().Duration("browser-auth-timeout", 120*time.Second, "Timeout for browser-based SSO login")
 	rootCmd.Flags().String("browser-exec", "", "Path to Chromium-based browser (default: auto-detect Edge, Chrome, Chromium)")
+	rootCmd.Flags().String("browser-auth-url", "", "Override browser login URL (absolute URL or path appended to --url); default: /sap/bc/adt/")
 	rootCmd.Flags().String("cookie-save", "", "Save browser auth cookies to file for reuse with --cookie-file")
 
 	// Session keep-alive
@@ -189,6 +190,7 @@ func init() {
 	_ = viper.BindPFlag("browser-auth", rootCmd.Flags().Lookup("browser-auth"))
 	_ = viper.BindPFlag("browser-auth-timeout", rootCmd.Flags().Lookup("browser-auth-timeout"))
 	_ = viper.BindPFlag("browser-exec", rootCmd.Flags().Lookup("browser-exec"))
+	_ = viper.BindPFlag("browser-auth-url", rootCmd.Flags().Lookup("browser-auth-url"))
 	_ = viper.BindPFlag("cookie-save", rootCmd.Flags().Lookup("cookie-save"))
 	_ = viper.BindPFlag("keepalive", rootCmd.Flags().Lookup("keepalive"))
 	_ = viper.BindPFlag("read-only", rootCmd.Flags().Lookup("read-only"))
@@ -305,15 +307,15 @@ func runServer(cmd *cobra.Command, _ []string) error {
 // processBrowserAuthSingleSystem handles browser-based SSO authentication for single-system mode.
 // This runs after Bootstrap and updates the config's single system with cookies.
 func processBrowserAuthSingleSystem(cmd *cobra.Command) error {
-	browserAuth, _ := cmd.Flags().GetBool("browser-auth")
-	if !browserAuth && !viper.GetBool("BROWSER_AUTH") {
-		return nil
-	}
-
 	// Get the single system from cfg.Systems["default"]
 	sys, ok := cfg.Systems[config.DefaultSystemID]
 	if !ok {
 		return fmt.Errorf("internal error: default system not found")
+	}
+
+	browserAuth, _ := cmd.Flags().GetBool("browser-auth")
+	if !browserAuth && !viper.GetBool("BROWSER_AUTH") && !sys.BrowserAuth {
+		return nil
 	}
 
 	if sys.URL == "" {
@@ -321,19 +323,33 @@ func processBrowserAuthSingleSystem(cmd *cobra.Command) error {
 	}
 
 	// Determine timeout
-	timeout, _ := cmd.Flags().GetDuration("browser-auth-timeout")
-	if !cmd.Flags().Changed("browser-auth-timeout") {
-		if v := viper.GetString("BROWSER_AUTH_TIMEOUT"); v != "" {
-			if d, err := time.ParseDuration(v); err == nil {
-				timeout = d
-			}
+	timeout := 120 * time.Second
+	if sys.BrowserAuthTimeout != "" {
+		if d, err := time.ParseDuration(sys.BrowserAuthTimeout); err == nil {
+			timeout = d
+		}
+	}
+	if cmd.Flags().Changed("browser-auth-timeout") {
+		timeout, _ = cmd.Flags().GetDuration("browser-auth-timeout")
+	} else if v := viper.GetString("BROWSER_AUTH_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			timeout = d
 		}
 	}
 
 	// Determine browser executable
-	browserExec, _ := cmd.Flags().GetString("browser-exec")
-	if browserExec == "" {
-		browserExec = viper.GetString("BROWSER_EXEC")
+	browserExec := sys.BrowserExec
+	if cmd.Flags().Changed("browser-exec") {
+		browserExec, _ = cmd.Flags().GetString("browser-exec")
+	} else if v := viper.GetString("BROWSER_EXEC"); v != "" {
+		browserExec = v
+	}
+
+	browserAuthURL := sys.BrowserAuthURL
+	if cmd.Flags().Changed("browser-auth-url") {
+		browserAuthURL, _ = cmd.Flags().GetString("browser-auth-url")
+	} else if v := viper.GetString("BROWSER_AUTH_URL"); v != "" {
+		browserAuthURL = v
 	}
 
 	if cfg.Verbose {
@@ -341,7 +357,7 @@ func processBrowserAuthSingleSystem(cmd *cobra.Command) error {
 	}
 
 	ctx := context.Background()
-	cookies, err := adt.BrowserLogin(ctx, sys.URL, sys.Insecure, timeout, browserExec, cfg.Verbose)
+	cookies, err := adt.BrowserLoginWithTarget(ctx, sys.URL, browserAuthURL, sys.Insecure, timeout, browserExec, cfg.Verbose)
 	if err != nil {
 		return fmt.Errorf("browser authentication failed: %w", err)
 	}
@@ -349,9 +365,11 @@ func processBrowserAuthSingleSystem(cmd *cobra.Command) error {
 	runtimeCookies[config.DefaultSystemID] = cookies
 
 	// Save cookies to file if requested
-	cookieSave, _ := cmd.Flags().GetString("cookie-save")
-	if cookieSave == "" {
-		cookieSave = viper.GetString("COOKIE_SAVE")
+	cookieSave := sys.CookieSave
+	if cmd.Flags().Changed("cookie-save") {
+		cookieSave, _ = cmd.Flags().GetString("cookie-save")
+	} else if v := viper.GetString("COOKIE_SAVE"); v != "" {
+		cookieSave = v
 	}
 	if cookieSave != "" {
 		if err := adt.SaveCookiesToFile(cookies, sys.URL, cookieSave); err != nil {

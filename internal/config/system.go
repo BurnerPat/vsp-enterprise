@@ -27,6 +27,7 @@ type BrowserAuthConfig struct {
 	BrowserAuth        bool   `json:"browser_auth,omitempty"`         // Enable SSO login via browser
 	BrowserAuthTimeout string `json:"browser_auth_timeout,omitempty"` // Timeout for browser login (e.g. "120s")
 	BrowserExec        string `json:"browser_exec,omitempty"`         // Path to Chromium browser (auto-detect if empty)
+	BrowserAuthURL     string `json:"browser_auth_url,omitempty"`     // Override login URL (absolute URL or path appended to url)
 	CookieSave         string `json:"cookie_save,omitempty"`          // Save browser cookies to file for reuse
 }
 

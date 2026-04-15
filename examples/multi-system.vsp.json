@@ -6,6 +6,7 @@
       "language": "EN",
       "browser_auth": true,
       "browser_auth_timeout": "120s",
+      "browser_auth_url": "/sap/bc/ui2/flp",
       "cookie_save": "dev-cookies.txt"
     },
     "QAS": {

@@ -97,6 +97,42 @@ func friendlyBrowserName(path string) string {
 	}
 }
 
+// buildBrowserAuthTargetURL resolves the browser navigation target.
+// Default behavior is to append /sap/bc/adt/ to sapURL for backward compatibility.
+func buildBrowserAuthTargetURL(sapURL, override string) (string, error) {
+	u, err := url.Parse(sapURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid SAP URL: %w", err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return "", fmt.Errorf("invalid SAP URL (missing scheme or host): %s", sapURL)
+	}
+
+	baseURL := strings.TrimRight(sapURL, "/")
+	override = strings.TrimSpace(override)
+	if override == "" {
+		return baseURL + "/sap/bc/adt/", nil
+	}
+
+	parsed, err := url.Parse(override)
+	if err != nil {
+		return "", fmt.Errorf("invalid browser auth URL override: %w", err)
+	}
+
+	if parsed.IsAbs() {
+		if parsed.Host == "" {
+			return "", fmt.Errorf("invalid browser auth URL override (missing host): %s", override)
+		}
+		return parsed.String(), nil
+	}
+
+	if strings.HasPrefix(override, "/") {
+		return baseURL + override, nil
+	}
+
+	return baseURL + "/" + override, nil
+}
+
 // BrowserLogin opens a headed browser window to the SAP system URL, waits for
 // SSO authentication to complete (Kerberos/SPNEGO, Keycloak, SAML, etc.),
 // and returns the session cookies.
@@ -114,6 +150,12 @@ func friendlyBrowserName(path string) string {
 // browser process exits unexpectedly (common in MCP host environments like VS Code
 // that manage child process lifecycles).
 func BrowserLogin(ctx context.Context, sapURL string, insecure bool, timeout time.Duration, execPath string, verbose bool) (map[string]string, error) {
+	return BrowserLoginWithTarget(ctx, sapURL, "", insecure, timeout, execPath, verbose)
+}
+
+// BrowserLoginWithTarget behaves like BrowserLogin but allows overriding
+// the browser navigation target URL (absolute URL or URL path).
+func BrowserLoginWithTarget(ctx context.Context, sapURL, targetOverride string, insecure bool, timeout time.Duration, execPath string, verbose bool) (map[string]string, error) {
 	u, err := url.Parse(sapURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid SAP URL: %w", err)
@@ -126,7 +168,10 @@ func BrowserLogin(ctx context.Context, sapURL string, insecure bool, timeout tim
 	// We use the ADT root which returns an HTML page after auth.
 	// The /sap/bc/adt/core/discovery endpoint returns XML which browsers
 	// try to download as a file, breaking the flow.
-	targetURL := strings.TrimRight(sapURL, "/") + "/sap/bc/adt/"
+	targetURL, err := buildBrowserAuthTargetURL(sapURL, targetOverride)
+	if err != nil {
+		return nil, err
+	}
 
 	// Determine which browser to use
 	browserName := "browser"
