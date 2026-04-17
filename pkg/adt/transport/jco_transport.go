@@ -1,12 +1,9 @@
 package transport
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 )
 
 // JcoTransport is the low-level transport interface for communicating with the
@@ -20,64 +17,6 @@ type JcoTransport interface {
 	// Close releases resources held by the transport.
 	Close() error
 }
-
-// --------------------------------------------------------------------------
-// AdtJcoHttpTransport
-// --------------------------------------------------------------------------
-
-// JcoHttpTransport implements JcoTransport by POSTing JSON to the
-// sidecar's /rfc-proxy HTTP endpoint.
-type JcoHttpTransport struct {
-	sidecarURL string
-	httpClient *http.Client
-}
-
-var _ JcoTransport = (*JcoHttpTransport)(nil)
-
-// NewJcoHttpTransport creates a transport that sends requests to the sidecar over HTTP.
-func NewJcoHttpTransport(sidecarURL string) *JcoHttpTransport {
-	return &JcoHttpTransport{
-		sidecarURL: sidecarURL,
-		httpClient: &http.Client{}, // no hard timeout — context deadline controls per-request
-	}
-}
-
-func (t *JcoHttpTransport) Send(ctx context.Context, req *ProxyRequest) (*ProxyResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling proxy request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.sidecarURL+"/rfc-proxy", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("creating sidecar request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := t.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("sidecar request failed (is the sidecar running at %s?): %w", t.sidecarURL, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading sidecar response: %w", err)
-	}
-
-	// The sidecar itself should always return 200; the SAP status is inside the JSON.
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("sidecar returned HTTP %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var proxyResp ProxyResponse
-	if err := json.Unmarshal(respBody, &proxyResp); err != nil {
-		return nil, fmt.Errorf("parsing sidecar response: %w", err)
-	}
-	return &proxyResp, nil
-}
-
-func (t *JcoHttpTransport) Close() error { return nil }
 
 // --------------------------------------------------------------------------
 // AdtJcoStdioTransport

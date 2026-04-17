@@ -326,7 +326,7 @@ func TestJcoConnection_SendRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	jcoTransport := NewJcoHttpTransport(server.URL)
+	jcoTransport := NewAdtJcoStdioTransport(&mockSidecarIO{})
 	conn := NewJcoConnection(jcoTransport, nil, &JcoConnectionConfig{
 		Client:        "001",
 		Language:      "EN",
@@ -395,3 +395,11 @@ func (m *mockJcoTransport) Send(_ context.Context, _ *ProxyRequest) (*ProxyRespo
 	return &ProxyResponse{StatusCode: 200, Body: "mock"}, nil
 }
 func (m *mockJcoTransport) Close() error { return nil }
+
+type mockSidecarIO struct{}
+
+func (m *mockSidecarIO) SendSTDIO(msg map[string]interface{}) (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"reponse": "jco-response",
+	}, nil
+}

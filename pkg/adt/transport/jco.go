@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 )
 
 // JcoConnectionConfig holds the parameters needed to create an JcoConnection.
@@ -197,16 +196,4 @@ func GetSidecarFromConnection(conn Connection) SidecarLifecycle {
 		return jco.Sidecar()
 	}
 	return nil
-}
-
-// SidecarURL is a helper to reconstruct the sidecar base URL from a JCo HTTP transport.
-func SidecarURL(conn Connection) string {
-	jco, ok := conn.(*JcoConnection)
-	if !ok {
-		return ""
-	}
-	if ht, ok := jco.Transport().(*JcoHttpTransport); ok {
-		return strings.TrimSuffix(ht.sidecarURL, "/")
-	}
-	return ""
 }
