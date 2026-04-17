@@ -9,18 +9,32 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/transport"
 )
 
 // Client is the main ADT API client.
+// It implements the ClientInterface interface while maintaining backward compatibility
+// with all existing methods.
 type Client struct {
 	transport Requester
 	config    *Config
+
+	// New transport layer (AdtConnection). When set, SendRequest delegates here.
+	// When nil, the legacy Requester path is used.
+	connection transport.Connection
 
 	// Keep-alive goroutine management
 	keepAliveCancel context.CancelFunc
 	keepAliveDone   chan struct{}
 	keepAliveMu     sync.Mutex
+
+	// Lazy-initialized service instances
+	servicesMu sync.Once
 }
+
+// Ensure Client implements ClientInterface at compile time.
+var _ ClientInterface = (*Client)(nil)
 
 // NewClient creates a new ADT client with the given configuration.
 func NewClient(baseURL, username, password string, opts ...Option) *Client {
@@ -33,11 +47,120 @@ func NewClient(baseURL, username, password string, opts ...Option) *Client {
 
 // NewClientWithTransport creates a new client with a custom transport.
 // This is useful for testing and for RFC mode (RfcTransport).
+//
+// Deprecated: Use NewClientWithConnection for new code.
 func NewClientWithTransport(cfg *Config, transport Requester) *Client {
 	return &Client{
 		transport: transport,
 		config:    cfg,
 	}
+}
+
+// NewClientWithConnection creates a new client backed by an AdtConnection.
+// This is the preferred constructor for new code.
+func NewClientWithConnection(cfg *Config, conn transport.Connection) *Client {
+	return &Client{
+		connection: conn,
+		config:     cfg,
+		// Also set the legacy transport field via an adapter so that all existing
+		// methods on Client continue to work without modification.
+		transport: &connectionRequesterAdapter{conn: conn},
+	}
+}
+
+// connectionRequesterAdapter adapts an AdtConnection to the legacy Requester interface.
+// This allows existing Client methods (which use c.transport.Request) to work
+// transparently with the new transport layer.
+type connectionRequesterAdapter struct {
+	conn transport.Connection
+}
+
+func (a *connectionRequesterAdapter) Request(ctx context.Context, path string, opts *RequestOptions) (*Response, error) {
+	if opts == nil {
+		opts = &RequestOptions{}
+	}
+	resp, err := a.conn.SendRequest(ctx, &transport.Request{
+		Path:        path,
+		Method:      opts.Method,
+		Query:       opts.Query,
+		Body:        opts.Body,
+		ContentType: opts.ContentType,
+		Accept:      opts.Accept,
+		Headers:     opts.Headers,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Response{
+		StatusCode: resp.StatusCode,
+		Headers:    adtResponseToHTTPHeaders(resp),
+		Body:       resp.Body,
+	}, nil
+}
+
+func (a *connectionRequesterAdapter) Ping(ctx context.Context) error {
+	return a.conn.Ping(ctx)
+}
+
+// adtResponseToHTTPHeaders converts the flat header map from AdtResponse back to
+// http.Header for backward compatibility with code that reads Response.Headers.
+func adtResponseToHTTPHeaders(resp *transport.AdtResponse) http.Header {
+	h := http.Header{}
+	for k, v := range resp.AllHeaders() {
+		h.Set(k, v)
+	}
+	return h
+}
+
+// --- AdtClient interface implementation ---
+
+// Connect eagerly validates credentials. For HTTP it fetches a CSRF token.
+func (c *Client) Connect(ctx context.Context) error {
+	if c.connection != nil {
+		return c.connection.Ping(ctx)
+	}
+	// Legacy path: use the Requester.Ping method.
+	return c.transport.Ping(ctx)
+}
+
+// Close releases all resources held by the client.
+func (c *Client) Close() error {
+	c.StopKeepAlive()
+	if c.connection != nil {
+		return c.connection.Close()
+	}
+	return nil
+}
+
+// SendRequest dispatches a request through the underlying connection.
+func (c *Client) SendRequest(ctx context.Context, req *transport.Request) (*transport.AdtResponse, error) {
+	if c.connection != nil {
+		return c.connection.SendRequest(ctx, req)
+	}
+	// Legacy path: convert to RequestOptions and use the old Requester.
+	opts := &RequestOptions{
+		Method:      req.Method,
+		Query:       req.Query,
+		Body:        req.Body,
+		ContentType: req.ContentType,
+		Accept:      req.Accept,
+		Headers:     req.Headers,
+	}
+	resp, err := c.transport.Request(ctx, req.Path, opts)
+	if err != nil {
+		return nil, err
+	}
+	return transport.NewAdtResponse(resp.StatusCode, resp.Headers, resp.Body), nil
+}
+
+// Connection returns the underlying AdtConnection, or nil if using legacy transport.
+func (c *Client) Connection() transport.Connection {
+	return c.connection
+}
+
+// GetConfig returns the client configuration.
+func (c *Client) GetConfig() *Config {
+	return c.config
 }
 
 // StartKeepAlive starts a background goroutine that periodically pings the SAP server
@@ -451,14 +574,14 @@ func (c *Client) GetSRVD(ctx context.Context, srvdName string) (string, error) {
 
 // ServiceBinding represents an OData Service Binding metadata
 type ServiceBinding struct {
-	Name            string `json:"name"`
-	Type            string `json:"type"`
-	Description     string `json:"description"`
-	Published       bool   `json:"published"`
-	BindingType     string `json:"bindingType"`     // ODATA
-	BindingVersion  string `json:"bindingVersion"`  // V2, V4
-	ServiceURL      string `json:"serviceUrl,omitempty"`
-	ServiceDefName  string `json:"serviceDefName,omitempty"`
+	Name           string `json:"name"`
+	Type           string `json:"type"`
+	Description    string `json:"description"`
+	Published      bool   `json:"published"`
+	BindingType    string `json:"bindingType"`    // ODATA
+	BindingVersion string `json:"bindingVersion"` // V2, V4
+	ServiceURL     string `json:"serviceUrl,omitempty"`
+	ServiceDefName string `json:"serviceDefName,omitempty"`
 }
 
 // GetSRVB retrieves metadata for a Service Binding.
@@ -516,13 +639,13 @@ func parseSRVBMetadata(data []byte) (*ServiceBinding, error) {
 	}
 
 	return &ServiceBinding{
-		Name:            root.Name,
-		Type:            root.Type,
-		Description:     root.Description,
-		Published:       root.Published,
-		BindingType:     root.Binding.Type,
-		BindingVersion:  root.Binding.Version,
-		ServiceDefName:  root.Services.Content.ServiceDef.Name,
+		Name:           root.Name,
+		Type:           root.Type,
+		Description:    root.Description,
+		Published:      root.Published,
+		BindingType:    root.Binding.Type,
+		BindingVersion: root.Binding.Version,
+		ServiceDefName: root.Services.Content.ServiceDef.Name,
 	}, nil
 }
 
@@ -1215,11 +1338,11 @@ func FlattenCallGraph(root *CallGraphNode) []CallGraphEdge {
 
 // CallGraphStats provides statistics about a call graph.
 type CallGraphStats struct {
-	TotalNodes   int            `json:"total_nodes"`
-	TotalEdges   int            `json:"total_edges"`
-	MaxDepth     int            `json:"max_depth"`
-	NodesByType  map[string]int `json:"nodes_by_type"`
-	UniqueNodes  []string       `json:"unique_nodes"`
+	TotalNodes  int            `json:"total_nodes"`
+	TotalEdges  int            `json:"total_edges"`
+	MaxDepth    int            `json:"max_depth"`
+	NodesByType map[string]int `json:"nodes_by_type"`
+	UniqueNodes []string       `json:"unique_nodes"`
 }
 
 // AnalyzeCallGraph computes statistics for a call graph.
@@ -1258,10 +1381,10 @@ func AnalyzeCallGraph(root *CallGraphNode) *CallGraphStats {
 
 // CallGraphComparison compares static and actual call graphs.
 type CallGraphComparison struct {
-	CommonEdges    []CallGraphEdge `json:"common_edges"`    // In both static and actual
-	StaticOnly     []CallGraphEdge `json:"static_only"`     // In static but not executed
-	ActualOnly     []CallGraphEdge `json:"actual_only"`     // Executed but not in static (dynamic calls)
-	CoverageRatio  float64         `json:"coverage_ratio"`  // Actual/Static ratio
+	CommonEdges   []CallGraphEdge `json:"common_edges"`   // In both static and actual
+	StaticOnly    []CallGraphEdge `json:"static_only"`    // In static but not executed
+	ActualOnly    []CallGraphEdge `json:"actual_only"`    // Executed but not in static (dynamic calls)
+	CoverageRatio float64         `json:"coverage_ratio"` // Actual/Static ratio
 }
 
 // CompareCallGraphs compares a static call graph with an actual execution trace.
@@ -1758,10 +1881,10 @@ func (c *Client) GetDump(ctx context.Context, dumpID string) (*DumpDetails, erro
 
 // dumpEntryXML is used for parsing dump feed entries.
 type dumpEntryXML struct {
-	ID        string `xml:"id"`
-	Title     string `xml:"title"`
-	Updated   string `xml:"updated"`
-	Category  struct {
+	ID       string `xml:"id"`
+	Title    string `xml:"title"`
+	Updated  string `xml:"updated"`
+	Category struct {
 		Term string `xml:"term,attr"`
 	} `xml:"category"`
 	Link struct {
@@ -1770,9 +1893,9 @@ type dumpEntryXML struct {
 	Content struct {
 		Type   string `xml:"type,attr"`
 		Source struct {
-			Line          string `xml:"line,attr"`
-			Program       string `xml:"program,attr"`
-			Include       string `xml:"include,attr"`
+			Line    string `xml:"line,attr"`
+			Program string `xml:"program,attr"`
+			Include string `xml:"include,attr"`
 		} `xml:"source"`
 		Exception struct {
 			Type string `xml:"type,attr"`
@@ -1882,8 +2005,8 @@ type TraceEntry struct {
 	Program     string  `json:"program,omitempty"`
 	Event       string  `json:"event,omitempty"`
 	Line        int     `json:"line,omitempty"`
-	GrossTime   int64   `json:"grossTime,omitempty"`   // microseconds
-	NetTime     int64   `json:"netTime,omitempty"`     // microseconds
+	GrossTime   int64   `json:"grossTime,omitempty"` // microseconds
+	NetTime     int64   `json:"netTime,omitempty"`   // microseconds
 	Calls       int     `json:"calls,omitempty"`
 	Percentage  float64 `json:"percentage,omitempty"`
 	Statement   string  `json:"statement,omitempty"`
@@ -2079,12 +2202,12 @@ func parseTraceAnalysis(data []byte, traceID, toolType string) (*TraceAnalysis, 
 
 // SQLTraceState represents the current state of SQL tracing.
 type SQLTraceState struct {
-	Active      bool   `json:"active"`
-	User        string `json:"user,omitempty"`
-	TraceType   string `json:"traceType,omitempty"`
-	StartTime   string `json:"startTime,omitempty"`
-	MaxRecords  int    `json:"maxRecords,omitempty"`
-	TraceFile   string `json:"traceFile,omitempty"`
+	Active     bool   `json:"active"`
+	User       string `json:"user,omitempty"`
+	TraceType  string `json:"traceType,omitempty"`
+	StartTime  string `json:"startTime,omitempty"`
+	MaxRecords int    `json:"maxRecords,omitempty"`
+	TraceFile  string `json:"traceFile,omitempty"`
 }
 
 // SQLTraceEntry represents a trace file in the directory.
@@ -2230,4 +2353,3 @@ func parseSQLTraceDirectory(data []byte) ([]SQLTraceEntry, error) {
 
 	return result, nil
 }
-
