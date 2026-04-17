@@ -3,7 +3,7 @@ package transport
 import "sync"
 
 // SessionState holds CSRF token and session cookie state.
-// It is embedded by both AdtHttpConnection and AdtJcoConnection to
+// It is embedded by both HttpConnection and JcoConnection to
 // eliminate the session-management duplication that previously existed
 // across Transport, RfcTransport, and StdioRfcTransport.
 type SessionState struct {

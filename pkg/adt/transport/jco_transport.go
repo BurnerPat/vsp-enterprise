@@ -9,11 +9,11 @@ import (
 	"net/http"
 )
 
-// AdtJcoTransport is the low-level transport interface for communicating with the
+// JcoTransport is the low-level transport interface for communicating with the
 // Java JCo sidecar. Two implementations exist:
-//   - AdtJcoHttpTransport  — sends JSON via HTTP POST to the sidecar's /rfc-proxy endpoint
+//   - JcoHttpTransport  — sends JSON via HTTP POST to the sidecar's /rfc-proxy endpoint
 //   - AdtJcoStdioTransport — sends JSON via stdin/stdout pipes to the sidecar process
-type AdtJcoTransport interface {
+type JcoTransport interface {
 	// Send transmits a ProxyRequest and returns the ProxyResponse.
 	Send(ctx context.Context, req *ProxyRequest) (*ProxyResponse, error)
 
@@ -25,24 +25,24 @@ type AdtJcoTransport interface {
 // AdtJcoHttpTransport
 // --------------------------------------------------------------------------
 
-// AdtJcoHttpTransport implements AdtJcoTransport by POSTing JSON to the
+// JcoHttpTransport implements JcoTransport by POSTing JSON to the
 // sidecar's /rfc-proxy HTTP endpoint.
-type AdtJcoHttpTransport struct {
+type JcoHttpTransport struct {
 	sidecarURL string
 	httpClient *http.Client
 }
 
-var _ AdtJcoTransport = (*AdtJcoHttpTransport)(nil)
+var _ JcoTransport = (*JcoHttpTransport)(nil)
 
-// NewAdtJcoHttpTransport creates a transport that sends requests to the sidecar over HTTP.
-func NewAdtJcoHttpTransport(sidecarURL string) *AdtJcoHttpTransport {
-	return &AdtJcoHttpTransport{
+// NewJcoHttpTransport creates a transport that sends requests to the sidecar over HTTP.
+func NewJcoHttpTransport(sidecarURL string) *JcoHttpTransport {
+	return &JcoHttpTransport{
 		sidecarURL: sidecarURL,
 		httpClient: &http.Client{}, // no hard timeout — context deadline controls per-request
 	}
 }
 
-func (t *AdtJcoHttpTransport) Send(ctx context.Context, req *ProxyRequest) (*ProxyResponse, error) {
+func (t *JcoHttpTransport) Send(ctx context.Context, req *ProxyRequest) (*ProxyResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling proxy request: %w", err)
@@ -77,7 +77,7 @@ func (t *AdtJcoHttpTransport) Send(ctx context.Context, req *ProxyRequest) (*Pro
 	return &proxyResp, nil
 }
 
-func (t *AdtJcoHttpTransport) Close() error { return nil }
+func (t *JcoHttpTransport) Close() error { return nil }
 
 // --------------------------------------------------------------------------
 // AdtJcoStdioTransport
@@ -89,14 +89,14 @@ type SidecarIO interface {
 	SendSTDIO(msg map[string]interface{}) (map[string]interface{}, error)
 }
 
-// AdtJcoStdioTransport implements AdtJcoTransport by exchanging newline-delimited
+// AdtJcoStdioTransport implements JcoTransport by exchanging newline-delimited
 // JSON messages with the sidecar process over stdin/stdout.
 type AdtJcoStdioTransport struct {
 	sidecar SidecarIO
 	nextID  int64
 }
 
-var _ AdtJcoTransport = (*AdtJcoStdioTransport)(nil)
+var _ JcoTransport = (*AdtJcoStdioTransport)(nil)
 
 // NewAdtJcoStdioTransport creates a transport that sends requests via STDIO.
 func NewAdtJcoStdioTransport(sidecar SidecarIO) *AdtJcoStdioTransport {

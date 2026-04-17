@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// JcoConnectionConfig holds the parameters needed to create an AdtJcoConnection.
+// JcoConnectionConfig holds the parameters needed to create an JcoConnection.
 type JcoConnectionConfig struct {
 	Client        string // SAP client number
 	Language      string // SAP language
@@ -21,31 +21,31 @@ type SidecarLifecycle interface {
 	Stop() error
 }
 
-// AdtJcoConnection implements AdtConnection by delegating to an AdtJcoTransport.
+// JcoConnection implements Connection by delegating to an JcoTransport.
 // It owns:
-//   - An AdtJcoTransport (HTTP or STDIO) for the low-level sidecar communication
+//   - An JcoTransport (HTTP or STDIO) for the low-level sidecar communication
 //   - The shared proxy-request building and response-parsing logic
 //   - The SidecarLifecycle for stopping the sidecar on Close()
 //   - Shared SessionState for CSRF and session-cookie management
 //   - A concurrency semaphore
-type AdtJcoConnection struct {
-	transport AdtJcoTransport
+type JcoConnection struct {
+	transport JcoTransport
 	sidecar   SidecarLifecycle
 	config    *JcoConnectionConfig
 	SessionState
 	semaphore chan struct{}
 }
 
-var _ AdtConnection = (*AdtJcoConnection)(nil)
+var _ Connection = (*JcoConnection)(nil)
 
-// NewAdtJcoConnection creates a JCo-based connection.
+// NewJcoConnection creates a JCo-based connection.
 // The sidecar parameter may be nil if the sidecar is managed externally.
-func NewAdtJcoConnection(jcoTransport AdtJcoTransport, sidecar SidecarLifecycle, cfg *JcoConnectionConfig) *AdtJcoConnection {
+func NewJcoConnection(jcoTransport JcoTransport, sidecar SidecarLifecycle, cfg *JcoConnectionConfig) *JcoConnection {
 	maxConcurrent := cfg.MaxConcurrent
 	if maxConcurrent <= 0 {
 		maxConcurrent = 5
 	}
-	return &AdtJcoConnection{
+	return &JcoConnection{
 		transport: jcoTransport,
 		sidecar:   sidecar,
 		config:    cfg,
@@ -53,11 +53,11 @@ func NewAdtJcoConnection(jcoTransport AdtJcoTransport, sidecar SidecarLifecycle,
 	}
 }
 
-// SendRequest converts an AdtRequest into a ProxyRequest, sends it through the
-// AdtJcoTransport, and converts the ProxyResponse back into an AdtResponse.
+// SendRequest converts an Request into a ProxyRequest, sends it through the
+// JcoTransport, and converts the ProxyResponse back into an AdtResponse.
 // This centralises logic that was previously duplicated across RfcTransport and
 // StdioRfcTransport.
-func (c *AdtJcoConnection) SendRequest(ctx context.Context, req *AdtRequest) (*AdtResponse, error) {
+func (c *JcoConnection) SendRequest(ctx context.Context, req *Request) (*AdtResponse, error) {
 	if req.Method == "" {
 		req.Method = http.MethodGet
 	}
@@ -111,10 +111,10 @@ func (c *AdtJcoConnection) SendRequest(ctx context.Context, req *AdtRequest) (*A
 }
 
 // Ping is a no-op for JCo connections (sessions are managed by the sidecar).
-func (c *AdtJcoConnection) Ping(_ context.Context) error { return nil }
+func (c *JcoConnection) Ping(_ context.Context) error { return nil }
 
 // Close stops the owned sidecar and releases the JCo transport.
-func (c *AdtJcoConnection) Close() error {
+func (c *JcoConnection) Close() error {
 	var firstErr error
 	if err := c.transport.Close(); err != nil && firstErr == nil {
 		firstErr = fmt.Errorf("closing JCo transport: %w", err)
@@ -129,12 +129,12 @@ func (c *AdtJcoConnection) Close() error {
 
 // Sidecar returns the managed sidecar lifecycle, or nil.
 // This is useful during server bootstrapping for health-checks or direct RFC calls.
-func (c *AdtJcoConnection) Sidecar() SidecarLifecycle {
+func (c *JcoConnection) Sidecar() SidecarLifecycle {
 	return c.sidecar
 }
 
 // Transport returns the underlying JCo transport.
-func (c *AdtJcoConnection) Transport() AdtJcoTransport {
+func (c *JcoConnection) Transport() JcoTransport {
 	return c.transport
 }
 
@@ -142,7 +142,7 @@ func (c *AdtJcoConnection) Transport() AdtJcoTransport {
 // internal helpers
 // --------------------------------------------------------------------------
 
-func (c *AdtJcoConnection) buildHeaders(req *AdtRequest) map[string]string {
+func (c *JcoConnection) buildHeaders(req *Request) map[string]string {
 	headers := make(map[string]string)
 
 	accept := req.Accept
@@ -183,29 +183,29 @@ func (c *AdtJcoConnection) buildHeaders(req *AdtRequest) map[string]string {
 	return headers
 }
 
-// IsJcoConnection returns true if the given AdtConnection is a *AdtJcoConnection.
+// IsJcoConnection returns true if the given Connection is a *JcoConnection.
 // Helper for callers that need to detect the connection type (e.g., IsRfcMode).
-func IsJcoConnection(conn AdtConnection) bool {
-	_, ok := conn.(*AdtJcoConnection)
+func IsJcoConnection(conn Connection) bool {
+	_, ok := conn.(*JcoConnection)
 	return ok
 }
 
 // GetSidecarFromConnection returns the SidecarLifecycle from a JCo connection, or nil.
 // Helper for bootstrap code that needs access to the sidecar for health-checks or RFC calls.
-func GetSidecarFromConnection(conn AdtConnection) SidecarLifecycle {
-	if jco, ok := conn.(*AdtJcoConnection); ok {
+func GetSidecarFromConnection(conn Connection) SidecarLifecycle {
+	if jco, ok := conn.(*JcoConnection); ok {
 		return jco.Sidecar()
 	}
 	return nil
 }
 
 // SidecarURL is a helper to reconstruct the sidecar base URL from a JCo HTTP transport.
-func SidecarURL(conn AdtConnection) string {
-	jco, ok := conn.(*AdtJcoConnection)
+func SidecarURL(conn Connection) string {
+	jco, ok := conn.(*JcoConnection)
 	if !ok {
 		return ""
 	}
-	if ht, ok := jco.Transport().(*AdtJcoHttpTransport); ok {
+	if ht, ok := jco.Transport().(*JcoHttpTransport); ok {
 		return strings.TrimSuffix(ht.sidecarURL, "/")
 	}
 	return ""

@@ -10,12 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oisee/vibing-steampunk/pkg/adt/service"
 	"github.com/oisee/vibing-steampunk/pkg/adt/transport"
 )
 
 // Client is the main ADT API client.
-// It implements the AdtClient interface while maintaining backward compatibility
+// It implements the ClientInterface interface while maintaining backward compatibility
 // with all existing methods.
 type Client struct {
 	transport Requester
@@ -23,7 +22,7 @@ type Client struct {
 
 	// New transport layer (AdtConnection). When set, SendRequest delegates here.
 	// When nil, the legacy Requester path is used.
-	connection transport.AdtConnection
+	connection transport.Connection
 
 	// Keep-alive goroutine management
 	keepAliveCancel context.CancelFunc
@@ -31,22 +30,11 @@ type Client struct {
 	keepAliveMu     sync.Mutex
 
 	// Lazy-initialized service instances
-	servicesMu       sync.Once
-	sourceService    service.SourceService
-	systemService    service.SystemService
-	devToolsService  service.DevToolsService
-	crudService      service.CrudService
-	codeIntelService service.CodeIntelService
-	debuggerService  service.DebuggerService
-	transportService service.TransportService
-	analysisService  service.AnalysisService
-	traceService     service.TraceService
-	ui5Service       service.UI5Service
-	workflowService  service.WorkflowService
+	servicesMu sync.Once
 }
 
-// Ensure Client implements AdtClient at compile time.
-var _ AdtClient = (*Client)(nil)
+// Ensure Client implements ClientInterface at compile time.
+var _ ClientInterface = (*Client)(nil)
 
 // NewClient creates a new ADT client with the given configuration.
 func NewClient(baseURL, username, password string, opts ...Option) *Client {
@@ -70,7 +58,7 @@ func NewClientWithTransport(cfg *Config, transport Requester) *Client {
 
 // NewClientWithConnection creates a new client backed by an AdtConnection.
 // This is the preferred constructor for new code.
-func NewClientWithConnection(cfg *Config, conn transport.AdtConnection) *Client {
+func NewClientWithConnection(cfg *Config, conn transport.Connection) *Client {
 	return &Client{
 		connection: conn,
 		config:     cfg,
@@ -84,14 +72,14 @@ func NewClientWithConnection(cfg *Config, conn transport.AdtConnection) *Client 
 // This allows existing Client methods (which use c.transport.Request) to work
 // transparently with the new transport layer.
 type connectionRequesterAdapter struct {
-	conn transport.AdtConnection
+	conn transport.Connection
 }
 
 func (a *connectionRequesterAdapter) Request(ctx context.Context, path string, opts *RequestOptions) (*Response, error) {
 	if opts == nil {
 		opts = &RequestOptions{}
 	}
-	resp, err := a.conn.SendRequest(ctx, &transport.AdtRequest{
+	resp, err := a.conn.SendRequest(ctx, &transport.Request{
 		Path:        path,
 		Method:      opts.Method,
 		Query:       opts.Query,
@@ -145,7 +133,7 @@ func (c *Client) Close() error {
 }
 
 // SendRequest dispatches a request through the underlying connection.
-func (c *Client) SendRequest(ctx context.Context, req *transport.AdtRequest) (*transport.AdtResponse, error) {
+func (c *Client) SendRequest(ctx context.Context, req *transport.Request) (*transport.AdtResponse, error) {
 	if c.connection != nil {
 		return c.connection.SendRequest(ctx, req)
 	}
@@ -166,7 +154,7 @@ func (c *Client) SendRequest(ctx context.Context, req *transport.AdtRequest) (*t
 }
 
 // Connection returns the underlying AdtConnection, or nil if using legacy transport.
-func (c *Client) Connection() transport.AdtConnection {
+func (c *Client) Connection() transport.Connection {
 	return c.connection
 }
 
@@ -174,41 +162,6 @@ func (c *Client) Connection() transport.AdtConnection {
 func (c *Client) GetConfig() *Config {
 	return c.config
 }
-
-// initServices initializes all service instances (called once, lazily).
-func (c *Client) initServices() {
-	c.servicesMu.Do(func() {
-		safety := NewSafetyChecker(&c.config.Safety)
-		svcCfg := ServiceConfigFromConfig(c.config)
-
-		// All services use the Client itself as the transport.Sender (via SendRequest).
-		var sender transport.Sender = c
-
-		c.sourceService = service.NewSourceService(sender, safety, svcCfg)
-		c.systemService = service.NewSystemService(sender, safety, svcCfg)
-		c.devToolsService = service.NewDevToolsService(sender, safety, svcCfg)
-		c.crudService = service.NewCrudService(sender, safety, svcCfg)
-		c.codeIntelService = service.NewCodeIntelService(sender, safety, svcCfg)
-		c.debuggerService = service.NewDebuggerService(sender, safety, svcCfg)
-		c.transportService = service.NewTransportService(sender, safety, svcCfg)
-		c.analysisService = service.NewAnalysisService(sender, safety, svcCfg)
-		c.traceService = service.NewTraceService(sender, safety, svcCfg)
-		c.ui5Service = service.NewUI5Service(sender, safety, svcCfg)
-		c.workflowService = service.NewWorkflowService(sender, safety, svcCfg)
-	})
-}
-
-func (c *Client) Source() service.SourceService       { c.initServices(); return c.sourceService }
-func (c *Client) System() service.SystemService       { c.initServices(); return c.systemService }
-func (c *Client) DevTools() service.DevToolsService   { c.initServices(); return c.devToolsService }
-func (c *Client) Crud() service.CrudService           { c.initServices(); return c.crudService }
-func (c *Client) CodeIntel() service.CodeIntelService { c.initServices(); return c.codeIntelService }
-func (c *Client) Debugger() service.DebuggerService   { c.initServices(); return c.debuggerService }
-func (c *Client) Transport() service.TransportService { c.initServices(); return c.transportService }
-func (c *Client) Analysis() service.AnalysisService   { c.initServices(); return c.analysisService }
-func (c *Client) Trace() service.TraceService         { c.initServices(); return c.traceService }
-func (c *Client) UI5() service.UI5Service             { c.initServices(); return c.ui5Service }
-func (c *Client) Workflow() service.WorkflowService   { c.initServices(); return c.workflowService }
 
 // StartKeepAlive starts a background goroutine that periodically pings the SAP server
 // to keep the session alive. This is especially useful for cookie/browser-auth sessions

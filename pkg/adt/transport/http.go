@@ -21,7 +21,7 @@ const (
 	SessionKeep      SessionType = "keep"
 )
 
-// HttpConnectionConfig holds the parameters needed to create an AdtHttpConnection.
+// HttpConnectionConfig holds the parameters needed to create an HttpConnection.
 // The root adt.Config is translated into this struct by the Client constructor
 // so that the transport package has no dependency on adt.Config.
 type HttpConnectionConfig struct {
@@ -47,37 +47,37 @@ type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// AdtHttpConnection implements AdtConnection for direct HTTP access to SAP ADT.
+// HttpConnection implements Connection for direct HTTP access to SAP ADT.
 // It manages CSRF tokens, sessions, basic/cookie authentication, and automatic
 // retry on 401/403 and session expiry.
-type AdtHttpConnection struct {
+type HttpConnection struct {
 	config     *HttpConnectionConfig
 	httpClient HTTPDoer
 	SessionState
 }
 
 // Ensure interface compliance at compile time.
-var _ AdtConnection = (*AdtHttpConnection)(nil)
+var _ Connection = (*HttpConnection)(nil)
 
-// NewAdtHttpConnection creates a new HTTP-based connection.
-func NewAdtHttpConnection(cfg *HttpConnectionConfig) *AdtHttpConnection {
-	return &AdtHttpConnection{
+// NewHttpConnection creates a new HTTP-based connection.
+func NewHttpConnection(cfg *HttpConnectionConfig) *HttpConnection {
+	return &HttpConnection{
 		config:     cfg,
 		httpClient: newHTTPClient(cfg),
 	}
 }
 
-// NewAdtHttpConnectionWithClient creates a new HTTP-based connection with a custom HTTP client.
+// NewHttpConnectionWithClient creates a new HTTP-based connection with a custom HTTP client.
 // Useful for testing with mock HTTP clients.
-func NewAdtHttpConnectionWithClient(cfg *HttpConnectionConfig, client HTTPDoer) *AdtHttpConnection {
-	return &AdtHttpConnection{
+func NewHttpConnectionWithClient(cfg *HttpConnectionConfig, client HTTPDoer) *HttpConnection {
+	return &HttpConnection{
 		config:     cfg,
 		httpClient: client,
 	}
 }
 
 // SendRequest performs an HTTP request to the ADT API.
-func (c *AdtHttpConnection) SendRequest(ctx context.Context, req *AdtRequest) (*AdtResponse, error) {
+func (c *HttpConnection) SendRequest(ctx context.Context, req *Request) (*AdtResponse, error) {
 	if req.Method == "" {
 		req.Method = http.MethodGet
 	}
@@ -185,17 +185,17 @@ func (c *AdtHttpConnection) SendRequest(ctx context.Context, req *AdtRequest) (*
 }
 
 // Ping sends a lightweight HEAD request to keep the session alive.
-func (c *AdtHttpConnection) Ping(ctx context.Context) error {
+func (c *HttpConnection) Ping(ctx context.Context) error {
 	return c.fetchCSRFToken(ctx)
 }
 
 // Close is a no-op for HTTP connections (no external resources to release).
-func (c *AdtHttpConnection) Close() error {
+func (c *HttpConnection) Close() error {
 	return nil
 }
 
 // Config returns the connection configuration (useful for service layer access to client/language).
-func (c *AdtHttpConnection) Config() *HttpConnectionConfig {
+func (c *HttpConnection) Config() *HttpConnectionConfig {
 	return c.config
 }
 
@@ -204,7 +204,7 @@ func (c *AdtHttpConnection) Config() *HttpConnectionConfig {
 // --------------------------------------------------------------------------
 
 // retryRequest retries a request after CSRF token refresh.
-func (c *AdtHttpConnection) retryRequest(ctx context.Context, req *AdtRequest) (*AdtResponse, error) {
+func (c *HttpConnection) retryRequest(ctx context.Context, req *Request) (*AdtResponse, error) {
 	reqURL, err := BuildFullURL(c.config.BaseURL, req.Path, req.Query, c.config.Client, c.config.Language)
 	if err != nil {
 		return nil, fmt.Errorf("building URL: %w", err)
@@ -252,7 +252,7 @@ func (c *AdtHttpConnection) retryRequest(ctx context.Context, req *AdtRequest) (
 }
 
 // fetchCSRFToken retrieves a CSRF token via HEAD /sap/bc/adt/core/discovery.
-func (c *AdtHttpConnection) fetchCSRFToken(ctx context.Context) error {
+func (c *HttpConnection) fetchCSRFToken(ctx context.Context) error {
 	reqURL, err := BuildFullURL(c.config.BaseURL, "/sap/bc/adt/core/discovery", nil, c.config.Client, c.config.Language)
 	if err != nil {
 		return fmt.Errorf("building URL: %w", err)
@@ -300,7 +300,7 @@ func (c *AdtHttpConnection) fetchCSRFToken(ctx context.Context) error {
 }
 
 // applyHeaders sets default + custom headers on an http.Request.
-func (c *AdtHttpConnection) applyHeaders(httpReq *http.Request, req *AdtRequest) {
+func (c *HttpConnection) applyHeaders(httpReq *http.Request, req *Request) {
 	accept := req.Accept
 	if accept == "" {
 		accept = "*/*"
@@ -328,7 +328,7 @@ func (c *AdtHttpConnection) applyHeaders(httpReq *http.Request, req *AdtRequest)
 }
 
 // extractSessionID extracts the session ID from response cookies.
-func (c *AdtHttpConnection) extractSessionID(resp *http.Response) string {
+func (c *HttpConnection) extractSessionID(resp *http.Response) string {
 	for _, cookie := range resp.Cookies() {
 		if cookie.Name == "sap-contextid" || cookie.Name == "SAP_SESSIONID" {
 			return cookie.Value

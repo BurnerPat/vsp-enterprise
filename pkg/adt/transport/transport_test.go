@@ -15,7 +15,7 @@ import (
 // AdtRequest / AdtResponse
 // --------------------------------------------------------------------------
 
-func TestAdtResponse_Header(t *testing.T) {
+func TestResponse_Header(t *testing.T) {
 	resp := NewAdtResponseFromMap(200, map[string]string{
 		"Content-Type": "application/xml",
 		"X-Custom":     "value",
@@ -29,7 +29,7 @@ func TestAdtResponse_Header(t *testing.T) {
 	}
 }
 
-func TestAdtResponse_AllHeaders(t *testing.T) {
+func TestResponse_AllHeaders(t *testing.T) {
 	orig := map[string]string{"A": "1", "B": "2"}
 	resp := NewAdtResponseFromMap(200, orig, nil)
 
@@ -45,7 +45,7 @@ func TestAdtResponse_AllHeaders(t *testing.T) {
 	}
 }
 
-func TestNewAdtResponse_FromHTTPHeader(t *testing.T) {
+func TestNewResponse_FromHTTPHeader(t *testing.T) {
 	h := http.Header{}
 	h.Set("Content-Type", "text/plain")
 	h.Add("X-Multi", "val1")
@@ -200,7 +200,7 @@ func TestAPIError(t *testing.T) {
 // AdtHttpConnection
 // --------------------------------------------------------------------------
 
-func TestAdtHttpConnection_SendRequest_GET(t *testing.T) {
+func TestHttpConnection_SendRequest_GET(t *testing.T) {
 	// Set up a test server that returns a CSRF token on HEAD and XML on GET.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
@@ -221,9 +221,9 @@ func TestAdtHttpConnection_SendRequest_GET(t *testing.T) {
 		Language:    "EN",
 		SessionType: SessionStateful,
 	}
-	conn := NewAdtHttpConnection(cfg)
+	conn := NewHttpConnection(cfg)
 
-	resp, err := conn.SendRequest(context.Background(), &AdtRequest{
+	resp, err := conn.SendRequest(context.Background(), &Request{
 		Path:   "/sap/bc/adt/test",
 		Method: http.MethodGet,
 		Accept: "application/xml",
@@ -239,7 +239,7 @@ func TestAdtHttpConnection_SendRequest_GET(t *testing.T) {
 	}
 }
 
-func TestAdtHttpConnection_SendRequest_POST_WithCSRF(t *testing.T) {
+func TestHttpConnection_SendRequest_POST_WithCSRF(t *testing.T) {
 	csrfToken := "server-csrf-token"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
@@ -267,9 +267,9 @@ func TestAdtHttpConnection_SendRequest_POST_WithCSRF(t *testing.T) {
 		Password: "pass",
 		Client:   "001",
 	}
-	conn := NewAdtHttpConnection(cfg)
+	conn := NewHttpConnection(cfg)
 
-	resp, err := conn.SendRequest(context.Background(), &AdtRequest{
+	resp, err := conn.SendRequest(context.Background(), &Request{
 		Path:        "/sap/bc/adt/test",
 		Method:      http.MethodPost,
 		Body:        []byte("hello"),
@@ -283,13 +283,13 @@ func TestAdtHttpConnection_SendRequest_POST_WithCSRF(t *testing.T) {
 	}
 }
 
-func TestAdtHttpConnection_Ping(t *testing.T) {
+func TestHttpConnection_Ping(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-CSRF-Token", "ping-token")
 	}))
 	defer server.Close()
 
-	conn := NewAdtHttpConnection(&HttpConnectionConfig{BaseURL: server.URL, Username: "u", Password: "p"})
+	conn := NewHttpConnection(&HttpConnectionConfig{BaseURL: server.URL, Username: "u", Password: "p"})
 	if err := conn.Ping(context.Background()); err != nil {
 		t.Fatalf("Ping failed: %v", err)
 	}
@@ -298,8 +298,8 @@ func TestAdtHttpConnection_Ping(t *testing.T) {
 	}
 }
 
-func TestAdtHttpConnection_Close(t *testing.T) {
-	conn := NewAdtHttpConnection(&HttpConnectionConfig{BaseURL: "http://localhost"})
+func TestHttpConnection_Close(t *testing.T) {
+	conn := NewHttpConnection(&HttpConnectionConfig{BaseURL: "http://localhost"})
 	if err := conn.Close(); err != nil {
 		t.Fatalf("Close should be a no-op for HTTP: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestAdtHttpConnection_Close(t *testing.T) {
 // AdtJcoConnection
 // --------------------------------------------------------------------------
 
-func TestAdtJcoConnection_SendRequest(t *testing.T) {
+func TestJcoConnection_SendRequest(t *testing.T) {
 	// Create a test HTTP server that acts as the sidecar /rfc-proxy endpoint.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -326,14 +326,14 @@ func TestAdtJcoConnection_SendRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	jcoTransport := NewAdtJcoHttpTransport(server.URL)
-	conn := NewAdtJcoConnection(jcoTransport, nil, &JcoConnectionConfig{
+	jcoTransport := NewJcoHttpTransport(server.URL)
+	conn := NewJcoConnection(jcoTransport, nil, &JcoConnectionConfig{
 		Client:        "001",
 		Language:      "EN",
 		MaxConcurrent: 2,
 	})
 
-	resp, err := conn.SendRequest(context.Background(), &AdtRequest{
+	resp, err := conn.SendRequest(context.Background(), &Request{
 		Path:   "/sap/bc/adt/test",
 		Method: http.MethodGet,
 	})
@@ -348,12 +348,12 @@ func TestAdtJcoConnection_SendRequest(t *testing.T) {
 	}
 }
 
-func TestAdtJcoConnection_Close_StopsSidecar(t *testing.T) {
+func TestJcoConnection_Close_StopsSidecar(t *testing.T) {
 	stopped := false
 	sidecar := &mockSidecar{stopFn: func() error { stopped = true; return nil }}
 	jcoTransport := &mockJcoTransport{}
 
-	conn := NewAdtJcoConnection(jcoTransport, sidecar, &JcoConnectionConfig{})
+	conn := NewJcoConnection(jcoTransport, sidecar, &JcoConnectionConfig{})
 	if err := conn.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -363,8 +363,8 @@ func TestAdtJcoConnection_Close_StopsSidecar(t *testing.T) {
 }
 
 func TestIsJcoConnection(t *testing.T) {
-	httpConn := NewAdtHttpConnection(&HttpConnectionConfig{BaseURL: "http://localhost"})
-	jcoConn := NewAdtJcoConnection(&mockJcoTransport{}, nil, &JcoConnectionConfig{})
+	httpConn := NewHttpConnection(&HttpConnectionConfig{BaseURL: "http://localhost"})
+	jcoConn := NewJcoConnection(&mockJcoTransport{}, nil, &JcoConnectionConfig{})
 
 	if IsJcoConnection(httpConn) {
 		t.Error("HTTP connection should not be JCo")
