@@ -39,6 +39,7 @@ var _ ClientInterface = (*Client)(nil)
 // NewClient creates a new ADT client with the given configuration.
 func NewClient(baseURL, username, password string, opts ...Option) *Client {
 	cfg := NewConfig(baseURL, username, password, opts...)
+
 	return &Client{
 		transport: NewTransport(cfg),
 		config:    cfg,

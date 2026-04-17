@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,7 +70,6 @@ type SidecarManager struct {
 	cmd        *exec.Cmd
 	actualPort int
 	mu         sync.Mutex
-	httpClient *http.Client
 
 	// STDIO transport pipes (only used when Transport == "stdio")
 	stdin   io.WriteCloser
@@ -88,8 +86,7 @@ func NewSidecarManager(cfg *SidecarConfig) *SidecarManager {
 		cfg.MaxConcurrent = 5
 	}
 	return &SidecarManager{
-		config:     cfg,
-		httpClient: &http.Client{Timeout: 5 * time.Second},
+		config: cfg,
 	}
 }
 
@@ -122,47 +119,11 @@ func (s *SidecarManager) Start(ctx context.Context) error {
 		fmt.Sprintf("DYLD_LIBRARY_PATH=%s", s.config.JcoLibsDir),
 	)
 
-	if s.IsSTDIO() {
-		return s.startSTDIO(ctx, cmd)
-	}
-	return s.startHTTP(ctx, cmd)
+	return s.start(ctx, cmd)
 }
 
-// startHTTP launches the sidecar in HTTP mode and waits for SIDECAR_PORT.
-func (s *SidecarManager) startHTTP(ctx context.Context, cmd *exec.Cmd) error {
-	// Capture stdout to read port
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("creating stdout pipe: %w", err)
-	}
-	// Capture stderr to include error details if sidecar fails to start
-	var stderrBuf bytes.Buffer
-	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("starting sidecar: %w", err)
-	}
-
-	s.cmd = cmd
-	s.process = cmd.Process
-
-	// Wait for SIDECAR_PORT line from stdout
-	port, err := s.waitForPort(ctx, stdout)
-	if err != nil {
-		s.process.Kill()
-		s.process = nil
-		s.cmd = nil
-		if errMsg := extractSidecarError(stderrBuf.String()); errMsg != "" {
-			return fmt.Errorf("waiting for sidecar port: %s", errMsg)
-		}
-		return fmt.Errorf("waiting for sidecar port: %w", err)
-	}
-	s.actualPort = port
-	return nil
-}
-
-// startSTDIO launches the sidecar in STDIO mode and waits for SIDECAR_READY.
-func (s *SidecarManager) startSTDIO(ctx context.Context, cmd *exec.Cmd) error {
+// start launches the sidecar in STDIO mode and waits for SIDECAR_READY.
+func (s *SidecarManager) start(ctx context.Context, cmd *exec.Cmd) error {
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("creating stdin pipe: %w", err)
@@ -278,18 +239,6 @@ func (s *SidecarManager) Stop() error {
 	return nil
 }
 
-// Port returns the actual port the sidecar is listening on.
-func (s *SidecarManager) Port() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.actualPort
-}
-
-// URL returns the base URL of the sidecar.
-func (s *SidecarManager) URL() string {
-	return fmt.Sprintf("http://localhost:%d", s.Port())
-}
-
 // IsRunning checks if the sidecar process is alive.
 func (s *SidecarManager) IsRunning() bool {
 	s.mu.Lock()
@@ -302,11 +251,6 @@ func (s *SidecarManager) IsRunning() bool {
 	// On Unix, sending signal 0 checks if process exists without actually signaling it
 	err := s.process.Signal(os.Signal(nil))
 	return err == nil
-}
-
-// IsSTDIO returns true if the sidecar is configured for STDIO transport.
-func (s *SidecarManager) IsSTDIO() bool {
-	return strings.EqualFold(s.config.Transport, "stdio")
 }
 
 // SendSTDIO sends a JSON message to the sidecar via stdin and reads the response from stdout.
@@ -347,70 +291,6 @@ func (s *SidecarManager) SendSTDIO(msg map[string]interface{}) (map[string]inter
 	}
 
 	return resp, nil
-}
-
-// HealthCheck performs a health check against the sidecar's /health endpoint.
-func (s *SidecarManager) HealthCheck(ctx context.Context) error {
-	url := fmt.Sprintf("http://localhost:%d/health", s.Port())
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("creating health check request: %w", err)
-	}
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("sidecar health check failed: %w", err)
-	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("sidecar health check returned HTTP %d", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// CallRFC calls a function module directly via the sidecar's /rfc-call endpoint.
-func (s *SidecarManager) CallRFC(ctx context.Context, function string, params map[string]interface{}) (map[string]interface{}, error) {
-	payload := map[string]interface{}{
-		"function": function,
-		"params":   params,
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling RFC call: %w", err)
-	}
-
-	url := fmt.Sprintf("http://localhost:%d/rfc-call", s.Port())
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("creating RFC call request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("RFC call failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading RFC response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("RFC call returned HTTP %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("parsing RFC response: %w", err)
-	}
-
-	return result, nil
 }
 
 // killOrphanedSidecars finds and kills any RfcProxyServer processes left over from previous runs.
@@ -468,14 +348,7 @@ func (s *SidecarManager) buildArgs(classpath string) []string {
 	}
 
 	// STDIO transport flag
-	if s.IsSTDIO() {
-		args = append(args, "--stdio")
-	}
-
-	// Sidecar server port (HTTP mode only, not a JCo property)
-	if !s.IsSTDIO() && s.config.Port > 0 {
-		args = append(args, "--port", strconv.Itoa(s.config.Port))
-	}
+	args = append(args, "--stdio")
 
 	// If JcoProperties is populated (e.g., SNC/SSO mode), pass all connection
 	// parameters as --<property> <value> arguments (keys already have jco.client.* prefix).

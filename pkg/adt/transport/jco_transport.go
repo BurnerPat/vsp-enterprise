@@ -13,9 +13,6 @@ import (
 type JcoTransport interface {
 	// Send transmits a ProxyRequest and returns the ProxyResponse.
 	Send(ctx context.Context, req *ProxyRequest) (*ProxyResponse, error)
-
-	// Close releases resources held by the transport.
-	Close() error
 }
 
 // --------------------------------------------------------------------------
@@ -37,8 +34,8 @@ type AdtJcoStdioTransport struct {
 
 var _ JcoTransport = (*AdtJcoStdioTransport)(nil)
 
-// NewAdtJcoStdioTransport creates a transport that sends requests via STDIO.
-func NewAdtJcoStdioTransport(sidecar SidecarIO) *AdtJcoStdioTransport {
+// NewJcoStdioTransport creates a transport that sends requests via STDIO.
+func NewJcoStdioTransport(sidecar SidecarIO) *AdtJcoStdioTransport {
 	return &AdtJcoStdioTransport{sidecar: sidecar}
 }
 
@@ -72,5 +69,3 @@ func (t *AdtJcoStdioTransport) Send(_ context.Context, req *ProxyRequest) (*Prox
 	}
 	return &proxyResp, nil
 }
-
-func (t *AdtJcoStdioTransport) Close() error { return nil }

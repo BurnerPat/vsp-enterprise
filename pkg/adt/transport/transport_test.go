@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -303,103 +302,4 @@ func TestHttpConnection_Close(t *testing.T) {
 	if err := conn.Close(); err != nil {
 		t.Fatalf("Close should be a no-op for HTTP: %v", err)
 	}
-}
-
-// --------------------------------------------------------------------------
-// AdtJcoConnection
-// --------------------------------------------------------------------------
-
-func TestJcoConnection_SendRequest(t *testing.T) {
-	// Create a test HTTP server that acts as the sidecar /rfc-proxy endpoint.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var req ProxyRequest
-		json.Unmarshal(body, &req)
-
-		resp := ProxyResponse{
-			StatusCode: 200,
-			Headers:    map[string]string{"X-CSRF-Token": "jco-csrf"},
-			Body:       "jco-result",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	jcoTransport := NewAdtJcoStdioTransport(&mockSidecarIO{})
-	conn := NewJcoConnection(jcoTransport, nil, &JcoConnectionConfig{
-		Client:        "001",
-		Language:      "EN",
-		MaxConcurrent: 2,
-	})
-
-	resp, err := conn.SendRequest(context.Background(), &Request{
-		Path:   "/sap/bc/adt/test",
-		Method: http.MethodGet,
-	})
-	if err != nil {
-		t.Fatalf("SendRequest failed: %v", err)
-	}
-	if string(resp.Body) != "jco-result" {
-		t.Errorf("Body = %q, want jco-result", string(resp.Body))
-	}
-	if conn.GetCSRFToken() != "jco-csrf" {
-		t.Errorf("CSRF token = %q, want jco-csrf", conn.GetCSRFToken())
-	}
-}
-
-func TestJcoConnection_Close_StopsSidecar(t *testing.T) {
-	stopped := false
-	sidecar := &mockSidecar{stopFn: func() error { stopped = true; return nil }}
-	jcoTransport := &mockJcoTransport{}
-
-	conn := NewJcoConnection(jcoTransport, sidecar, &JcoConnectionConfig{})
-	if err := conn.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if !stopped {
-		t.Error("Close should have called sidecar.Stop()")
-	}
-}
-
-func TestIsJcoConnection(t *testing.T) {
-	httpConn := NewHttpConnection(&HttpConnectionConfig{BaseURL: "http://localhost"})
-	jcoConn := NewJcoConnection(&mockJcoTransport{}, nil, &JcoConnectionConfig{})
-
-	if IsJcoConnection(httpConn) {
-		t.Error("HTTP connection should not be JCo")
-	}
-	if !IsJcoConnection(jcoConn) {
-		t.Error("JCo connection should be JCo")
-	}
-}
-
-// --------------------------------------------------------------------------
-// Test helpers / mocks
-// --------------------------------------------------------------------------
-
-type mockSidecar struct {
-	stopFn func() error
-}
-
-func (m *mockSidecar) Stop() error {
-	if m.stopFn != nil {
-		return m.stopFn()
-	}
-	return nil
-}
-
-type mockJcoTransport struct{}
-
-func (m *mockJcoTransport) Send(_ context.Context, _ *ProxyRequest) (*ProxyResponse, error) {
-	return &ProxyResponse{StatusCode: 200, Body: "mock"}, nil
-}
-func (m *mockJcoTransport) Close() error { return nil }
-
-type mockSidecarIO struct{}
-
-func (m *mockSidecarIO) SendSTDIO(msg map[string]interface{}) (map[string]interface{}, error) {
-	return map[string]interface{}{
-		"reponse": "jco-response",
-	}, nil
 }

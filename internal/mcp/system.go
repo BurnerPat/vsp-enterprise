@@ -15,6 +15,7 @@ import (
 	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
+	"github.com/oisee/vibing-steampunk/pkg/adt/transport"
 )
 
 // System represents a configured destination to an SAP system.
@@ -210,13 +211,16 @@ func createRFCADTClient(cfg *config.SystemConfig, opts []adt.Option) (*adt.Clien
 	}
 
 	var adtClient *adt.Client
-	if sidecar.IsSTDIO() {
-		stdioTransport := adt.NewStdioRfcTransport(sidecar, adtCfg, maxConcurrent)
-		adtClient = adt.NewClientWithTransport(adtCfg, stdioTransport)
-	} else {
-		rfcTransport := adt.NewRfcTransport(sidecar.URL(), adtCfg, maxConcurrent)
-		adtClient = adt.NewClientWithTransport(adtCfg, rfcTransport)
-	}
+
+	sidecarTransport := transport.NewJcoStdioTransport(sidecar)
+	connection := transport.NewJcoConnection(sidecarTransport, sidecar, &transport.JcoConnectionConfig{
+		Client:        cfg.Client,
+		MaxConcurrent: maxConcurrent,
+		SessionType:   transport.SessionStateless,
+	})
+
+	adtClient = adt.NewClientWithConnection(adtCfg, connection)
+
 	return adtClient, sidecar, nil
 }
 

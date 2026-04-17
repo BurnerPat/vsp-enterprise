@@ -113,10 +113,10 @@ func TestSidecarManager_BuildClasspath(t *testing.T) {
 
 func TestSidecarManager_ParsePort(t *testing.T) {
 	tests := []struct {
-		name    string
-		line    string
-		want    int
-		wantOK  bool
+		name   string
+		line   string
+		want   int
+		wantOK bool
 	}{
 		{"valid port", "SIDECAR_PORT=8081", 8081, true},
 		{"valid port with whitespace", "SIDECAR_PORT=9090 ", 9090, true},
@@ -160,7 +160,6 @@ func TestSidecarManager_BuildArgs(t *testing.T) {
 	// Check required args
 	assertContainsArg(t, args, "-cp", classpath)
 	assertContainsArg(t, args, "-Djava.library.path=/opt/jcolibs", "")
-	assertContainsArg(t, args, "--port", "8081")
 	assertContainsArg(t, args, "--ashost", "sap.example.com")
 	assertContainsArg(t, args, "--sysnr", "00")
 	assertContainsArg(t, args, "--client", "001")

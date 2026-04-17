@@ -22,7 +22,6 @@ func AllToolDefs() []types.ToolDef {
 	defs = append(defs, FileToolDefs()...)
 	defs = append(defs, GitToolDefs()...)
 	defs = append(defs, GrepToolDefs()...)
-	defs = append(defs, ReportToolDefs()...)
 	defs = append(defs, ServiceBindingToolDefs()...)
 	defs = append(defs, SQLTraceToolDefs()...)
 	defs = append(defs, TraceToolDefs()...)

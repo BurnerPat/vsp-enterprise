@@ -115,11 +115,8 @@ func (c *JcoConnection) Ping(_ context.Context) error { return nil }
 // Close stops the owned sidecar and releases the JCo transport.
 func (c *JcoConnection) Close() error {
 	var firstErr error
-	if err := c.transport.Close(); err != nil && firstErr == nil {
-		firstErr = fmt.Errorf("closing JCo transport: %w", err)
-	}
 	if c.sidecar != nil {
-		if err := c.sidecar.Stop(); err != nil && firstErr == nil {
+		if err := c.sidecar.Stop(); err != nil {
 			firstErr = fmt.Errorf("stopping sidecar: %w", err)
 		}
 	}
