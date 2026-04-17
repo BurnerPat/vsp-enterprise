@@ -3,7 +3,7 @@ package adt
 import (
 	"context"
 
-	"github.com/oisee/vibing-steampunk/pkg/adt/transport"
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // ClientInterface is the primary interface for interacting with an SAP ADT backend.
@@ -24,11 +24,11 @@ type ClientInterface interface {
 
 	// SendRequest dispatches a single request through the underlying connection.
 	// Most callers should use the service accessors instead.
-	SendRequest(ctx context.Context, req *transport.Request) (*transport.AdtResponse, error)
+	SendRequest(ctx context.Context, req *connection.Request) (*connection.AdtResponse, error)
 
 	// Connection returns the underlying AdtConnection.
-	// Useful for advanced callers that need transport-level access.
-	Connection() transport.Connection
+	// Useful for advanced callers that need connection-level access.
+	Connection() connection.Connection
 
 	// GetConfig returns the client configuration.
 	GetConfig() *Config
@@ -37,16 +37,16 @@ type ClientInterface interface {
 	Safety() *SafetyConfig
 }
 
-// HttpConfigFromConfig converts an adt.Config into a transport.HttpConnectionConfig.
-func HttpConfigFromConfig(cfg *Config) *transport.HttpConnectionConfig {
-	return &transport.HttpConnectionConfig{
+// HttpConfigFromConfig converts an adt.Config into a connection.HttpConnectionConfig.
+func HttpConfigFromConfig(cfg *Config) *connection.HttpConnectionConfig {
+	return &connection.HttpConnectionConfig{
 		BaseURL:            cfg.BaseURL,
 		Username:           cfg.Username,
 		Password:           cfg.Password,
 		Client:             cfg.Client,
 		Language:           cfg.Language,
 		InsecureSkipVerify: cfg.InsecureSkipVerify,
-		SessionType:        transport.SessionType(cfg.SessionType),
+		SessionType:        connection.SessionType(cfg.SessionType),
 		Timeout:            cfg.Timeout,
 		Cookies:            cfg.Cookies,
 	}

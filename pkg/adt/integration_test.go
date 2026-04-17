@@ -345,7 +345,7 @@ func TestIntegration_CRUD_FullWorkflow(t *testing.T) {
 	// Use a unique test program name with timestamp to avoid conflicts
 	timestamp := time.Now().Unix() % 100000 // Last 5 digits
 	programName := fmt.Sprintf("ZMCP_%05d", timestamp)
-	packageName := "$TMP" // Local package, no transport needed
+	packageName := "$TMP" // Local package, no connection needed
 	t.Logf("Test program name: %s", programName)
 
 	// Step 1: Create a new program

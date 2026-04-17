@@ -232,7 +232,7 @@ func HandleDebuggerStep(ctx context.Context, sys types.System, request mcp.CallT
 		// debuggeeEnded is normal when stepContinue runs the program to completion
 		if strings.Contains(err.Error(), "debuggeeEnded") {
 			debugLog.Printf("DebuggerStep: program ended after %v (normal for stepContinue), resetting session", elapsed)
-			// Reset transport session to prevent "already attached" on next debug run
+			// Reset connection session to prevent "already attached" on next debug run
 			sys.ADT().DebuggerResetSession()
 			debugLog.Printf("DebuggerStep: session cookie cleared")
 			return mcp.NewToolResultText("Program execution completed. The debuggee has ended normally."), nil

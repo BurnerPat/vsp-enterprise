@@ -121,9 +121,9 @@ func parseSyntaxCheckResults(data []byte) ([]SyntaxCheckResult, error) {
 
 // ActivationResult represents the result of an activation.
 type ActivationResult struct {
-	Success  bool                       `json:"success"`
-	Messages []ActivationResultMessage  `json:"messages"`
-	Inactive []InactiveObject           `json:"inactive,omitempty"`
+	Success  bool                      `json:"success"`
+	Messages []ActivationResultMessage `json:"messages"`
+	Inactive []InactiveObject          `json:"inactive,omitempty"`
 }
 
 // ActivationResultMessage represents a message from activation.
@@ -146,10 +146,10 @@ type InactiveObject struct {
 	Deleted   bool   `json:"deleted,omitempty"`
 }
 
-// InactiveObjectRecord represents an inactive object with its transport info.
+// InactiveObjectRecord represents an inactive object with its connection info.
 type InactiveObjectRecord struct {
 	Object    *InactiveObject `json:"object,omitempty"`
-	Transport *InactiveObject `json:"transport,omitempty"`
+	Transport *InactiveObject `json:"connection,omitempty"`
 }
 
 // Activate activates one or more ABAP objects.
@@ -294,13 +294,13 @@ func parseInactiveObjects(data []byte) ([]InactiveObjectRecord, error) {
 		ParentURI string `xml:"parentUri,attr"`
 	}
 	type objectElement struct {
-		Deleted bool `xml:"deleted,attr"`
+		Deleted bool   `xml:"deleted,attr"`
 		User    string `xml:"user,attr"`
 		Ref     ref    `xml:"ref"`
 	}
 	type entry struct {
 		Object    *objectElement `xml:"object"`
-		Transport *objectElement `xml:"transport"`
+		Transport *objectElement `xml:"connection"`
 	}
 	type inactiveObjects struct {
 		Entries []entry `xml:"entry"`
@@ -690,13 +690,13 @@ func parseUnitTestResult(data []byte) (*UnitTestResult, error) {
 		} `xml:"stack"`
 	}
 	type testMethod struct {
-		URI           string `xml:"uri,attr"`
-		Type          string `xml:"type,attr"`
-		Name          string `xml:"name,attr"`
+		URI           string  `xml:"uri,attr"`
+		Type          string  `xml:"type,attr"`
+		Name          string  `xml:"name,attr"`
 		ExecutionTime float64 `xml:"executionTime,attr"`
-		URIType       string `xml:"uriType,attr"`
-		NavigationURI string `xml:"navigationUri,attr"`
-		Unit          string `xml:"unit,attr"`
+		URIType       string  `xml:"uriType,attr"`
+		NavigationURI string  `xml:"navigationUri,attr"`
+		Unit          string  `xml:"unit,attr"`
 		Alerts        struct {
 			Items []alert `xml:"alert"`
 		} `xml:"alerts"`

@@ -337,7 +337,7 @@ func TestSafetyConfig_CheckTransportableEdit(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:        "No transport - always allowed",
+			name:        "No connection - always allowed",
 			config:      SafetyConfig{},
 			transport:   "",
 			opName:      "EditSource",
@@ -401,7 +401,7 @@ func TestSafetyConfig_CheckTransportableEdit_ErrorMessage(t *testing.T) {
 		t.Error("Error message should contain operation name")
 	}
 	if !contains(errMsg, "DEVK900123") {
-		t.Error("Error message should contain transport number")
+		t.Error("Error message should contain connection number")
 	}
 	if !contains(errMsg, "--allow-transportable-edits") {
 		t.Error("Error message should mention CLI flag")

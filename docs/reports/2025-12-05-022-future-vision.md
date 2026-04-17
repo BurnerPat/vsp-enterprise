@@ -105,7 +105,7 @@ on_failure: block_transport
 # workflows/feature-branch.yaml
 name: Feature Development
 steps:
-  - name: Create transport
+  - name: Create connection
     tool: CreateTransport
     args:
       description: "Feature: {{ feature_name }}"

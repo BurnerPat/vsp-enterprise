@@ -51,13 +51,13 @@ type Config struct {
 	TerminalID string
 
 	// RFC connection settings (alternative to HTTP/BaseURL)
-	ConnectionMode   string // "http" (default) or "rfc"
-	AsHost           string // Direct app server hostname
-	SysNr            string // System number (e.g., "00")
-	MsHost           string // Message server host (load balancing)
-	MsServ           string // Message server service/port
-	R3Name           string // SAP system name
-	Group            string // Logon group
+	ConnectionMode string // "http" (default) or "rfc"
+	AsHost         string // Direct app server hostname
+	SysNr          string // System number (e.g., "00")
+	MsHost         string // Message server host (load balancing)
+	MsServ         string // Message server service/port
+	R3Name         string // SAP system name
+	Group          string // Logon group
 
 	// JCo sidecar settings
 	JcoProxyJar      string // Path to jco-proxy JAR
@@ -147,8 +147,8 @@ func WithAllowedPackages(packages ...string) Option {
 	}
 }
 
-// WithEnableTransports enables transport management operations.
-// By default, transport operations are disabled - this flag explicitly enables them.
+// WithEnableTransports enables connection management operations.
+// By default, connection operations are disabled - this flag explicitly enables them.
 func WithEnableTransports() Option {
 	return func(c *Config) {
 		c.Safety.EnableTransports = true
@@ -163,7 +163,7 @@ func WithTransportReadOnly() Option {
 	}
 }
 
-// WithAllowedTransports restricts transport operations to specific transports.
+// WithAllowedTransports restricts connection operations to specific transports.
 // Supports wildcards: "A4HK*" matches all transports starting with A4HK.
 func WithAllowedTransports(transports ...string) Option {
 	return func(c *Config) {
@@ -171,9 +171,9 @@ func WithAllowedTransports(transports ...string) Option {
 	}
 }
 
-// WithAllowTransportableEdits enables editing objects that require transport requests.
+// WithAllowTransportableEdits enables editing objects that require connection requests.
 // By default, only local objects ($TMP, $* packages) can be edited.
-// When enabled, users can provide transport parameters to EditSource/WriteSource.
+// When enabled, users can provide connection parameters to EditSource/WriteSource.
 // WARNING: This allows modifications to non-local objects that may affect production systems.
 func WithAllowTransportableEdits() Option {
 	return func(c *Config) {
@@ -330,7 +330,7 @@ func (c *Config) NewHTTPClient() *http.Client {
 		},
 	}
 
-	// Wrap transport to fix SAP session cookies marked Secure over HTTP.
+	// Wrap connection to fix SAP session cookies marked Secure over HTTP.
 	// SAP often sets Secure flag even on HTTP connections, which causes
 	// Go's cookie jar to drop them on subsequent requests.
 	var transport http.RoundTripper = base

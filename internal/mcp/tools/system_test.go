@@ -83,7 +83,7 @@ func TestHandleGetFeatures(t *testing.T) {
 	if got := payload.Features["abapgit"]; got.Available || got.Mode != string(adt.FeatureModeOff) {
 		t.Fatalf("unexpected abapgit status: %+v", got)
 	}
-	if got := payload.Features["transport"]; got.Available || got.Mode != string(adt.FeatureModeOff) {
-		t.Fatalf("unexpected transport status: %+v", got)
+	if got := payload.Features["connection"]; got.Available || got.Mode != string(adt.FeatureModeOff) {
+		t.Fatalf("unexpected connection status: %+v", got)
 	}
 }

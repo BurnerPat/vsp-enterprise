@@ -52,7 +52,7 @@ export SAP_CLIENT=001
 ```json
 EditSource(
   object_url: "/sap/bc/adt/programs/programs/zprod_001_test",
-  old_string: "* Test edit with transport - added by vsp",
+  old_string: "* Test edit with connection - added by vsp",
   new_string: "* Test edit - attempt without flag",
   transport: "A4HK900114"
 )

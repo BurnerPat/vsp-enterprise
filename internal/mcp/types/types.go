@@ -8,7 +8,7 @@ import (
 )
 
 // System defines the interface for interacting with a single SAP system.
-// Systems follow an explicit lifecycle: Connect validates credentials and opens transport,
+// Systems follow an explicit lifecycle: Connect validates credentials and opens connection,
 // Start activates runtime behavior (e.g., keep-alive), and Shutdown cleans up resources.
 // Handlers assume the system has been connected before use.
 type System interface {
@@ -24,7 +24,7 @@ type System interface {
 	// EnsureWSConnected ensures the WebSocket client for a tool is connected.
 	EnsureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult
 
-	// Connect validates credentials and establishes the transport connection.
+	// Connect validates credentials and establishes the connection connection.
 	// For HTTP mode, this performs an explicit authentication check (Ping).
 	// For RFC/SNC mode, this is a silent no-op as logon validation is deferred to first RFC call.
 	// Connect is idempotent and safe to call multiple times.

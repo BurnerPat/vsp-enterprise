@@ -416,7 +416,7 @@ server.AddTool(mcp.Tool{
                 "type":        "string",
                 "description": "Package name (e.g., $ZAML_IRIS)",
             },
-            "transport": map[string]interface{}{
+            "connection": map[string]interface{}{
                 "type":        "string",
                 "description": "Transport request number (optional for local packages)",
             },
@@ -435,7 +435,7 @@ server.AddTool(mcp.Tool{
                 "type":        "string",
                 "description": "Absolute path to ABAP source file",
             },
-            "transport": map[string]interface{}{
+            "connection": map[string]interface{}{
                 "type":        "string",
                 "description": "Transport request number (optional)",
             },
@@ -458,7 +458,7 @@ server.AddTool(mcp.Tool{
                 "type":        "string",
                 "description": "Package name (required for new objects)",
             },
-            "transport": map[string]interface{}{
+            "connection": map[string]interface{}{
                 "type":        "string",
                 "description": "Transport request number (optional)",
             },
@@ -471,7 +471,7 @@ server.AddTool(mcp.Tool{
 case "CreateFromFile":
     filePath, _ := getString(args, "file_path")
     packageName, _ := getString(args, "package_name")
-    transport, _ := getString(args, "transport")
+    transport, _ := getString(args, "connection")
 
     result, err := s.client.CreateFromFile(ctx, filePath, packageName, transport)
     if err != nil {

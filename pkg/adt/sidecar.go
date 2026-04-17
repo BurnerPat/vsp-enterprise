@@ -71,7 +71,7 @@ type SidecarManager struct {
 	actualPort int
 	mu         sync.Mutex
 
-	// STDIO transport pipes (only used when Transport == "stdio")
+	// STDIO connection pipes (only used when Transport == "stdio")
 	stdin   io.WriteCloser
 	stdout  *bufio.Reader
 	stdioMu sync.Mutex // serializes STDIO request/response pairs
@@ -260,7 +260,7 @@ func (s *SidecarManager) SendSTDIO(msg map[string]interface{}) (map[string]inter
 	defer s.stdioMu.Unlock()
 
 	if s.stdin == nil || s.stdout == nil {
-		return nil, fmt.Errorf("STDIO transport not initialized")
+		return nil, fmt.Errorf("STDIO connection not initialized")
 	}
 
 	// Write request as a single JSON line
@@ -347,7 +347,7 @@ func (s *SidecarManager) buildArgs(classpath string) []string {
 		"com.sap.mcp.proxy.RfcProxyServer",
 	}
 
-	// STDIO transport flag
+	// STDIO connection flag
 	args = append(args, "--stdio")
 
 	// If JcoProperties is populated (e.g., SNC/SSO mode), pass all connection

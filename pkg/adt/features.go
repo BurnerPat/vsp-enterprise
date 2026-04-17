@@ -23,8 +23,8 @@ const (
 	FeatureAMDP FeatureID = "amdp"
 	// FeatureUI5 indicates UI5/Fiori BSP management is available
 	FeatureUI5 FeatureID = "ui5"
-	// FeatureTransport indicates CTS transport management is available
-	FeatureTransport FeatureID = "transport"
+	// FeatureTransport indicates CTS connection management is available
+	FeatureTransport FeatureID = "connection"
 	// FeatureHANA indicates HANA database (required for some AMDP features)
 	FeatureHANA FeatureID = "hana"
 )
@@ -43,11 +43,11 @@ const (
 
 // FeatureStatus represents the probed status of a feature
 type FeatureStatus struct {
-	ID        FeatureID `json:"id"`
-	Available bool      `json:"available"`
+	ID        FeatureID   `json:"id"`
+	Available bool        `json:"available"`
 	Mode      FeatureMode `json:"mode"`
-	Message   string    `json:"message,omitempty"`
-	ProbedAt  time.Time `json:"probed_at,omitempty"`
+	Message   string      `json:"message,omitempty"`
+	ProbedAt  time.Time   `json:"probed_at,omitempty"`
 }
 
 // FeatureConfig controls which optional features are enabled
@@ -62,7 +62,7 @@ type FeatureConfig struct {
 	AMDP FeatureMode
 	// UI5 controls UI5/Fiori BSP tools (default: auto)
 	UI5 FeatureMode
-	// Transport controls CTS transport tools (default: auto)
+	// Transport controls CTS connection tools (default: auto)
 	Transport FeatureMode
 }
 
@@ -120,7 +120,7 @@ func NewFeatureProber(client *Client, config FeatureConfig, verbose bool) *Featu
 // ProbeAll probes all features and returns their status
 func (p *FeatureProber) ProbeAll(ctx context.Context) map[FeatureID]*FeatureStatus {
 	features := []FeatureID{
-		FeatureHANA,     // Probe first - other features may depend on it
+		FeatureHANA, // Probe first - other features may depend on it
 		FeatureAbapGit,
 		FeatureRAP,
 		FeatureAMDP,
@@ -335,9 +335,9 @@ func (p *FeatureProber) probeUI5(ctx context.Context) (bool, string, error) {
 	return false, "UI5 BSP not responding", nil
 }
 
-// probeTransport checks if CTS transport management is available
+// probeTransport checks if CTS connection management is available
 func (p *FeatureProber) probeTransport(ctx context.Context) (bool, string, error) {
-	// Check if transport endpoint exists
+	// Check if connection endpoint exists
 	resp, err := p.client.transport.Request(ctx, "/sap/bc/adt/cts/transports", &RequestOptions{
 		Method: http.MethodOptions,
 	})
@@ -349,7 +349,7 @@ func (p *FeatureProber) probeTransport(ctx context.Context) (bool, string, error
 	}
 
 	if resp.StatusCode == 200 || resp.StatusCode == 405 {
-		return true, "CTS transport management available", nil
+		return true, "CTS connection management available", nil
 	}
 
 	return false, "CTS not responding", nil

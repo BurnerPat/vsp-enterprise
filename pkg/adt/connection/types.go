@@ -1,9 +1,9 @@
-// Package transport provides the connection and request handling layer for ADT.
+// Package connection provides the connection and request handling layer for ADT.
 //
 // It defines Request / AdtResponse as the universal request / response types,
 // the Connection interface for sending requests, and concrete implementations
 // for HTTP (HttpConnection) and JCo sidecar (JcoConnection) connectivity.
-package transport
+package connection
 
 import (
 	"net/http"
@@ -11,7 +11,7 @@ import (
 )
 
 // Request describes a single request to the SAP ADT backend.
-// It is transport-agnostic: both HTTP and JCo/STDIO connections consume it.
+// It is connection-agnostic: both HTTP and JCo/STDIO connections consume it.
 type Request struct {
 	// Path is the ADT endpoint path (e.g., "/sap/bc/adt/programs/programs/ZTEST/source/main").
 	Path string
@@ -35,7 +35,7 @@ type Request struct {
 	Headers map[string]string
 }
 
-// AdtResponse is the transport-agnostic response returned for every Request.
+// AdtResponse is the connection-agnostic response returned for every Request.
 // It intentionally does NOT expose http.Header so that non-HTTP transports
 // (JCo/STDIO) are first-class citizens.
 type AdtResponse struct {

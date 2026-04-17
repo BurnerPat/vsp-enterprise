@@ -1,4 +1,4 @@
-package transport
+package connection
 
 import (
 	"net/http"

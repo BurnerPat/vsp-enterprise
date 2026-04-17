@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oisee/vibing-steampunk/pkg/adt/transport"
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // Client is the main ADT API client.
@@ -22,7 +22,7 @@ type Client struct {
 
 	// New transport layer (AdtConnection). When set, SendRequest delegates here.
 	// When nil, the legacy Requester path is used.
-	connection transport.Connection
+	connection connection.Connection
 
 	// Keep-alive goroutine management
 	keepAliveCancel context.CancelFunc
@@ -46,7 +46,7 @@ func NewClient(baseURL, username, password string, opts ...Option) *Client {
 	}
 }
 
-// NewClientWithTransport creates a new client with a custom transport.
+// NewClientWithTransport creates a new client with a custom connection.
 // This is useful for testing and for RFC mode (RfcTransport).
 //
 // Deprecated: Use NewClientWithConnection for new code.
@@ -59,28 +59,28 @@ func NewClientWithTransport(cfg *Config, transport Requester) *Client {
 
 // NewClientWithConnection creates a new client backed by an AdtConnection.
 // This is the preferred constructor for new code.
-func NewClientWithConnection(cfg *Config, conn transport.Connection) *Client {
+func NewClientWithConnection(cfg *Config, conn connection.Connection) *Client {
 	return &Client{
 		connection: conn,
 		config:     cfg,
-		// Also set the legacy transport field via an adapter so that all existing
+		// Also set the legacy connection field via an adapter so that all existing
 		// methods on Client continue to work without modification.
 		transport: &connectionRequesterAdapter{conn: conn},
 	}
 }
 
 // connectionRequesterAdapter adapts an AdtConnection to the legacy Requester interface.
-// This allows existing Client methods (which use c.transport.Request) to work
-// transparently with the new transport layer.
+// This allows existing Client methods (which use c.connection.Request) to work
+// transparently with the new connection layer.
 type connectionRequesterAdapter struct {
-	conn transport.Connection
+	conn connection.Connection
 }
 
 func (a *connectionRequesterAdapter) Request(ctx context.Context, path string, opts *RequestOptions) (*Response, error) {
 	if opts == nil {
 		opts = &RequestOptions{}
 	}
-	resp, err := a.conn.SendRequest(ctx, &transport.Request{
+	resp, err := a.conn.SendRequest(ctx, &connection.Request{
 		Path:        path,
 		Method:      opts.Method,
 		Query:       opts.Query,
@@ -105,7 +105,7 @@ func (a *connectionRequesterAdapter) Ping(ctx context.Context) error {
 
 // adtResponseToHTTPHeaders converts the flat header map from AdtResponse back to
 // http.Header for backward compatibility with code that reads Response.Headers.
-func adtResponseToHTTPHeaders(resp *transport.AdtResponse) http.Header {
+func adtResponseToHTTPHeaders(resp *connection.AdtResponse) http.Header {
 	h := http.Header{}
 	for k, v := range resp.AllHeaders() {
 		h.Set(k, v)
@@ -134,7 +134,7 @@ func (c *Client) Close() error {
 }
 
 // SendRequest dispatches a request through the underlying connection.
-func (c *Client) SendRequest(ctx context.Context, req *transport.Request) (*transport.AdtResponse, error) {
+func (c *Client) SendRequest(ctx context.Context, req *connection.Request) (*connection.AdtResponse, error) {
 	if c.connection != nil {
 		return c.connection.SendRequest(ctx, req)
 	}
@@ -151,11 +151,11 @@ func (c *Client) SendRequest(ctx context.Context, req *transport.Request) (*tran
 	if err != nil {
 		return nil, err
 	}
-	return transport.NewAdtResponse(resp.StatusCode, resp.Headers, resp.Body), nil
+	return connection.NewAdtResponse(resp.StatusCode, resp.Headers, resp.Body), nil
 }
 
-// Connection returns the underlying AdtConnection, or nil if using legacy transport.
-func (c *Client) Connection() transport.Connection {
+// Connection returns the underlying AdtConnection, or nil if using legacy connection.
+func (c *Client) Connection() connection.Connection {
 	return c.connection
 }
 
@@ -244,7 +244,7 @@ func (c *Client) checkTransportableEdit(transport, opName string) error {
 	return c.config.Safety.CheckTransportableEdit(transport, opName)
 }
 
-// Safety returns the safety configuration for checking transport operations.
+// Safety returns the safety configuration for checking connection operations.
 func (c *Client) Safety() *SafetyConfig {
 	return &c.config.Safety
 }

@@ -15,7 +15,7 @@ import (
 	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
-	"github.com/oisee/vibing-steampunk/pkg/adt/transport"
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // System represents a configured destination to an SAP system.
@@ -53,7 +53,7 @@ func (s *System) EnsureWSConnected(ctx context.Context, toolName string) *mcp.Ca
 	return s.ensureWSConnected(ctx, toolName)
 }
 
-// Connect implements types.System by validating credentials and establishing transport connection.
+// Connect implements types.System by validating credentials and establishing connection connection.
 // For HTTP mode, performs a GetSystemInfo call to validate authentication and establish session.
 // HTTP 400 from GetSystemInfo is treated as non-fatal (e.g., missing authorization for T000 query)
 // since the session was still established and other tools may work fine.
@@ -147,7 +147,7 @@ func newSystemInstance(cfg config.SystemConfig, cookies map[string]string) (*Sys
 
 	// Cookies are a runtime concern owned by the System, not the config struct.
 	// They are passed in by the server and applied here when building
-	// the ADT client so the HTTP transport includes them from the first request.
+	// the ADT client so the HTTP connection includes them from the first request.
 	if len(cookies) > 0 {
 		opts = append(opts, adt.WithCookies(cookies))
 	}
@@ -212,11 +212,11 @@ func createRFCADTClient(cfg *config.SystemConfig, opts []adt.Option) (*adt.Clien
 
 	var adtClient *adt.Client
 
-	sidecarTransport := transport.NewJcoStdioTransport(sidecar)
-	connection := transport.NewJcoConnection(sidecarTransport, sidecar, &transport.JcoConnectionConfig{
+	sidecarTransport := connection.NewJcoStdioTransport(sidecar)
+	connection := connection.NewJcoConnection(sidecarTransport, sidecar, &connection.JcoConnectionConfig{
 		Client:        cfg.Client,
 		MaxConcurrent: maxConcurrent,
-		SessionType:   transport.SessionStateless,
+		SessionType:   connection.SessionStateless,
 	})
 
 	adtClient = adt.NewClientWithConnection(adtCfg, connection)

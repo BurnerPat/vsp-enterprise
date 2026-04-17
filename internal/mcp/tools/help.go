@@ -233,10 +233,10 @@ Info:
 
 Transports:
   SAP(action="system", params={"type": "list_transports"})
-  SAP(action="system", params={"type": "get_transport", "transport": "A4HK900001"})
+  SAP(action="system", params={"type": "get_transport", "connection": "A4HK900001"})
   SAP(action="system", params={"type": "create_transport", "description": "...", "package": "$TMP"})
-  SAP(action="system", params={"type": "release_transport", "transport": "A4HK900001"})
-  SAP(action="system", params={"type": "delete_transport", "transport": "A4HK900001"})
+  SAP(action="system", params={"type": "release_transport", "connection": "A4HK900001"})
+  SAP(action="system", params={"type": "delete_transport", "connection": "A4HK900001"})
   SAP(action="system", params={"type": "get_user_transports", "user_name": "DEVELOPER"})
   SAP(action="system", params={"type": "get_transport_info", "object_url": "...", "dev_class": "$TMP"})
 

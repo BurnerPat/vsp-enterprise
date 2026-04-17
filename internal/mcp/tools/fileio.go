@@ -20,7 +20,7 @@ func FileToolDefs() []types.ToolDef {
 			mcp.WithDescription("✅ RECOMMENDED - Smart deploy from file: auto-detects if object exists and creates/updates accordingly. Solves token limit problem for large generated files (ML models, 3948+ lines). Example: DeployFromFile(file_path=\"/path/to/zcl_ml_iris.clas.abap\", package_name=\"$ZAML_IRIS\") deploys any size file. Workflow: Parse → Check existence → Create or Update → Lock → SyntaxCheck → Write → Unlock → Activate. Supports .clas.abap, .prog.abap, .intf.abap, .fugr.abap, .func.abap. Use this for all file-based deployments."),
 			mcp.WithString("file_path", mcp.Required(), mcp.Description("Absolute path to ABAP source file")),
 			mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name (required for new objects, e.g., $ZAML_IRIS)")),
-			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
 		), Handler: HandleDeployFromFile},
 
 		{Tool: mcp.NewTool("SaveToFile",
@@ -36,7 +36,7 @@ func FileToolDefs() []types.ToolDef {
 			mcp.WithString("oldName", mcp.Required(), mcp.Description("Current object name")),
 			mcp.WithString("newName", mcp.Required(), mcp.Description("New object name")),
 			mcp.WithString("packageName", mcp.Required(), mcp.Description("Package name for new object (e.g., $ZAML_IRIS)")),
-			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
 		), Handler: HandleRenameObject},
 
 		{Tool: mcp.NewTool("EditSource",
@@ -48,7 +48,7 @@ func FileToolDefs() []types.ToolDef {
 			mcp.WithBoolean("syntax_check", mcp.Description("If true (default), validate syntax before saving. If syntax errors found, changes are NOT saved. Default: true")),
 			mcp.WithBoolean("case_insensitive", mcp.Description("If true, ignore case when matching old_string. Useful for renaming variables regardless of case. Default: false")),
 			mcp.WithString("method", mcp.Description("For CLAS only: constrain search/replace to this method only. Prevents accidental edits in other methods. (optional)")),
-			mcp.WithString("transport", mcp.Description("Transport request number (required for objects not in $TMP package)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (required for objects not in $TMP package)")),
 		), Handler: HandleEditSource, Focused: true},
 	}
 }
@@ -67,7 +67,7 @@ func HandleDeployFromFile(ctx context.Context, sys types.System, request mcp.Cal
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 
@@ -202,7 +202,7 @@ func HandleRenameObject(ctx context.Context, sys types.System, request mcp.CallT
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 
@@ -260,7 +260,7 @@ func HandleEditSource(ctx context.Context, sys types.System, request mcp.CallToo
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 

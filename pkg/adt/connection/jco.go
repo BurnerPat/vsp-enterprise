@@ -1,4 +1,4 @@
-package transport
+package connection
 
 import (
 	"context"
@@ -88,7 +88,7 @@ func (c *JcoConnection) SendRequest(ctx context.Context, req *Request) (*AdtResp
 		proxyReq.Body = string(req.Body)
 	}
 
-	// Send via transport.
+	// Send via connection.
 	proxyResp, err := c.transport.Send(ctx, proxyReq)
 	if err != nil {
 		return nil, err
@@ -112,7 +112,7 @@ func (c *JcoConnection) SendRequest(ctx context.Context, req *Request) (*AdtResp
 // Ping is a no-op for JCo connections (sessions are managed by the sidecar).
 func (c *JcoConnection) Ping(_ context.Context) error { return nil }
 
-// Close stops the owned sidecar and releases the JCo transport.
+// Close stops the owned sidecar and releases the JCo connection.
 func (c *JcoConnection) Close() error {
 	var firstErr error
 	if c.sidecar != nil {
@@ -129,7 +129,7 @@ func (c *JcoConnection) Sidecar() SidecarLifecycle {
 	return c.sidecar
 }
 
-// Transport returns the underlying JCo transport.
+// Transport returns the underlying JCo connection.
 func (c *JcoConnection) Transport() JcoTransport {
 	return c.transport
 }

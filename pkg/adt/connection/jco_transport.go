@@ -1,4 +1,4 @@
-package transport
+package connection
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-// JcoTransport is the low-level transport interface for communicating with the
+// JcoTransport is the low-level connection interface for communicating with the
 // Java JCo sidecar. Two implementations exist:
 //   - JcoHttpTransport  — sends JSON via HTTP POST to the sidecar's /rfc-proxy endpoint
 //   - AdtJcoStdioTransport — sends JSON via stdin/stdout pipes to the sidecar process
@@ -34,7 +34,7 @@ type AdtJcoStdioTransport struct {
 
 var _ JcoTransport = (*AdtJcoStdioTransport)(nil)
 
-// NewJcoStdioTransport creates a transport that sends requests via STDIO.
+// NewJcoStdioTransport creates a connection that sends requests via STDIO.
 func NewJcoStdioTransport(sidecar SidecarIO) *AdtJcoStdioTransport {
 	return &AdtJcoStdioTransport{sidecar: sidecar}
 }

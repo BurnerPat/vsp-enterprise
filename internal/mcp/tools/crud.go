@@ -33,7 +33,7 @@ func CRUDToolDefs() []types.ToolDef {
 			mcp.WithString("object_url", mcp.Required(), mcp.Description("ADT URL of the object (e.g., /sap/bc/adt/programs/programs/ZTEST)")),
 			mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code to write")),
 			mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from LockObject")),
-			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
 		), Handler: HandleUpdateSource},
 
 		{Tool: mcp.NewTool("CreateObject",
@@ -42,7 +42,7 @@ func CRUDToolDefs() []types.ToolDef {
 			mcp.WithString("name", mcp.Required(), mcp.Description("Object name (e.g., ZTEST_PROGRAM)")),
 			mcp.WithString("description", mcp.Required(), mcp.Description("Object description")),
 			mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name (e.g., $TMP for local, ZPACKAGE for transportable)")),
-			mcp.WithString("transport", mcp.Description("Transport request number (required for non-local packages)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (required for non-local packages)")),
 			mcp.WithString("parent_name", mcp.Description("Parent name (required for function modules - the function group name)")),
 			mcp.WithString("service_definition", mcp.Description("For SRVB: the service definition name to bind")),
 			mcp.WithString("binding_version", mcp.Description("For SRVB: OData version 'V2' or 'V4' (default: V2)")),
@@ -50,11 +50,11 @@ func CRUDToolDefs() []types.ToolDef {
 		), Handler: HandleCreateObject},
 
 		{Tool: mcp.NewTool("CreatePackage",
-			mcp.WithDescription("Create a new ABAP package. Local packages ($*) work by default. Transportable packages require --enable-transports flag and transport parameter."),
+			mcp.WithDescription("Create a new ABAP package. Local packages ($*) work by default. Transportable packages require --enable-transports flag and connection parameter."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Package name (e.g., $ZTEST for local, ZPRODUCTION for transportable)")),
 			mcp.WithString("description", mcp.Required(), mcp.Description("Package description")),
 			mcp.WithString("parent", mcp.Description("Parent package name (optional, e.g., $TMP, ZPROD). If not specified, creates a root-level package.")),
-			mcp.WithString("transport", mcp.Description("Transport request number (required for transportable packages, e.g., 'A4HK900114')")),
+			mcp.WithString("connection", mcp.Description("Transport request number (required for transportable packages, e.g., 'A4HK900114')")),
 			mcp.WithString("software_component", mcp.Description("Software component name (required for transportable packages, e.g., 'HOME', 'ZLOCAL'). Use GetInstalledComponents to list available components.")),
 		), Handler: HandleCreatePackage, Focused: true},
 
@@ -64,7 +64,7 @@ func CRUDToolDefs() []types.ToolDef {
 			mcp.WithString("description", mcp.Required(), mcp.Description("Short description of the table")),
 			mcp.WithString("package", mcp.Description("Target package (default: $TMP)")),
 			mcp.WithString("fields", mcp.Required(), mcp.Description("JSON array of fields: [{\"name\":\"ID\",\"type\":\"CHAR32\",\"key\":true},{\"name\":\"VALUE\",\"type\":\"STRING\"}]. Types: CHAR/CHARnn, NUMC/NUMCnn, INT4, DEC, STRING, TIMESTAMPL, UUID, DATS, TIMS, or data element name.")),
-			mcp.WithString("transport", mcp.Description("Transport request number (optional for $TMP)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (optional for $TMP)")),
 			mcp.WithString("delivery_class", mcp.Description("Delivery class: A=Application (default), C=Customizing, L=Temporary")),
 		), Handler: HandleCreateTable, Focused: true},
 
@@ -97,7 +97,7 @@ func CRUDToolDefs() []types.ToolDef {
 			mcp.WithDescription("Delete an ABAP object (requires lock)"),
 			mcp.WithString("object_url", mcp.Required(), mcp.Description("ADT URL of the object (e.g., /sap/bc/adt/programs/programs/ZTEST)")),
 			mcp.WithString("lock_handle", mcp.Required(), mcp.Description("lock_handle from LockObject")),
-			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
 		), Handler: HandleDeleteObject},
 	}
 }
@@ -160,7 +160,7 @@ func HandleUpdateSource(ctx context.Context, sys types.System, request mcp.CallT
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 
@@ -200,7 +200,7 @@ func HandleCreateObject(ctx context.Context, sys types.System, request mcp.CallT
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 
@@ -269,7 +269,7 @@ func HandleCreatePackage(ctx context.Context, sys types.System, request mcp.Call
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok && t != "" {
+	if t, ok := request.GetArguments()["connection"].(string); ok && t != "" {
 		transport = t
 	}
 
@@ -278,9 +278,9 @@ func HandleCreatePackage(ctx context.Context, sys types.System, request mcp.Call
 		softwareComponent = strings.ToUpper(sc)
 	}
 
-	// Transportable packages require transport parameter
+	// Transportable packages require connection parameter
 	if !strings.HasPrefix(name, "$") && transport == "" {
-		return types.ErrorResult("transport is required for creating transportable packages (non-$ packages). Use --enable-transports flag."), nil
+		return types.ErrorResult("connection is required for creating transportable packages (non-$ packages). Use --enable-transports flag."), nil
 	}
 
 	opts := adt.CreateObjectOptions{
@@ -342,7 +342,7 @@ func HandleCreateTable(ctx context.Context, sys types.System, request mcp.CallTo
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok && t != "" {
+	if t, ok := request.GetArguments()["connection"].(string); ok && t != "" {
 		transport = t
 	}
 
@@ -459,7 +459,7 @@ func HandleDeleteObject(ctx context.Context, sys types.System, request mcp.CallT
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 

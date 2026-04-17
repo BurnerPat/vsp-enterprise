@@ -7,40 +7,40 @@ import (
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
 )
 
-// TransportToolDefs returns tool definitions for transport-related tools.
+// TransportToolDefs returns tool definitions for connection-related tools.
 func TransportToolDefs() []types.ToolDef {
 	return []types.ToolDef{
 		{Tool: mcp.NewTool("GetUserTransports",
-			mcp.WithDescription("List open transport requests for the current user"),
+			mcp.WithDescription("List open connection requests for the current user"),
 		), Handler: HandleGetUserTransports, ReadOnly: true, Focused: true,
 			Routes: []types.UniversalRoute{{Action: "query", ParamsType: "user_transports"}}},
 
 		{Tool: mcp.NewTool("GetTransportInfo",
-			mcp.WithDescription("Get detailed information about a transport request"),
-			mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number")),
+			mcp.WithDescription("Get detailed information about a connection request"),
+			mcp.WithString("connection", mcp.Required(), mcp.Description("Transport request number")),
 		), Handler: HandleGetTransportInfo, ReadOnly: true, Focused: true},
 
 		{Tool: mcp.NewTool("ListTransports",
-			mcp.WithDescription("Search for transport requests"),
+			mcp.WithDescription("Search for connection requests"),
 			mcp.WithString("user", mcp.Description("Filter by user (default: current)")),
 			mcp.WithString("status", mcp.Description("Filter by status (D=Modifiable, R=Released)")),
 			mcp.WithNumber("limit", mcp.Description("Maximum number of results (default 50)")),
 		), Handler: HandleListTransports, ReadOnly: true},
 
 		{Tool: mcp.NewTool("CreateTransport",
-			mcp.WithDescription("Create a new transport request"),
+			mcp.WithDescription("Create a new connection request"),
 			mcp.WithString("description", mcp.Required(), mcp.Description("Transport description")),
 			mcp.WithString("target", mcp.Description("Target system (optional)")),
 		), Handler: HandleCreateTransport},
 
 		{Tool: mcp.NewTool("ReleaseTransport",
-			mcp.WithDescription("Release a transport request"),
-			mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number")),
+			mcp.WithDescription("Release a connection request"),
+			mcp.WithString("connection", mcp.Required(), mcp.Description("Transport request number")),
 		), Handler: HandleReleaseTransport},
 
 		{Tool: mcp.NewTool("DeleteTransport",
-			mcp.WithDescription("Delete an empty transport request"),
-			mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number")),
+			mcp.WithDescription("Delete an empty connection request"),
+			mcp.WithString("connection", mcp.Required(), mcp.Description("Transport request number")),
 		), Handler: HandleDeleteTransport},
 	}
 }
@@ -53,9 +53,9 @@ func HandleGetUserTransports(ctx context.Context, sys types.System, request mcp.
 }
 
 func HandleGetTransportInfo(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	trID, _ := request.GetArguments()["transport"].(string)
+	trID, _ := request.GetArguments()["connection"].(string)
 	if trID == "" {
-		return types.ErrorResult("transport is required"), nil
+		return types.ErrorResult("connection is required"), nil
 	}
 
 	// Placeholder - mismatch with adt.Client

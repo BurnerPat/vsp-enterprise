@@ -122,14 +122,14 @@ See: `reports/2026-02-03-002-test-checklist.md`
 # Allow transportable edits
 ./vsp --url ... --allow-transportable-edits
 
-# Allow transportable edits with transport whitelist
+# Allow transportable edits with connection whitelist
 ./vsp --url ... --allow-transportable-edits --allowed-transports "A4HK*,DEVK*"
 
-# Full transport management (create, release, delete)
+# Full connection management (create, release, delete)
 ./vsp --url ... --allow-transportable-edits --enable-transports
 
-# Read-only transport info
-./vsp --url ... --allow-transportable-edits --enable-transports --transport-read-only
+# Read-only connection info
+./vsp --url ... --allow-transportable-edits --enable-transports --connection-read-only
 ```
 
 ## References

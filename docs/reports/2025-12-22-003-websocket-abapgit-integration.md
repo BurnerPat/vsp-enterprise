@@ -544,7 +544,7 @@ func (c *AMDPWebSocketClient) GitImportZip(ctx context.Context, zipBase64, pkg, 
 	params := map[string]interface{}{
 		"zipBase64": zipBase64,
 		"package":   pkg,
-		"transport": transport,
+		"connection": transport,
 		"overwrite": overwrite,
 		"activate":  activate,
 	}
@@ -750,7 +750,7 @@ vsp git export --packages '$ZADT,$ZADT_VSP' --output backup.zip
 vsp git export --objects 'CLAS:ZCL_MY_CLASS,INTF:ZIF_MY_INTERFACE' --output export.zip
 
 # Import ZIP
-vsp git import --path backup.zip --package '$ZADT' --transport A4HK900123
+vsp git import --path backup.zip --package '$ZADT' --connection A4HK900123
 
 # Import folder (abapGit format)
 vsp git import --path ./src/ --package '$ZADT'

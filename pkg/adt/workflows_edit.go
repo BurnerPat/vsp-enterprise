@@ -10,17 +10,17 @@ import (
 
 // EditSourceResult represents the result of editing source code.
 type EditSourceResult struct {
-	Success        bool                `json:"success"`
-	ObjectURL      string              `json:"objectUrl"`
-	ObjectName     string              `json:"objectName"`
-	MatchCount     int                 `json:"matchCount"`
-	OldString      string              `json:"oldString,omitempty"`
-	NewString      string              `json:"newString,omitempty"`
-	SyntaxErrors   []string            `json:"syntaxErrors,omitempty"`
-	SyntaxWarnings []string            `json:"syntaxWarnings,omitempty"`
-	Activation     *ActivationResult   `json:"activation,omitempty"`
-	Message        string              `json:"message,omitempty"`
-	Method         string              `json:"method,omitempty"` // Method name if method-level edit
+	Success        bool              `json:"success"`
+	ObjectURL      string            `json:"objectUrl"`
+	ObjectName     string            `json:"objectName"`
+	MatchCount     int               `json:"matchCount"`
+	OldString      string            `json:"oldString,omitempty"`
+	NewString      string            `json:"newString,omitempty"`
+	SyntaxErrors   []string          `json:"syntaxErrors,omitempty"`
+	SyntaxWarnings []string          `json:"syntaxWarnings,omitempty"`
+	Activation     *ActivationResult `json:"activation,omitempty"`
+	Message        string            `json:"message,omitempty"`
+	Method         string            `json:"method,omitempty"` // Method name if method-level edit
 }
 
 // EditSourceOptions provides optional parameters for EditSource.
@@ -135,14 +135,16 @@ func (c *Client) EditSource(ctx context.Context, objectURL, oldString, newString
 //   - opts: Optional parameters (ReplaceAll, SyntaxCheck, CaseInsensitive, Method)
 //
 // Method-level isolation (CLAS only):
-//   When opts.Method is set, the search is constrained to the specified method only.
-//   This prevents accidental edits in other methods when the same pattern exists elsewhere.
+//
+//	When opts.Method is set, the search is constrained to the specified method only.
+//	This prevents accidental edits in other methods when the same pattern exists elsewhere.
 //
 // Example:
-//   EditSourceWithOptions(ctx, "/sap/bc/adt/oo/classes/ZCL_TEST",
-//     "METHOD foo.\n  ENDMETHOD.",
-//     "METHOD foo.\n  rv_result = 42.\n  ENDMETHOD.",
-//     &EditSourceOptions{Method: "FOO"})
+//
+//	EditSourceWithOptions(ctx, "/sap/bc/adt/oo/classes/ZCL_TEST",
+//	  "METHOD foo.\n  ENDMETHOD.",
+//	  "METHOD foo.\n  rv_result = 42.\n  ENDMETHOD.",
+//	  &EditSourceOptions{Method: "FOO"})
 func (c *Client) EditSourceWithOptions(ctx context.Context, objectURL, oldString, newString string, opts *EditSourceOptions) (*EditSourceResult, error) {
 	// Safety check
 	if err := c.checkSafety(OpUpdate, "EditSource"); err != nil {
@@ -154,7 +156,7 @@ func (c *Client) EditSourceWithOptions(ctx context.Context, objectURL, oldString
 		opts = &EditSourceOptions{SyntaxCheck: true}
 	}
 
-	// Check if transportable edits are allowed when transport is specified
+	// Check if transportable edits are allowed when connection is specified
 	if err := c.checkTransportableEdit(opts.Transport, "EditSource"); err != nil {
 		return nil, err
 	}
@@ -418,4 +420,3 @@ func (c *Client) EditSourceWithOptions(ctx context.Context, objectURL, oldString
 	}
 	return result, nil
 }
-

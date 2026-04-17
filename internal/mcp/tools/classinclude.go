@@ -28,7 +28,7 @@ func ClassIncludeToolDefs() []types.ToolDef {
 				mcp.WithDescription("Create the test classes include for a class (required before writing test code)"),
 				mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
 				mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from LockObject (lock the parent class first)")),
-				mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+				mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
 			),
 			Handler: HandleCreateTestInclude,
 		},
@@ -39,7 +39,7 @@ func ClassIncludeToolDefs() []types.ToolDef {
 				mcp.WithString("include_type", mcp.Required(), mcp.Description("Include type: main, definitions, implementations, macros, testclasses")),
 				mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code to write")),
 				mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from LockObject (lock the parent class first)")),
-				mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+				mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
 			),
 			Handler: HandleUpdateClassInclude,
 		},
@@ -95,7 +95,7 @@ func HandleCreateTestInclude(ctx context.Context, sys types.System, request mcp.
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 
@@ -129,7 +129,7 @@ func HandleUpdateClassInclude(ctx context.Context, sys types.System, request mcp
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 

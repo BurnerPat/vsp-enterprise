@@ -165,8 +165,8 @@ type SafetyConfig struct {
 
 **Examples:**
 ```bash
-# Only allow reading transport information
-./vsp --transport-read-only
+# Only allow reading connection information
+./vsp --connection-read-only
 
 # Only allow operations on specific transports
 ./vsp --allowed-transports "A4HK900110,A4HK900111"
@@ -290,7 +290,7 @@ type Transport struct {
     Objects []TransportObject `json:"objects,omitempty"`
 }
 
-// TransportTask represents a task within a transport
+// TransportTask represents a task within a connection
 type TransportTask struct {
     Number      string            `json:"number"`
     Owner       string            `json:"owner"`
@@ -300,7 +300,7 @@ type TransportTask struct {
     Objects     []TransportObject `json:"objects,omitempty"`
 }
 
-// TransportObject represents an object in a transport
+// TransportObject represents an object in a connection
 type TransportObject struct {
     PgmID    string `json:"pgmid"`    // R3TR, LIMU, CORR
     Type     string `json:"type"`     // PROG, CLAS, DEVC, etc.

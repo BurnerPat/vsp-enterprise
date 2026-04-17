@@ -109,7 +109,7 @@ func (c *Client) UnlockObject(ctx context.Context, objectURL string, lockHandle 
 // UpdateSource writes source code to an ABAP object.
 // objectSourceURL is the source URL (e.g., "/sap/bc/adt/programs/programs/ZTEST/source/main")
 // lockHandle is required (from LockObject)
-// transport is optional (for transportable objects)
+// connection is optional (for transportable objects)
 func (c *Client) UpdateSource(ctx context.Context, objectSourceURL string, source string, lockHandle string, transport string) error {
 	// Safety check
 	if err := c.checkSafety(OpUpdate, "UpdateSource"); err != nil {
@@ -168,7 +168,7 @@ type CreateObjectOptions struct {
 	Name        string              `json:"name"`
 	Description string              `json:"description"`
 	PackageName string              `json:"packageName"`
-	Transport   string              `json:"transport,omitempty"`
+	Transport   string              `json:"connection,omitempty"`
 	Responsible string              `json:"responsible,omitempty"`
 	// For function modules - the function group name
 	ParentName string `json:"parentName,omitempty"`
@@ -325,9 +325,9 @@ func (c *Client) CreateObject(ctx context.Context, opts CreateObjectOptions) err
 		if !c.config.Safety.EnableTransports && !c.config.Safety.AllowTransportableEdits {
 			return fmt.Errorf("creating transportable packages requires --enable-transports or --allow-transportable-edits flag. Package: %s", opts.Name)
 		}
-		// Transportable package requires a transport request
+		// Transportable package requires a connection request
 		if opts.Transport == "" {
-			return fmt.Errorf("transport request is required for creating transportable package %s", opts.Name)
+			return fmt.Errorf("connection request is required for creating transportable package %s", opts.Name)
 		}
 	}
 
@@ -424,10 +424,10 @@ func buildCreateObjectBody(opts CreateObjectOptions, typeInfo objectTypeInfo, de
   <pack:attributes pack:packageType="development"/>
   <pack:superPackage adtcore:name="%s" adtcore:type="DEVC/K"/>
   <pack:applicationComponent/>
-  <pack:transport>
+  <pack:connection>
     <pack:softwareComponent pack:name="%s"/>
     <pack:transportLayer pack:name="%s"/>
-  </pack:transport>
+  </pack:connection>
   <pack:translation/>
   <pack:useAccesses/>
   <pack:packageInterfaces/>
@@ -580,7 +580,7 @@ func escapeXML(s string) string {
 // DeleteObject deletes an ABAP object.
 // objectURL is the ADT URL of the object (e.g., "/sap/bc/adt/programs/programs/ZTEST")
 // lockHandle is required (from LockObject)
-// transport is optional (for transportable objects)
+// connection is optional (for transportable objects)
 func (c *Client) DeleteObject(ctx context.Context, objectURL string, lockHandle string, transport string) error {
 	// Safety check
 	if err := c.checkSafety(OpDelete, "DeleteObject"); err != nil {
@@ -840,11 +840,11 @@ func parsePublishResult(data []byte) (*PublishResult, error) {
 
 // CreateTableOptions defines options for creating a DDIC table.
 type CreateTableOptions struct {
-	Name          string       `json:"name"`          // Table name (uppercase, max 30 chars, must start with Z/Y)
-	Description   string       `json:"description"`   // Short description
-	Package       string       `json:"package"`       // Target package
-	Fields        []TableField `json:"fields"`        // Field definitions
-	Transport     string       `json:"transport,omitempty"` // Transport request (optional for $TMP)
+	Name          string       `json:"name"`                    // Table name (uppercase, max 30 chars, must start with Z/Y)
+	Description   string       `json:"description"`             // Short description
+	Package       string       `json:"package"`                 // Target package
+	Fields        []TableField `json:"fields"`                  // Field definitions
+	Transport     string       `json:"connection,omitempty"`    // Transport request (optional for $TMP)
 	DeliveryClass string       `json:"deliveryClass,omitempty"` // A=Application, C=Customizing, L=Temp, etc. (default: A)
 	TableCategory string       `json:"tableCategory,omitempty"` // TRANSPARENT (default), STRUCTURE, etc.
 }

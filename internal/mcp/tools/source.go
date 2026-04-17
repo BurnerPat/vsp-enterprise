@@ -79,7 +79,7 @@ func UnifiedToolDefs() []types.ToolDef {
 				mcp.WithString("test_source",
 					mcp.Description("Test source code for CLAS (auto-creates test include and runs tests)"),
 				),
-				mcp.WithString("transport",
+				mcp.WithString("connection",
 					mcp.Description("Transport request number"),
 				),
 				mcp.WithString("method",
@@ -174,7 +174,7 @@ func FileSourceToolDefs() []types.ToolDef {
 				mcp.WithString("package_name",
 					mcp.Description("Target package name (required for new objects, not needed for class includes)"),
 				),
-				mcp.WithString("transport",
+				mcp.WithString("connection",
 					mcp.Description("Transport request number"),
 				),
 			),
@@ -259,7 +259,7 @@ func HandleWriteSource(ctx context.Context, sys types.System, request mcp.CallTo
 	description, _ := request.GetArguments()["description"].(string)
 	packageName, _ := request.GetArguments()["package"].(string)
 	testSource, _ := request.GetArguments()["test_source"].(string)
-	transport, _ := request.GetArguments()["transport"].(string)
+	transport, _ := request.GetArguments()["connection"].(string)
 	method, _ := request.GetArguments()["method"].(string)
 
 	opts := &adt.WriteSourceOptions{

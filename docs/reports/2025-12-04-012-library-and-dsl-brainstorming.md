@@ -476,7 +476,7 @@ workflows:
 
   deploy:
     depends_on: [validate]
-    - action: transport
+    - action: connection
       request: DEVK900123
       operations:
         - release
@@ -502,7 +502,7 @@ workflows:
 vsp workflow run validate
 
 # Run with variables
-vsp workflow run deploy --var transport=DEVK900234
+vsp workflow run deploy --var connection=DEVK900234
 
 # Dry run
 vsp workflow run update_headers --dry-run

@@ -1,4 +1,4 @@
-package transport
+package connection
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ const (
 
 // HttpConnectionConfig holds the parameters needed to create an HttpConnection.
 // The root adt.Config is translated into this struct by the Client constructor
-// so that the transport package has no dependency on adt.Config.
+// so that the connection package has no dependency on adt.Config.
 type HttpConnectionConfig struct {
 	BaseURL            string
 	Username           string

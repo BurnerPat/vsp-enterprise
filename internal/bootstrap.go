@@ -124,16 +124,16 @@ func bootstrapMultiSystem(cfg *config.GlobalConfig, systemsConfigPath string) er
 
 	cfg.Systems = activeSystems
 
-	// Enforce stdio transport when multiple systems use RFC mode
+	// Enforce stdio connection when multiple systems use RFC mode
 	if rfcSystemCount > 1 {
 		if strings.EqualFold(cfg.SidecarTransport, "http") || cfg.SidecarTransport == "" {
-			return fmt.Errorf("--multi-system: multiple systems use RFC mode (%d systems) — jco-sidecar-transport must be \"stdio\" (not \"http\"). "+
-				"Each RFC system needs its own sidecar process, which is only supported via stdio transport. "+
-				"Add --jco-sidecar-transport=stdio", rfcSystemCount)
+			return fmt.Errorf("--multi-system: multiple systems use RFC mode (%d systems) — jco-sidecar-connection must be \"stdio\" (not \"http\"). "+
+				"Each RFC system needs its own sidecar process, which is only supported via stdio connection. "+
+				"Add --jco-sidecar-connection=stdio", rfcSystemCount)
 		}
 
 		if cfg.Verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: %d RFC systems detected, using stdio sidecar transport\n", rfcSystemCount)
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Multi-system: %d RFC systems detected, using stdio sidecar connection\n", rfcSystemCount)
 		}
 	}
 

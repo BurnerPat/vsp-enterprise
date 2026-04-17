@@ -45,29 +45,29 @@ type SafetyConfig struct {
 	// DryRun mode - log operations but don't execute them (useful for testing)
 	DryRun bool
 
-	// EnableTransports explicitly enables transport management operations
+	// EnableTransports explicitly enables connection management operations
 	// By default false - requires conscious opt-in to work with transports
-	// When false, all transport operations (create, release, list) are blocked
+	// When false, all connection operations (create, release, list) are blocked
 	EnableTransports bool
 
 	// TransportReadOnly allows only read operations on transports (list, get)
 	// When true, create/release/delete operations are blocked
 	TransportReadOnly bool
 
-	// AllowedTransports restricts transport operations to specific transports
+	// AllowedTransports restricts connection operations to specific transports
 	// Example: []string{"A4HK900110", "A4HK*", "DEV*"}
 	// Supports wildcards: "A4HK*" matches all transports starting with A4HK
 	// Empty = all transports allowed (within other restrictions)
 	AllowedTransports []string
 
-	// AllowTransportableEdits enables editing objects that require transport requests
+	// AllowTransportableEdits enables editing objects that require connection requests
 	// By default false - only allows editing local objects ($TMP, $* packages)
 	// When false:
-	//   - Providing a transport parameter to EditSource/WriteSource will be rejected
-	//   - Objects in transportable packages will fail at SAP level (no transport)
+	//   - Providing a connection parameter to EditSource/WriteSource will be rejected
+	//   - Objects in transportable packages will fail at SAP level (no connection)
 	// When true:
 	//   - Transport parameter is accepted and passed to SAP
-	//   - User takes responsibility for transport management
+	//   - User takes responsibility for connection management
 	// Use --allow-transportable-edits or SAP_ALLOW_TRANSPORTABLE_EDITS=true to enable
 	AllowTransportableEdits bool
 }
@@ -141,7 +141,7 @@ func (s *SafetyConfig) IsOperationAllowed(op OperationType) bool {
 		return false
 	}
 
-	// Check EnableTransports - transport operations require explicit opt-in
+	// Check EnableTransports - connection operations require explicit opt-in
 	if op == OpTransport && !s.EnableTransports {
 		return false
 	}
@@ -205,7 +205,7 @@ func (s *SafetyConfig) CheckPackage(pkg string) error {
 	return nil
 }
 
-// IsTransportAllowed checks if operations on a given transport are allowed
+// IsTransportAllowed checks if operations on a given connection are allowed
 func (s *SafetyConfig) IsTransportAllowed(transport string) bool {
 	// First check if transports are enabled at all
 	if !s.EnableTransports {
@@ -247,16 +247,16 @@ func (s *SafetyConfig) IsTransportWriteAllowed() bool {
 	return !s.TransportReadOnly
 }
 
-// CheckTransport returns an error if the transport operation is not allowed
+// CheckTransport returns an error if the connection operation is not allowed
 func (s *SafetyConfig) CheckTransport(transport, opName string, isWrite bool) error {
 	// For read operations (ListTransports, GetTransport), allow if:
 	// - EnableTransports is true, OR
 	// - AllowTransportableEdits is true (user needs to discover transports)
 	if !isWrite && (s.EnableTransports || s.AllowTransportableEdits) {
-		// Read operation allowed, check transport whitelist if specified
+		// Read operation allowed, check connection whitelist if specified
 		if transport != "" && transport != "*" && len(s.AllowedTransports) > 0 {
 			if !s.isTransportInWhitelist(transport) {
-				return fmt.Errorf("operation '%s' on transport '%s' is blocked by safety configuration (allowed: %v)",
+				return fmt.Errorf("operation '%s' on connection '%s' is blocked by safety configuration (allowed: %v)",
 					opName, transport, s.AllowedTransports)
 			}
 		}
@@ -266,20 +266,20 @@ func (s *SafetyConfig) CheckTransport(transport, opName string, isWrite bool) er
 	// For write operations or when neither flag is set, require EnableTransports
 	if !s.EnableTransports {
 		if s.AllowTransportableEdits && isWrite {
-			return fmt.Errorf("transport write operation '%s' requires --enable-transports flag (--allow-transportable-edits only enables read operations)", opName)
+			return fmt.Errorf("connection write operation '%s' requires --enable-transports flag (--allow-transportable-edits only enables read operations)", opName)
 		}
-		return fmt.Errorf("transport operation '%s' is blocked: transports not enabled (use --enable-transports or SAP_ENABLE_TRANSPORTS=true)", opName)
+		return fmt.Errorf("connection operation '%s' is blocked: transports not enabled (use --enable-transports or SAP_ENABLE_TRANSPORTS=true)", opName)
 	}
 
 	// Check write permissions
 	if isWrite && s.TransportReadOnly {
-		return fmt.Errorf("transport write operation '%s' is blocked: transport read-only mode enabled", opName)
+		return fmt.Errorf("connection write operation '%s' is blocked: connection read-only mode enabled", opName)
 	}
 
-	// Check transport whitelist (only for specific transport operations, not for list)
+	// Check connection whitelist (only for specific connection operations, not for list)
 	if transport != "" && transport != "*" && len(s.AllowedTransports) > 0 {
 		if !s.IsTransportAllowed(transport) {
-			return fmt.Errorf("operation '%s' on transport '%s' is blocked by safety configuration (allowed: %v)",
+			return fmt.Errorf("operation '%s' on connection '%s' is blocked by safety configuration (allowed: %v)",
 				opName, transport, s.AllowedTransports)
 		}
 	}
@@ -288,31 +288,31 @@ func (s *SafetyConfig) CheckTransport(transport, opName string, isWrite bool) er
 }
 
 // CheckTransportableEdit returns an error if editing transportable objects is not allowed
-// This should be called when a transport parameter is provided to write operations
+// This should be called when a connection parameter is provided to write operations
 func (s *SafetyConfig) CheckTransportableEdit(transport, opName string) error {
 	if transport == "" {
-		return nil // No transport = local object, always allowed
+		return nil // No connection = local object, always allowed
 	}
 
 	if !s.AllowTransportableEdits {
 		return fmt.Errorf(
-			"operation '%s' with transport '%s' is blocked: editing transportable objects is disabled.\n"+
+			"operation '%s' with connection '%s' is blocked: editing transportable objects is disabled.\n"+
 				"Objects in transportable packages require explicit opt-in.\n"+
 				"Use --allow-transportable-edits or SAP_ALLOW_TRANSPORTABLE_EDITS=true to enable.\n"+
 				"WARNING: This allows modifications to non-local objects that may affect production systems.",
 			opName, transport)
 	}
 
-	// If transportable edits are allowed, also check transport whitelist
+	// If transportable edits are allowed, also check connection whitelist
 	if len(s.AllowedTransports) > 0 && !s.isTransportInWhitelist(transport) {
-		return fmt.Errorf("operation '%s' with transport '%s' is blocked by safety configuration (allowed transports: %v)",
+		return fmt.Errorf("operation '%s' with connection '%s' is blocked by safety configuration (allowed transports: %v)",
 			opName, transport, s.AllowedTransports)
 	}
 
 	return nil
 }
 
-// isTransportInWhitelist checks if a transport matches the AllowedTransports whitelist
+// isTransportInWhitelist checks if a connection matches the AllowedTransports whitelist
 // This is a helper that doesn't check EnableTransports (unlike IsTransportAllowed)
 func (s *SafetyConfig) isTransportInWhitelist(transport string) bool {
 	if len(s.AllowedTransports) == 0 {

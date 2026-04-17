@@ -22,11 +22,11 @@ func TestParseInactiveObjects(t *testing.T) {
                adtcore:type="PROG/P"
                adtcore:name="ZTEST"/>
     </ioc:object>
-    <ioc:transport ioc:user="TRANSPORT_USER" ioc:deleted="false">
+    <ioc:connection ioc:user="TRANSPORT_USER" ioc:deleted="false">
       <ioc:ref adtcore:uri="/sap/bc/adt/cts/transportrequests/DEVK900001"
                adtcore:type="TASK"
                adtcore:name="DEVK900001"/>
-    </ioc:transport>
+    </ioc:connection>
   </ioc:entry>
 </ioc:inactiveObjects>`
 
@@ -39,7 +39,7 @@ func TestParseInactiveObjects(t *testing.T) {
 		t.Fatalf("expected 2 entries, got %d", len(result))
 	}
 
-	// Check first entry (class without transport)
+	// Check first entry (class without connection)
 	entry1 := result[0]
 	if entry1.Object == nil {
 		t.Fatal("expected first entry to have object")
@@ -57,10 +57,10 @@ func TestParseInactiveObjects(t *testing.T) {
 		t.Error("expected first object not to be deleted")
 	}
 	if entry1.Transport != nil {
-		t.Error("expected first entry to have no transport")
+		t.Error("expected first entry to have no connection")
 	}
 
-	// Check second entry (program with transport, marked deleted)
+	// Check second entry (program with connection, marked deleted)
 	entry2 := result[1]
 	if entry2.Object == nil {
 		t.Fatal("expected second entry to have object")
@@ -72,10 +72,10 @@ func TestParseInactiveObjects(t *testing.T) {
 		t.Error("expected second object to be deleted")
 	}
 	if entry2.Transport == nil {
-		t.Fatal("expected second entry to have transport")
+		t.Fatal("expected second entry to have connection")
 	}
 	if entry2.Transport.Name != "DEVK900001" {
-		t.Errorf("expected transport name 'DEVK900001', got '%s'", entry2.Transport.Name)
+		t.Errorf("expected connection name 'DEVK900001', got '%s'", entry2.Transport.Name)
 	}
 }
 

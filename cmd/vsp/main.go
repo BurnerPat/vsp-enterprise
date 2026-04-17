@@ -130,10 +130,10 @@ func init() {
 	rootCmd.Flags().StringVar(&cfg.AllowedOps, "allowed-ops", "", "Whitelist of allowed operation types (e.g., \"RSQ\" for Read, Search, Query only)")
 	rootCmd.Flags().StringVar(&cfg.DisallowedOps, "disallowed-ops", "", "Blacklist of operation types to block (e.g., \"CDUA\" for Create, Delete, Update, Activate)")
 	rootCmd.Flags().StringSliceVar(&cfg.AllowedPackages, "allowed-packages", nil, "Restrict operations to specific packages (comma-separated, supports wildcards like Z*)")
-	rootCmd.Flags().BoolVar(&cfg.EnableTransports, "enable-transports", false, "Enable transport management operations (disabled by default for safety)")
-	rootCmd.Flags().BoolVar(&cfg.TransportReadOnly, "transport-read-only", false, "Only allow read operations on transports (list, get)")
-	rootCmd.Flags().StringSliceVar(&cfg.AllowedTransports, "allowed-transports", nil, "Restrict transport operations to specific transports (comma-separated, supports wildcards like A4HK*)")
-	rootCmd.Flags().BoolVar(&cfg.AllowTransportableEdits, "allow-transportable-edits", false, "Allow editing objects in transportable packages (requires transport parameter)")
+	rootCmd.Flags().BoolVar(&cfg.EnableTransports, "enable-transports", false, "Enable connection management operations (disabled by default for safety)")
+	rootCmd.Flags().BoolVar(&cfg.TransportReadOnly, "connection-read-only", false, "Only allow read operations on transports (list, get)")
+	rootCmd.Flags().StringSliceVar(&cfg.AllowedTransports, "allowed-transports", nil, "Restrict connection operations to specific transports (comma-separated, supports wildcards like A4HK*)")
+	rootCmd.Flags().BoolVar(&cfg.AllowTransportableEdits, "allow-transportable-edits", false, "Allow editing objects in transportable packages (requires connection parameter)")
 
 	// Mode options
 	rootCmd.Flags().StringVar(&cfg.Mode, "mode", "focused", "Tool mode: focused (81 tools), expert (122 tools), or hyperfocused (single universal SAP tool)")
@@ -150,7 +150,7 @@ func init() {
 	rootCmd.Flags().StringVar(&cfg.FeatureRAP, "feature-rap", "auto", "RAP/OData development: auto, on, off")
 	rootCmd.Flags().StringVar(&cfg.FeatureAMDP, "feature-amdp", "auto", "AMDP/HANA debugger: auto, on, off")
 	rootCmd.Flags().StringVar(&cfg.FeatureUI5, "feature-ui5", "auto", "UI5/Fiori BSP management: auto, on, off")
-	rootCmd.Flags().StringVar(&cfg.FeatureTransport, "feature-transport", "auto", "CTS transport management: auto, on, off")
+	rootCmd.Flags().StringVar(&cfg.FeatureTransport, "feature-connection", "auto", "CTS connection management: auto, on, off")
 
 	// Debugger configuration
 	rootCmd.Flags().StringVar(&cfg.TerminalID, "terminal-id", "", "SAP GUI terminal ID for cross-tool breakpoint sharing")
@@ -199,7 +199,7 @@ func init() {
 	_ = viper.BindPFlag("disallowed-ops", rootCmd.Flags().Lookup("disallowed-ops"))
 	_ = viper.BindPFlag("allowed-packages", rootCmd.Flags().Lookup("allowed-packages"))
 	_ = viper.BindPFlag("enable-transports", rootCmd.Flags().Lookup("enable-transports"))
-	_ = viper.BindPFlag("transport-read-only", rootCmd.Flags().Lookup("transport-read-only"))
+	_ = viper.BindPFlag("connection-read-only", rootCmd.Flags().Lookup("connection-read-only"))
 	_ = viper.BindPFlag("allowed-transports", rootCmd.Flags().Lookup("allowed-transports"))
 	_ = viper.BindPFlag("allow-transportable-edits", rootCmd.Flags().Lookup("allow-transportable-edits"))
 	_ = viper.BindPFlag("mode", rootCmd.Flags().Lookup("mode"))
@@ -212,7 +212,7 @@ func init() {
 	_ = viper.BindPFlag("feature-rap", rootCmd.Flags().Lookup("feature-rap"))
 	_ = viper.BindPFlag("feature-amdp", rootCmd.Flags().Lookup("feature-amdp"))
 	_ = viper.BindPFlag("feature-ui5", rootCmd.Flags().Lookup("feature-ui5"))
-	_ = viper.BindPFlag("feature-transport", rootCmd.Flags().Lookup("feature-transport"))
+	_ = viper.BindPFlag("feature-connection", rootCmd.Flags().Lookup("feature-connection"))
 
 	// Debugger configuration
 	_ = viper.BindPFlag("terminal-id", rootCmd.Flags().Lookup("terminal-id"))
@@ -230,7 +230,7 @@ func init() {
 	_ = viper.BindPFlag("java-path", rootCmd.Flags().Lookup("java-path"))
 	_ = viper.BindPFlag("rfc-proxy-port", rootCmd.Flags().Lookup("rfc-proxy-port"))
 	_ = viper.BindPFlag("rfc-max-concurrent", rootCmd.Flags().Lookup("rfc-max-concurrent"))
-	_ = viper.BindPFlag("jco-sidecar-transport", rootCmd.Flags().Lookup("jco-sidecar-transport"))
+	_ = viper.BindPFlag("jco-sidecar-connection", rootCmd.Flags().Lookup("jco-sidecar-connection"))
 
 	// SNC/SSO configuration
 	_ = viper.BindPFlag("snc", rootCmd.Flags().Lookup("snc"))
@@ -398,7 +398,7 @@ func logFinalConfiguration(cfg *config.GlobalConfig) {
 			if transport == "" {
 				transport = "http"
 			}
-			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] System %q: RFC mode (sidecar transport: %s)\n", sysID, transport)
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] System %q: RFC mode (sidecar connection: %s)\n", sysID, transport)
 			if sys.SNC {
 				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   Auth: SNC/SSO (system ID: %s, %d JCo properties)\n", sys.SysID, len(sys.JcoProperties))
 			} else if sys.AsHost != "" {

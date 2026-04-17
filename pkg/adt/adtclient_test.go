@@ -5,24 +5,24 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/oisee/vibing-steampunk/pkg/adt/transport"
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // --------------------------------------------------------------------------
-// mockAdtConnection implements transport.AdtConnection for testing.
+// mockAdtConnection implements connection.AdtConnection for testing.
 // --------------------------------------------------------------------------
 
 type mockAdtConnection struct {
-	sendFn  func(ctx context.Context, req *transport.Request) (*transport.AdtResponse, error)
+	sendFn  func(ctx context.Context, req *connection.Request) (*connection.AdtResponse, error)
 	pingErr error
 	closed  bool
 }
 
-func (m *mockAdtConnection) SendRequest(ctx context.Context, req *transport.Request) (*transport.AdtResponse, error) {
+func (m *mockAdtConnection) SendRequest(ctx context.Context, req *connection.Request) (*connection.AdtResponse, error) {
 	if m.sendFn != nil {
 		return m.sendFn(ctx, req)
 	}
-	return transport.NewAdtResponseFromMap(200, nil, []byte("mock")), nil
+	return connection.NewAdtResponseFromMap(200, nil, []byte("mock")), nil
 }
 func (m *mockAdtConnection) Ping(_ context.Context) error { return m.pingErr }
 func (m *mockAdtConnection) Close() error                 { m.closed = true; return nil }
@@ -44,13 +44,13 @@ func TestNewClientWithConnection_ImplementsAdtClient(t *testing.T) {
 func TestClient_SendRequest_ViaNativeConnection(t *testing.T) {
 	cfg := NewConfig("https://sap.example.com", "user", "pass")
 	conn := &mockAdtConnection{
-		sendFn: func(_ context.Context, req *transport.Request) (*transport.AdtResponse, error) {
-			return transport.NewAdtResponseFromMap(200, nil, []byte("native-response")), nil
+		sendFn: func(_ context.Context, req *connection.Request) (*connection.AdtResponse, error) {
+			return connection.NewAdtResponseFromMap(200, nil, []byte("native-response")), nil
 		},
 	}
 	client := NewClientWithConnection(cfg, conn)
 
-	resp, err := client.SendRequest(context.Background(), &transport.Request{
+	resp, err := client.SendRequest(context.Background(), &connection.Request{
 		Path:   "/sap/bc/adt/test",
 		Method: http.MethodGet,
 	})
@@ -120,7 +120,7 @@ func TestClient_LegacyClient_SendRequest(t *testing.T) {
 	client := NewClientWithTransport(cfg, legacyTransport)
 
 	// SendRequest should work through the legacy fallback path.
-	resp, err := client.SendRequest(context.Background(), &transport.Request{
+	resp, err := client.SendRequest(context.Background(), &connection.Request{
 		Path:   "/sap/bc/adt/test",
 		Method: http.MethodGet,
 	})
@@ -145,15 +145,15 @@ func TestClient_LegacyClient_ConnectionIsNil(t *testing.T) {
 
 func TestConnectionRequesterAdapter_BridgesNewToLegacy(t *testing.T) {
 	conn := &mockAdtConnection{
-		sendFn: func(_ context.Context, req *transport.Request) (*transport.AdtResponse, error) {
-			return transport.NewAdtResponseFromMap(200, map[string]string{
+		sendFn: func(_ context.Context, req *connection.Request) (*connection.AdtResponse, error) {
+			return connection.NewAdtResponseFromMap(200, map[string]string{
 				"X-Custom": "header-val",
 			}, []byte("bridged")), nil
 		},
 	}
 	client := NewClientWithConnection(NewConfig("https://sap.example.com", "user", "pass"), conn)
 
-	// Use legacy path (c.transport.Request) by calling an existing Client method
+	// Use legacy path (c.connection.Request) by calling an existing Client method
 	// that hasn't been migrated yet.
 	source, err := client.GetProgram(context.Background(), "ZTEST")
 	if err != nil {

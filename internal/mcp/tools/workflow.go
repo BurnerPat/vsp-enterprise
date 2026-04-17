@@ -18,14 +18,14 @@ func WorkflowToolDefs() []types.ToolDef {
 			mcp.WithDescription("Update an existing program with syntax check and activation (Lock -> SyntaxCheck -> Update -> Unlock -> Activate)"),
 			mcp.WithString("program_name", mcp.Required(), mcp.Description("Name of the ABAP program")),
 			mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code")),
-			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
 		), Handler: HandleWriteProgram},
 
 		{Tool: mcp.NewTool("WriteClass",
 			mcp.WithDescription("Update an existing class with syntax check and activation (Lock -> SyntaxCheck -> Update -> Unlock -> Activate)"),
 			mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
 			mcp.WithString("source", mcp.Required(), mcp.Description("ABAP class source code (definition and implementation)")),
-			mcp.WithString("transport", mcp.Description("Transport request number (optional for local packages)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
 		), Handler: HandleWriteClass},
 
 		{Tool: mcp.NewTool("CreateAndActivateProgram",
@@ -34,7 +34,7 @@ func WorkflowToolDefs() []types.ToolDef {
 			mcp.WithString("description", mcp.Required(), mcp.Description("Program description")),
 			mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name (e.g., $TMP for local)")),
 			mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code")),
-			mcp.WithString("transport", mcp.Description("Transport request number (required for non-local packages)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (required for non-local packages)")),
 		), Handler: HandleCreateAndActivateProgram},
 
 		{Tool: mcp.NewTool("CreateClassWithTests",
@@ -44,7 +44,7 @@ func WorkflowToolDefs() []types.ToolDef {
 			mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name (e.g., $TMP for local)")),
 			mcp.WithString("class_source", mcp.Required(), mcp.Description("ABAP class source code (definition and implementation)")),
 			mcp.WithString("test_source", mcp.Required(), mcp.Description("ABAP unit test source code")),
-			mcp.WithString("transport", mcp.Description("Transport request number (required for non-local packages)")),
+			mcp.WithString("connection", mcp.Description("Transport request number (required for non-local packages)")),
 		), Handler: HandleCreateClassWithTests},
 	}
 }
@@ -63,7 +63,7 @@ func HandleWriteProgram(ctx context.Context, sys types.System, request mcp.CallT
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 
@@ -88,7 +88,7 @@ func HandleWriteClass(ctx context.Context, sys types.System, request mcp.CallToo
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 
@@ -123,7 +123,7 @@ func HandleCreateAndActivateProgram(ctx context.Context, sys types.System, reque
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 
@@ -163,7 +163,7 @@ func HandleCreateClassWithTests(ctx context.Context, sys types.System, request m
 	}
 
 	transport := ""
-	if t, ok := request.GetArguments()["transport"].(string); ok {
+	if t, ok := request.GetArguments()["connection"].(string); ok {
 		transport = t
 	}
 

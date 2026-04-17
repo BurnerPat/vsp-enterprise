@@ -182,12 +182,12 @@ func TestNewHTTPClient(t *testing.T) {
 		t.Errorf("HTTP client timeout = %v, want %v", client.Timeout, cfg.Timeout)
 	}
 
-	// Verify transport has proxy configured (fixes #13)
+	// Verify connection has proxy configured (fixes #13)
 	transport, ok := client.Transport.(*http.Transport)
 	if !ok {
-		t.Error("HTTP client transport should be *http.Transport")
+		t.Error("HTTP client connection should be *http.Transport")
 	} else if transport.Proxy == nil {
-		t.Error("HTTP transport should have Proxy function set (for HTTP_PROXY/HTTPS_PROXY support)")
+		t.Error("HTTP connection should have Proxy function set (for HTTP_PROXY/HTTPS_PROXY support)")
 	}
 }
 

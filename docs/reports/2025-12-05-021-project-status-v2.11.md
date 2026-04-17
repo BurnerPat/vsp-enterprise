@@ -89,7 +89,7 @@ VSP (Vibing SAP) has reached a significant milestone with v2.11.0, delivering **
 
 # Transport controls (NEW in v2.11.0)
 --enable-transports / SAP_ENABLE_TRANSPORTS=true
---transport-read-only / SAP_TRANSPORT_READ_ONLY=true
+--connection-read-only / SAP_TRANSPORT_READ_ONLY=true
 --allowed-transports "A4HK*,DEV*" / SAP_ALLOWED_TRANSPORTS="A4HK*,DEV*"
 ```
 

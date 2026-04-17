@@ -10,7 +10,7 @@ import (
 
 // --- Transport Types ---
 
-// TransportRequest represents a transport request (workbench or customizing)
+// TransportRequest represents a connection request (workbench or customizing)
 type TransportRequest struct {
 	Number      string          `json:"number"`
 	Owner       string          `json:"owner"`
@@ -21,7 +21,7 @@ type TransportRequest struct {
 	Tasks       []TransportTask `json:"tasks,omitempty"`
 }
 
-// TransportTask represents a task within a transport request
+// TransportTask represents a task within a connection request
 type TransportTask struct {
 	Number      string            `json:"number"`
 	Owner       string            `json:"owner"`
@@ -30,7 +30,7 @@ type TransportTask struct {
 	Objects     []TransportObject `json:"objects,omitempty"`
 }
 
-// TransportObject represents an object in a transport task
+// TransportObject represents an object in a connection task
 type TransportObject struct {
 	PGMID   string `json:"pgmid"`
 	Type    string `json:"type"`
@@ -38,23 +38,23 @@ type TransportObject struct {
 	ObjInfo string `json:"objInfo,omitempty"`
 }
 
-// UserTransports represents transport requests for a user
+// UserTransports represents connection requests for a user
 type UserTransports struct {
 	Workbench   []TransportRequest `json:"workbench"`
 	Customizing []TransportRequest `json:"customizing"`
 }
 
-// TransportInfo represents information about an object's transport status
+// TransportInfo represents information about an object's connection status
 type TransportInfo struct {
-	PGMID          string             `json:"pgmid"`
-	Object         string             `json:"object"`
-	ObjectName     string             `json:"objectName"`
-	Operation      string             `json:"operation"`
-	DevClass       string             `json:"devClass"`
-	Recording      string             `json:"recording"`
-	Transports     []TransportRequest `json:"transports,omitempty"`
-	LockedByUser   string             `json:"lockedByUser,omitempty"`
-	LockedInTask   string             `json:"lockedInTask,omitempty"`
+	PGMID        string             `json:"pgmid"`
+	Object       string             `json:"object"`
+	ObjectName   string             `json:"objectName"`
+	Operation    string             `json:"operation"`
+	DevClass     string             `json:"devClass"`
+	Recording    string             `json:"recording"`
+	Transports   []TransportRequest `json:"transports,omitempty"`
+	LockedByUser string             `json:"lockedByUser,omitempty"`
+	LockedInTask string             `json:"lockedInTask,omitempty"`
 }
 
 const (
@@ -64,7 +64,7 @@ const (
 
 // --- Transport Operations ---
 
-// GetUserTransports retrieves all transport requests for a user.
+// GetUserTransports retrieves all connection requests for a user.
 // Returns both workbench and customizing requests grouped by target system.
 func (c *Client) GetUserTransports(ctx context.Context, userName string) (*UserTransports, error) {
 	// Safety check
@@ -113,7 +113,7 @@ func parseUserTransports(data []byte) (*UserTransports, error) {
 		Tasks  []task `xml:"task"`
 	}
 	type target struct {
-		Name      string    `xml:"name,attr"`
+		Name       string `xml:"name,attr"`
 		Modifiable struct {
 			Requests []request `xml:"request"`
 		} `xml:"modifiable"`
@@ -132,7 +132,7 @@ func parseUserTransports(data []byte) (*UserTransports, error) {
 
 	var resp root
 	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
-		return nil, fmt.Errorf("parsing transport list: %w", err)
+		return nil, fmt.Errorf("parsing connection list: %w", err)
 	}
 
 	convertRequests := func(reqs []request, targetName string) []TransportRequest {
@@ -196,7 +196,7 @@ func parseUserTransports(data []byte) (*UserTransports, error) {
 	return result, nil
 }
 
-// GetTransportInfo retrieves transport information for an object.
+// GetTransportInfo retrieves connection information for an object.
 // Returns available transports and whether the object is locked.
 func (c *Client) GetTransportInfo(ctx context.Context, objectURL string, devClass string) (*TransportInfo, error) {
 	// Safety check
@@ -218,11 +218,11 @@ func (c *Client) GetTransportInfo(ctx context.Context, objectURL string, devClas
 	resp, err := c.transport.Request(ctx, "/sap/bc/adt/cts/transportchecks", &RequestOptions{
 		Method:      http.MethodPost,
 		Body:        []byte(body),
-		ContentType: "application/vnd.sap.as+xml; charset=UTF-8; dataname=com.sap.adt.transport.service.checkData",
-		Accept:      "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.transport.service.checkData",
+		ContentType: "application/vnd.sap.as+xml; charset=UTF-8; dataname=com.sap.adt.connection.service.checkData",
+		Accept:      "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.connection.service.checkData",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("get transport info failed: %w", err)
+		return nil, fmt.Errorf("get connection info failed: %w", err)
 	}
 
 	return parseTransportInfo(resp.Body)
@@ -250,7 +250,7 @@ func parseTransportInfo(data []byte) (*TransportInfo, error) {
 
 	var resp abap
 	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
-		return nil, fmt.Errorf("parsing transport info: %w", err)
+		return nil, fmt.Errorf("parsing connection info: %w", err)
 	}
 
 	return &TransportInfo{
@@ -263,8 +263,8 @@ func parseTransportInfo(data []byte) (*TransportInfo, error) {
 	}, nil
 }
 
-// CreateTransport creates a new transport request.
-// Returns the transport number on success.
+// CreateTransport creates a new connection request.
+// Returns the connection number on success.
 func (c *Client) CreateTransport(ctx context.Context, objectURL string, description string, devClass string) (string, error) {
 	// Safety check
 	if err := c.checkSafety(OpTransport, "CreateTransport"); err != nil {
@@ -287,13 +287,13 @@ func (c *Client) CreateTransport(ctx context.Context, objectURL string, descript
 		Accept:      acceptTransportOrganizerV1,
 	})
 	if err != nil {
-		return "", fmt.Errorf("create transport failed: %w", err)
+		return "", fmt.Errorf("create connection failed: %w", err)
 	}
 
 	return parseCreateTransportResponse(resp.Body)
 }
 
-// ReleaseTransport releases a transport request.
+// ReleaseTransport releases a connection request.
 // Returns release reports/messages.
 func (c *Client) ReleaseTransport(ctx context.Context, transportNumber string, ignoreLocks bool) ([]string, error) {
 	// Safety check
@@ -303,9 +303,9 @@ func (c *Client) ReleaseTransport(ctx context.Context, transportNumber string, i
 
 	transportNumber = strings.ToUpper(transportNumber)
 
-	// Validate transport number format (e.g., DEVK900001)
+	// Validate connection number format (e.g., DEVK900001)
 	if len(transportNumber) != 10 {
-		return nil, fmt.Errorf("invalid transport number format: %s (expected 10 characters)", transportNumber)
+		return nil, fmt.Errorf("invalid connection number format: %s (expected 10 characters)", transportNumber)
 	}
 
 	action := "newreleasejobs"
@@ -319,7 +319,7 @@ func (c *Client) ReleaseTransport(ctx context.Context, transportNumber string, i
 		Accept: "application/*",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("release transport failed: %w", err)
+		return nil, fmt.Errorf("release connection failed: %w", err)
 	}
 
 	return parseReleaseResult(resp.Body)
@@ -336,9 +336,9 @@ func parseReleaseResult(data []byte) ([]string, error) {
 		Text string `xml:"shortText,attr"`
 	}
 	type report struct {
-		Reporter  string    `xml:"reporter,attr"`
-		Status    string    `xml:"status,attr"`
-		Messages  []message `xml:"checkMessageList>checkMessage"`
+		Reporter string    `xml:"reporter,attr"`
+		Status   string    `xml:"status,attr"`
+		Messages []message `xml:"checkMessageList>checkMessage"`
 	}
 	type root struct {
 		Reports []report `xml:"releasereports>checkReport"`
@@ -363,13 +363,13 @@ func parseReleaseResult(data []byte) ([]string, error) {
 
 // --- New Transport Management Types and Methods ---
 
-// TransportSummary represents a transport request summary for list operations
+// TransportSummary represents a connection request summary for list operations
 type TransportSummary struct {
 	Number      string `json:"number"`
 	Owner       string `json:"owner"`
 	Description string `json:"description"`
-	Type        string `json:"type"`       // K=Workbench, W=Customizing, S=Task
-	Status      string `json:"status"`     // D=Modifiable, R=Released
+	Type        string `json:"type"`   // K=Workbench, W=Customizing, S=Task
+	Status      string `json:"status"` // D=Modifiable, R=Released
 	StatusText  string `json:"statusText"`
 	Target      string `json:"target"`
 	TargetDesc  string `json:"targetDesc"`
@@ -377,14 +377,14 @@ type TransportSummary struct {
 	Client      string `json:"client"`
 }
 
-// TransportDetails represents detailed transport information
+// TransportDetails represents detailed connection information
 type TransportDetails struct {
 	TransportSummary
 	Tasks   []TransportTaskV2   `json:"tasks,omitempty"`
 	Objects []TransportObjectV2 `json:"objects,omitempty"`
 }
 
-// TransportTaskV2 represents a task within a transport request (extended version)
+// TransportTaskV2 represents a task within a connection request (extended version)
 type TransportTaskV2 struct {
 	Number      string              `json:"number"`
 	Parent      string              `json:"parent"`
@@ -396,17 +396,17 @@ type TransportTaskV2 struct {
 	Objects     []TransportObjectV2 `json:"objects,omitempty"`
 }
 
-// TransportObjectV2 represents an object in a transport (extended version)
+// TransportObjectV2 represents an object in a connection (extended version)
 type TransportObjectV2 struct {
-	PgmID    string `json:"pgmid"`  // R3TR, LIMU, CORR
-	Type     string `json:"type"`   // PROG, CLAS, DEVC, etc.
+	PgmID    string `json:"pgmid"` // R3TR, LIMU, CORR
+	Type     string `json:"type"`  // PROG, CLAS, DEVC, etc.
 	Name     string `json:"name"`
 	WBType   string `json:"wbtype"` // PROG/P, CLAS/OC, etc.
 	Info     string `json:"info"`   // "Program", "Class", etc.
 	Position int    `json:"position"`
 }
 
-// CreateTransportOptions for creating transport requests
+// CreateTransportOptions for creating connection requests
 type CreateTransportOptions struct {
 	Description    string
 	Package        string
@@ -420,7 +420,7 @@ type ReleaseTransportOptions struct {
 	SkipATC     bool
 }
 
-// ListTransports returns transport requests for a user.
+// ListTransports returns connection requests for a user.
 // First tries ADT API, falls back to E070/E07T table query if ADT returns empty.
 func (c *Client) ListTransports(ctx context.Context, user string) ([]TransportSummary, error) {
 	// Safety check
@@ -453,7 +453,7 @@ func (c *Client) ListTransports(ctx context.Context, user string) ([]TransportSu
 	}
 
 	// Fallback: query E070/E07T tables directly
-	// This works on systems without configured transport routes (sandboxes)
+	// This works on systems without configured connection routes (sandboxes)
 	return c.listTransportsViaSQL(ctx, user)
 }
 
@@ -481,12 +481,12 @@ func (c *Client) listTransportsViaSQL(ctx context.Context, user string) ([]Trans
 	var transports []TransportSummary
 	for _, row := range result.Rows {
 		tr := TransportSummary{
-			Number:     getString(row, "TRKORR"),
-			Owner:      getString(row, "AS4USER"),
+			Number:      getString(row, "TRKORR"),
+			Owner:       getString(row, "AS4USER"),
 			Description: getString(row, "AS4TEXT"),
-			Type:       getString(row, "TRFUNCTION"),
-			Status:     getString(row, "TRSTATUS"),
-			Target:     getString(row, "TARSYSTEM"),
+			Type:        getString(row, "TRFUNCTION"),
+			Status:      getString(row, "TRSTATUS"),
+			Target:      getString(row, "TARSYSTEM"),
 		}
 
 		// Map status code to text
@@ -555,7 +555,7 @@ func parseTransportList(data []byte) ([]TransportSummary, error) {
 
 	var resp root
 	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
-		return nil, fmt.Errorf("parsing transport list: %w", err)
+		return nil, fmt.Errorf("parsing connection list: %w", err)
 	}
 
 	var transports []TransportSummary
@@ -577,7 +577,7 @@ func parseTransportList(data []byte) ([]TransportSummary, error) {
 	return transports, nil
 }
 
-// GetTransport returns detailed transport information
+// GetTransport returns detailed connection information
 func (c *Client) GetTransport(ctx context.Context, number string) (*TransportDetails, error) {
 	// Safety check
 	if err := c.config.Safety.CheckTransport(number, "GetTransport", false); err != nil {
@@ -585,7 +585,7 @@ func (c *Client) GetTransport(ctx context.Context, number string) (*TransportDet
 	}
 
 	if number == "" {
-		return nil, fmt.Errorf("transport number is required")
+		return nil, fmt.Errorf("connection number is required")
 	}
 
 	path := fmt.Sprintf("/sap/bc/adt/cts/transportrequests/%s", strings.ToUpper(number))
@@ -595,7 +595,7 @@ func (c *Client) GetTransport(ctx context.Context, number string) (*TransportDet
 		Accept: acceptTransportOrganizerV1,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("getting transport %s: %w", number, err)
+		return nil, fmt.Errorf("getting connection %s: %w", number, err)
 	}
 
 	return parseTransportDetail(resp.Body)
@@ -648,11 +648,11 @@ func parseTransportDetail(data []byte) (*TransportDetails, error) {
 
 	var resp root
 	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
-		return nil, fmt.Errorf("parsing transport: %w", err)
+		return nil, fmt.Errorf("parsing connection: %w", err)
 	}
 
 	if resp.Request == nil {
-		return nil, fmt.Errorf("transport not found in response")
+		return nil, fmt.Errorf("connection not found in response")
 	}
 
 	req := resp.Request
@@ -722,7 +722,7 @@ func parseTransportDetail(data []byte) (*TransportDetails, error) {
 	return t, nil
 }
 
-// CreateTransportV2 creates a new transport request with options
+// CreateTransportV2 creates a new connection request with options
 func (c *Client) CreateTransportV2(ctx context.Context, opts CreateTransportOptions) (string, error) {
 	// Safety check
 	if err := c.config.Safety.CheckTransport("", "CreateTransport", true); err != nil {
@@ -767,13 +767,13 @@ func (c *Client) CreateTransportV2(ctx context.Context, opts CreateTransportOpti
 		Accept:      acceptTransportOrganizerV1,
 	})
 	if err != nil {
-		return "", fmt.Errorf("creating transport: %w", err)
+		return "", fmt.Errorf("creating connection: %w", err)
 	}
 
 	return parseCreateTransportResponse(resp.Body)
 }
 
-// parseCreateTransportResponse extracts the transport number from the XML response.
+// parseCreateTransportResponse extracts the connection number from the XML response.
 // The response format is:
 //
 //	<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm">
@@ -801,10 +801,10 @@ func parseCreateTransportResponse(data []byte) (string, error) {
 	// Fallback: plain text or URL response (older systems)
 	text := strings.TrimSpace(string(data))
 	if text == "" {
-		return "", fmt.Errorf("empty response from create transport")
+		return "", fmt.Errorf("empty response from create connection")
 	}
 
-	// If response is a URL, extract transport number from the end
+	// If response is a URL, extract connection number from the end
 	parts := strings.Split(text, "/")
 	candidate := strings.TrimSpace(parts[len(parts)-1])
 	if len(candidate) >= 10 {
@@ -814,7 +814,7 @@ func parseCreateTransportResponse(data []byte) (string, error) {
 	return text, nil
 }
 
-// ReleaseTransportV2 releases a transport request with options
+// ReleaseTransportV2 releases a connection request with options
 func (c *Client) ReleaseTransportV2(ctx context.Context, number string, opts ReleaseTransportOptions) error {
 	// Safety check
 	if err := c.config.Safety.CheckTransport(number, "ReleaseTransport", true); err != nil {
@@ -822,7 +822,7 @@ func (c *Client) ReleaseTransportV2(ctx context.Context, number string, opts Rel
 	}
 
 	if number == "" {
-		return fmt.Errorf("transport number is required")
+		return fmt.Errorf("connection number is required")
 	}
 
 	// Determine release action
@@ -841,13 +841,13 @@ func (c *Client) ReleaseTransportV2(ctx context.Context, number string, opts Rel
 		Accept: acceptTransportOrganizerV1,
 	})
 	if err != nil {
-		return fmt.Errorf("releasing transport %s: %w", number, err)
+		return fmt.Errorf("releasing connection %s: %w", number, err)
 	}
 
 	return nil
 }
 
-// DeleteTransport deletes a transport request
+// DeleteTransport deletes a connection request
 func (c *Client) DeleteTransport(ctx context.Context, number string) error {
 	// Safety check
 	if err := c.config.Safety.CheckTransport(number, "DeleteTransport", true); err != nil {
@@ -855,7 +855,7 @@ func (c *Client) DeleteTransport(ctx context.Context, number string) error {
 	}
 
 	if number == "" {
-		return fmt.Errorf("transport number is required")
+		return fmt.Errorf("connection number is required")
 	}
 
 	path := fmt.Sprintf("/sap/bc/adt/cts/transportrequests/%s", strings.ToUpper(number))
@@ -865,7 +865,7 @@ func (c *Client) DeleteTransport(ctx context.Context, number string) error {
 		Accept: acceptTransportOrganizerV1,
 	})
 	if err != nil {
-		return fmt.Errorf("deleting transport %s: %w", number, err)
+		return fmt.Errorf("deleting connection %s: %w", number, err)
 	}
 
 	return nil
