@@ -21,9 +21,6 @@ type System interface {
 	// FeatureProber returns the feature prober for optional-capability detection.
 	FeatureProber() *adt.FeatureProber
 
-	// EnsureWSConnected ensures the WebSocket client for a tool is connected.
-	EnsureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult
-
 	// DiscoveredEndpoints returns the ADT endpoints discovered from /sap/bc/adt/discovery.
 	// Returns nil if discovery was not performed (e.g., RFC mode or discovery failed).
 	DiscoveredEndpoints() adt.DiscoveredEndpoints
@@ -41,7 +38,7 @@ type System interface {
 	// Returns error if runtime activation fails.
 	Start(ctx context.Context) error
 
-	// Shutdown gracefully stops system resources (keep-alive, sidecar, WebSocket clients).
+	// Shutdown gracefully stops system resources (keep-alive, sidecar).
 	// Shutdown is idempotent and safe to call multiple times.
 	Shutdown() error
 }

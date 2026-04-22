@@ -57,13 +57,12 @@ func TestDefaultDisabledTools(t *testing.T) {
 		t.Error("DefaultDisabledTools() returned empty list")
 	}
 
-	// Check that AMDP debugger tools are in the list
-	amdpTools := []string{
-		"AMDPDebuggerStart", "AMDPDebuggerResume", "AMDPDebuggerStop",
-		"AMDPDebuggerStep", "AMDPGetVariables", "AMDPSetBreakpoint", "AMDPGetBreakpoints",
+	// Check that UI5 write tools are in the list
+	ui5Tools := []string{
+		"UI5CreateApp", "UI5DeleteApp", "UI5DeleteFile", "UI5UploadFile",
 	}
 
-	for _, tool := range amdpTools {
+	for _, tool := range ui5Tools {
 		found := false
 		for _, d := range defaults {
 			if d == tool {

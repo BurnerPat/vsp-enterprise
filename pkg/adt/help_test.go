@@ -160,9 +160,9 @@ func TestClientGetAbapHelp(t *testing.T) {
 				t.Errorf("GetAbapHelp(%q).SearchQuery is empty", tt.keyword)
 			}
 
-			// Documentation should be empty for Level 1 (no ZADT_VSP)
+			// Documentation should be empty for Level 1
 			if result.Documentation != "" {
-				t.Errorf("GetAbapHelp(%q).Documentation should be empty without ZADT_VSP", tt.keyword)
+				t.Errorf("GetAbapHelp(%q).Documentation should be empty", tt.keyword)
 			}
 		})
 	}

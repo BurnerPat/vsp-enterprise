@@ -50,7 +50,7 @@ func AnalysisToolDefs() []types.ToolDef {
 		), Handler: HandleCompareCallGraphs, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/cai/callgraph", "/sap/bc/adt/runtime/traces"}},
 
 		{Tool: mcp.NewTool("TraceExecution",
-			mcp.WithDescription("Execute ABAP code with coverage/performance tracing. Requires ZADT_VSP."),
+			mcp.WithDescription("Execute ABAP code with coverage/performance tracing."),
 			mcp.WithString("object_type", mcp.Required(), mcp.Description("PROG, CLAS, FUNC")),
 			mcp.WithString("object_name", mcp.Required(), mcp.Description("Name of the object")),
 			mcp.WithString("method", mcp.Description("Method name for CLAS")),

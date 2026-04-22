@@ -58,14 +58,11 @@ flowchart TB
             subgraph Extras["Extras"]
                 ui5[ui5.go<br/>UI5/BSP Apps]
                 features[features.go<br/>System Probing]
-                git[git.go<br/>abapGit Export]
-                reports[reports.go<br/>Report Execution]
             end
         end
 
         subgraph Transport["Transport Layer"]
             HTTP[http.go<br/>CSRF · Sessions · Auth]
-            WS[WebSocket Client<br/>ZADT_VSP APC]
             RFC[RFC Transport<br/>via JCo Sidecar]
             STDIO[STDIO Transport<br/>JCo Sidecar Alt]
         end
@@ -86,8 +83,6 @@ flowchart TB
 
     subgraph SAP["SAP System"]
         ADT[ADT REST API<br/>/sap/bc/adt/*]
-        APC[ZADT_VSP<br/>WebSocket APC]
-        HANA[HANA DB<br/>AMDP Debug]
         RFCSAP[RFC Interface]
     end
 
@@ -98,8 +93,6 @@ flowchart TB
     Safety --> ADTLib
     ADTLib --> Transport
     HTTP <-->|HTTPS| ADT
-    WS <-->|WebSocket| APC
-    amdp <-->|WebSocket| HANA
     RFC <-->|HTTP/STDIO| JCo
     JCo <-->|RFC| RFCSAP
 ```
@@ -125,7 +118,7 @@ sequenceDiagram
         Safety->>ADT: Execute operation
         ADT->>HTTP: HTTP request
         HTTP->>HTTP: Add CSRF token + cookies
-        HTTP->>SAP: HTTPS / WebSocket
+        HTTP->>SAP: HTTPS
         SAP-->>HTTP: Response
         HTTP-->>ADT: Parsed response
         ADT-->>Server: Result
@@ -189,12 +182,11 @@ flowchart LR
         CS[CompareSource]
     end
 
-    subgraph Write["Write (5)"]
+    subgraph Write["Write (4)"]
         WS[WriteSource]
         ES[EditSource]
         IF[ImportFromFile]
         EF[ExportToFile]
-        MO[MoveObject]
     end
 
     subgraph Dev["Dev (5)"]
@@ -217,16 +209,6 @@ flowchart LR
         DS[Step]
         DGS[GetStack]
         DGV[GetVariables]
-    end
-
-    subgraph AMDP["AMDP Debugger (7)"]
-        AL[AMDPListen]
-        AA[AMDPAttach]
-        AD[AMDPDetach]
-        AS[AMDPStep]
-        AGS[AMDPGetStack]
-        AGV[AMDPGetVariables]
-        ABP[AMDPBreakpoints]
     end
 
     subgraph System["System (5)"]
@@ -254,18 +236,6 @@ flowchart LR
         ATT[AddToTransport]
     end
 
-    subgraph Git["Git (2)"]
-        GiT[GitTypes]
-        GiE[GitExport]
-    end
-
-    subgraph Reports["Reports (4)"]
-        RR[RunReport]
-        GV[GetVariants]
-        GTE[GetTextElements]
-        STE[SetTextElements]
-    end
-
     subgraph Install["Install (3)"]
         IV[InstallZADTVSP]
         IA[InstallAbapGit]
@@ -273,13 +243,12 @@ flowchart LR
     end
 ```
 
-## Triple Transport: HTTP + WebSocket + RFC
+## Dual Transport: HTTP + RFC
 
 ```mermaid
 flowchart LR
     subgraph VSP["vsp"]
         HTTP[HTTP Client<br/>pkg/adt/http.go]
-        WS[WebSocket Client<br/>pkg/adt/websocket.go]
         RFC[RFC Transport<br/>pkg/adt/rfc_transport.go<br/>pkg/adt/stdio_transport.go]
     end
 
@@ -289,25 +258,12 @@ flowchart LR
 
     subgraph SAP["SAP System"]
         ADT[ADT REST API<br/>/sap/bc/adt/*]
-        APC[ZADT_VSP APC Handler<br/>/sap/bc/apc/ws/zadt_vsp]
         RFCSAP[SAP RFC Interface<br/>SADT_REST_RFC_ENDPOINT]
     end
 
     HTTP -->|"CRUD · Search · Read<br/>Syntax · Activate · Debug"| ADT
-    WS -->|"RFC Calls · Breakpoints<br/>Git Export · Reports<br/>AMDP Debug"| APC
     RFC -->|"HTTP or STDIO"| JCo
     JCo -->|"SAP JCo RFC"| RFCSAP
-
-    subgraph WSServices["WebSocket Domains"]
-        direction TB
-        WSRFC[rfc — Function Calls]
-        BRK[debug — Breakpoints]
-        GIT[git — abapGit Export]
-        RPT[report — Report Execution]
-        HLP[help — ABAP Documentation]
-    end
-
-    APC --- WSServices
 ```
 
 ## Package Structure
@@ -335,12 +291,10 @@ vibing-steampunk/
 │   ├── devtools.go             #   Syntax check, activate, unit tests, ATC
 │   ├── codeintel.go            #   Find definition, references, completion
 │   ├── workflows.go            #   High-level: GetSource, WriteSource, Grep*
-│   ├── debugger.go             #   External ABAP debugger (HTTP + WebSocket)
+│   ├── debugger.go             #   External ABAP debugger (HTTP)
 │   ├── amdp_debugger.go        #   HANA/AMDP SQLScript debugger
 │   ├── ui5.go                  #   UI5/Fiori BSP management
 │   ├── cds.go                  #   CDS view dependency analysis
-│   ├── git.go                  #   abapGit export via WebSocket
-│   ├── reports.go              #   Report execution, variants, spool output
 │   ├── safety.go               #   Read-only, package/op filtering
 │   ├── features.go             #   System capability detection
 │   ├── http.go                 #   HTTP transport (CSRF, sessions, auth)
@@ -353,11 +307,6 @@ vibing-steampunk/
 │   ├── landscape.go            #   SAP UI Landscape XML parsing (SNC/SSO)
 │   ├── recorder.go             #   Execution recording for time-travel debug
 │   ├── history.go              #   Tool call history tracking
-│   ├── websocket.go            #   WebSocket client (ZADT_VSP APC)
-│   ├── websocket_base.go       #   WebSocket base types
-│   ├── websocket_types.go      #   WebSocket protocol types
-│   ├── websocket_rfc.go        #   RFC-over-WebSocket operations
-│   ├── websocket_debug.go      #   Debug-over-WebSocket operations
 │   ├── xml.go                  #   ADT XML type definitions
 │   └── config.go               #   Client configuration with functional options
 │
@@ -375,7 +324,7 @@ vibing-steampunk/
 │   └── deps/                   #   jco-proxy.jar (compiled sidecar)
 │
 ├── abap/                       # ABAP source artifacts
-│   └── src/                    #   ZADT_VSP and related ABAP objects
+│   └── src/                    #   ABAP source artifacts
 │
 └── docs/                       # Documentation
     ├── architecture.md         #   This file
@@ -446,7 +395,7 @@ go test -tags=integration ./pkg/adt/             # Integration tests (requires S
 1. **Single Binary**: No runtime dependencies (except optional JCo sidecar for RFC mode)
 2. **Functional Options**: Flexible client configuration via `adt.WithXxx()` pattern
 3. **Stateful HTTP**: Required for CRUD operations (lock handles, CSRF tokens, session cookies)
-4. **Triple Transport**: HTTP for ADT REST, WebSocket for ZADT_VSP APC, RFC via JCo sidecar
+4. **Dual Transport**: HTTP for ADT REST, RFC via JCo sidecar
 5. **Mode-Aware Tools**: Focused (default), Expert (all), Hyperfocused (single universal tool)
 6. **Granular Tool Control**: Groups can be disabled (`--disabled-groups`), individual tools via `.vsp.json`
 7. **Multi-System**: Connect to multiple SAP systems from one instance via profiles

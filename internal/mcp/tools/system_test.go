@@ -19,10 +19,6 @@ func (m *mockSystem) IsRfcMode() bool { return false }
 
 func (m *mockSystem) FeatureProber() *adt.FeatureProber { return m.prober }
 
-func (m *mockSystem) EnsureWSConnected(_ context.Context, _ string) *mcp.CallToolResult {
-	return nil
-}
-
 func (m *mockSystem) DiscoveredEndpoints() adt.DiscoveredEndpoints { return nil }
 
 func (m *mockSystem) Connect(_ context.Context) error { return nil }

@@ -83,14 +83,6 @@ func (c *GlobalConfigJSON) SetToolEnabled(toolName string, enabled bool) {
 // These are experimental or non-working tools.
 func DefaultDisabledTools() []string {
 	return []string{
-		// AMDP/HANA Debugger - session management issues
-		"AMDPDebuggerStart", "AMDPDebuggerResume", "AMDPDebuggerStop",
-		"AMDPDebuggerStep", "AMDPGetVariables", "AMDPSetBreakpoint", "AMDPGetBreakpoints",
-		// ABAP Debugger - requires ZADT_VSP WebSocket, HTTP unreliable
-		"DebuggerListen", "DebuggerAttach", "DebuggerDetach",
-		"DebuggerStep", "DebuggerGetStack", "DebuggerGetVariables",
-		// Breakpoints - requires ZADT_VSP WebSocket
-		"SetBreakpoint", "GetBreakpoints", "DeleteBreakpoint",
 		// UI5 write operations - need alternate API
 		"UI5CreateApp", "UI5DeleteApp", "UI5DeleteFile", "UI5UploadFile",
 	}

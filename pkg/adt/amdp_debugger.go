@@ -1,8 +1,6 @@
 package adt
 
 // AMDP Debugger types.
-// HTTP-based methods have been removed - now using WebSocket via ZADT_VSP.
-// See amdp_websocket.go for the WebSocket-based implementation.
 
 // AMDPDebugSession represents an AMDP debug session.
 type AMDPDebugSession struct {

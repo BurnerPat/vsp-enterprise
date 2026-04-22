@@ -11,7 +11,7 @@ type AbapHelpResult struct {
 	Keyword       string `json:"keyword"`
 	URL           string `json:"url"`
 	SearchQuery   string `json:"search_query"`
-	Documentation string `json:"documentation,omitempty"` // Only if ZADT_VSP available
+	Documentation string `json:"documentation,omitempty"`
 }
 
 // GetAbapHelpURL returns the SAP Help Portal URL for an ABAP keyword.
@@ -36,8 +36,7 @@ func FormatAbapHelpQuery(keyword string) string {
 }
 
 // GetAbapHelp returns ABAP keyword documentation.
-// Level 1: Always returns URL and search query.
-// Level 2: If ZADT_VSP WebSocket is available, also returns real documentation from SAP system.
+// Returns URL and search query for SAP Help Portal.
 func (c *Client) GetAbapHelp(ctx context.Context, keyword string) (*AbapHelpResult, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
@@ -49,15 +48,6 @@ func (c *Client) GetAbapHelp(ctx context.Context, keyword string) (*AbapHelpResu
 		URL:         GetAbapHelpURL(keyword),
 		SearchQuery: FormatAbapHelpQuery(keyword),
 	}
-
-	// Level 2: Try ZADT_VSP for real documentation (if available)
-	// TODO: Implement WebSocket call to get documentation from CL_ABAP_DOCU
-	// if c.wsClient != nil && c.wsClient.IsConnected() {
-	//     html, err := c.wsClient.GetAbapDocumentation(ctx, keyword)
-	//     if err == nil && html != "" {
-	//         result.Documentation = html
-	//     }
-	// }
 
 	return result, nil
 }

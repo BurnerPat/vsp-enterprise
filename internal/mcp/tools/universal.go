@@ -121,7 +121,6 @@ func getAllToolDefs() []types.ToolDef {
 	defs = append(defs, DevToolDefs()...)
 	defs = append(defs, DumpToolDefs()...)
 	defs = append(defs, FileToolDefs()...)
-	defs = append(defs, GitToolDefs()...)
 	defs = append(defs, GrepToolDefs()...)
 	defs = append(defs, ServiceBindingToolDefs()...)
 	defs = append(defs, SQLTraceToolDefs()...)

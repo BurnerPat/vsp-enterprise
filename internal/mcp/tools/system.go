@@ -34,7 +34,7 @@ func SystemToolDefs() []types.ToolDef {
 			Routes: []types.UniversalRoute{{Action: "system", TargetType: "FEATURES"}}},
 
 		{Tool: mcp.NewTool("GetAbapHelp",
-			mcp.WithDescription("Get ABAP keyword documentation. Returns URL to SAP Help Portal and search query. If ZADT_VSP is installed, also returns real documentation from SAP system."),
+			mcp.WithDescription("Get ABAP keyword documentation. Returns URL to SAP Help Portal and search query."),
 			mcp.WithString("keyword", mcp.Required(), mcp.Description("ABAP keyword (e.g., SELECT, LOOP, DATA, METHOD, READ TABLE)")),
 		), Handler: HandleGetAbapHelp, AlwaysOn: true, ReadOnly: true,
 			Routes: []types.UniversalRoute{{Action: "analyze", ParamsType: "abap_help"}}},

@@ -145,10 +145,9 @@ type BreakpointResponse struct {
 
 // --- External Breakpoints API ---
 // DEPRECATED: These functions return 403 CSRF errors in current SAP versions.
-// Use WebSocket debug domain (ZADT_VSP) for breakpoint management instead.
 
 // SetExternalBreakpoint creates an external (persistent) breakpoint.
-// Deprecated: Use ZADT_VSP WebSocket handler with debug domain instead.
+// Deprecated: These breakpoints may return 403 CSRF errors in current SAP versions.
 // These breakpoints persist across sessions and trigger when the specified user runs code that hits them.
 //
 // For line breakpoints:
@@ -188,7 +187,7 @@ func (c *Client) SetExternalBreakpoint(ctx context.Context, req *BreakpointReque
 }
 
 // GetExternalBreakpoints retrieves all external breakpoints for a user.
-// Deprecated: Use ZADT_VSP WebSocket handler with debug domain instead.
+// Deprecated: May return 403 CSRF errors in current SAP versions.
 // user is required for external breakpoints in user debugging mode.
 func (c *Client) GetExternalBreakpoints(ctx context.Context, user string) (*BreakpointResponse, error) {
 	query := url.Values{}
@@ -217,7 +216,7 @@ func (c *Client) GetExternalBreakpoints(ctx context.Context, user string) (*Brea
 }
 
 // DeleteExternalBreakpoint removes an external breakpoint by ID.
-// Deprecated: Use ZADT_VSP WebSocket handler with debug domain instead.
+// Deprecated: May return 403 CSRF errors in current SAP versions.
 // user is required for external breakpoints in user debugging mode.
 func (c *Client) DeleteExternalBreakpoint(ctx context.Context, breakpointID string, user string) error {
 	query := url.Values{}
@@ -241,7 +240,7 @@ func (c *Client) DeleteExternalBreakpoint(ctx context.Context, breakpointID stri
 }
 
 // DeleteAllExternalBreakpoints removes all external breakpoints for a user.
-// Deprecated: Use ZADT_VSP WebSocket handler with debug domain instead.
+// Deprecated: May return 403 CSRF errors in current SAP versions.
 func (c *Client) DeleteAllExternalBreakpoints(ctx context.Context, user string) error {
 	// Get all breakpoints first
 	bps, err := c.GetExternalBreakpoints(ctx, user)

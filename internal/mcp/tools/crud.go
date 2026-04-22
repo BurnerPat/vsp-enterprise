@@ -470,34 +470,3 @@ func HandleDeleteObject(ctx context.Context, sys types.System, request mcp.CallT
 
 	return mcp.NewToolResultText("Object deleted successfully"), nil
 }
-
-func HandleMoveObject(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	objectType, ok := request.GetArguments()["object_type"].(string)
-	if !ok || objectType == "" {
-		return types.ErrorResult("object_type is required"), nil
-	}
-
-	objectName, ok := request.GetArguments()["object_name"].(string)
-	if !ok || objectName == "" {
-		return types.ErrorResult("object_name is required"), nil
-	}
-
-	newPackage, ok := request.GetArguments()["new_package"].(string)
-	if !ok || newPackage == "" {
-		return types.ErrorResult("new_package is required"), nil
-	}
-
-	// MoveObject requires ZADT_VSP WebSocket
-	if sys.IsRfcMode() {
-		return types.ErrorResult("MoveObject is not available in RFC mode"), nil
-	}
-
-	// Ensure WebSocket client is connected
-	if errResult := sys.EnsureWSConnected(ctx, "MoveObject"); errResult != nil {
-		return errResult, nil
-	}
-
-	// This is a placeholder since sys doesn't have a DebugWSClient yet.
-	// We'll need to add it to the System interface if needed.
-	return types.ErrorResult("MoveObject is not yet implemented in the new architecture"), nil
-}

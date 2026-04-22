@@ -1,6 +1,6 @@
 // Package mcp provides the MCP server implementation for ABAP ADT tools.
 // system.go contains the System struct representing a configured SAP system destination.
-// It holds the ADT client, WebSocket clients, sidecar, feature prober, and per-system state.
+// It holds the ADT client, sidecar, feature prober, and per-system state.
 // System implements the types.System interface consumed by all tool handlers.
 package mcp
 
@@ -18,16 +18,15 @@ import (
 )
 
 // System represents a configured destination to an SAP system.
-// It holds the connection (ADT client), WebSocket clients, sidecar manager,
+// It holds the connection (ADT client), sidecar manager,
 // feature prober, and per-system state. System implements types.System.
 type System struct {
 	adtClient           *adt.Client
-	amdpWSClient        *adt.AMDPWebSocketClient // WebSocket-based AMDP client (ZADT_VSP)
-	config              *config.SystemConfig     // Per-system configuration
-	featureProber       *adt.FeatureProber       // Feature detection system (safety network)
-	sidecar             *adt.SidecarManager      // JCo sidecar (RFC mode only)
-	cookies             map[string]string        // Runtime cookies (browser-auth, cookie-file, etc.)
-	discoveredEndpoints adt.DiscoveredEndpoints  // ADT endpoints from /sap/bc/adt/discovery
+	config              *config.SystemConfig    // Per-system configuration
+	featureProber       *adt.FeatureProber      // Feature detection system (safety network)
+	sidecar             *adt.SidecarManager     // JCo sidecar (RFC mode only)
+	cookies             map[string]string       // Runtime cookies (browser-auth, cookie-file, etc.)
+	discoveredEndpoints adt.DiscoveredEndpoints // ADT endpoints from /sap/bc/adt/discovery
 }
 
 // Ensure System implements types.System at compile time.
@@ -51,11 +50,6 @@ func (s *System) FeatureProber() *adt.FeatureProber {
 // DiscoveredEndpoints implements types.System.
 func (s *System) DiscoveredEndpoints() adt.DiscoveredEndpoints {
 	return s.discoveredEndpoints
-}
-
-// EnsureWSConnected implements types.System.
-func (s *System) EnsureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult {
-	return s.ensureWSConnected(ctx, toolName)
 }
 
 // Connect implements types.System by validating credentials and establishing connection.
@@ -114,21 +108,6 @@ func (s *System) Shutdown() error {
 		}
 	}
 
-	return nil
-}
-
-// ensureWSConnected ensures the WebSocket client is connected, creating it if needed.
-// Returns error result if connection fails, nil on success.
-func (s *System) ensureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult {
-	if s.amdpWSClient == nil || !s.amdpWSClient.IsConnected() {
-		s.amdpWSClient = adt.NewAMDPWebSocketClient(
-			s.config.URL, s.config.Client, s.config.Username, s.config.Password, s.config.Insecure,
-		)
-		if err := s.amdpWSClient.Connect(ctx); err != nil {
-			s.amdpWSClient = nil
-			return newToolResultError(fmt.Sprintf("%s: WebSocket connect failed: %v", toolName, err))
-		}
-	}
 	return nil
 }
 

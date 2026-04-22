@@ -833,7 +833,7 @@ func GetAllToolNames() []string {
 		"GetClassInfo", "GetClassComponents", "GetClassInclude", "GetCDSDependencies",
 		// Core write tools
 		"WriteSource", "WriteClass", "WriteProgram", "EditSource", "UpdateSource",
-		"CreateObject", "DeleteObject", "CloneObject", "RenameObject", "MoveObject",
+		"CreateObject", "DeleteObject", "CloneObject", "RenameObject",
 		"LockObject", "UnlockObject",
 		// Search tools
 		"SearchObject", "GrepObjects", "GrepPackages", "GrepObject", "GrepPackage",
@@ -859,20 +859,18 @@ func GetAllToolNames() []string {
 		// Transport
 		"ListTransports", "GetTransport", "GetTransportInfo", "GetUserTransports",
 		"CreateTransport", "ReleaseTransport", "DeleteTransport",
-		// Report execution (requires ZADT_VSP)
+		// Report execution
 		"RunReport", "RunReportAsync", "GetAsyncResult",
 		"GetVariants", "GetTextElements", "SetTextElements",
-		// Debugger (requires ZADT_VSP, experimental)
+		// Debugger (experimental)
 		"SetBreakpoint", "GetBreakpoints", "DeleteBreakpoint",
 		"DebuggerListen", "DebuggerAttach", "DebuggerDetach",
 		"DebuggerStep", "DebuggerGetStack", "DebuggerGetVariables",
 		// AMDP debugger (experimental)
 		"AMDPDebuggerStart", "AMDPDebuggerResume", "AMDPDebuggerStop",
 		"AMDPDebuggerStep", "AMDPGetVariables", "AMDPSetBreakpoint", "AMDPGetBreakpoints",
-		// RFC (requires ZADT_VSP)
+		// RFC
 		"CallRFC", "ExecuteABAP",
-		// Git/abapGit (requires ZADT_VSP)
-		"GitTypes", "GitExport",
 		// Install tools
 		"InstallZADTVSP", "InstallAbapGit", "ListDependencies", "InstallDummyTest",
 		// UI5/BSP
