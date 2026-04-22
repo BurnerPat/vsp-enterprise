@@ -19,14 +19,14 @@ func WorkflowToolDefs() []types.ToolDef {
 			mcp.WithString("program_name", mcp.Required(), mcp.Description("Name of the ABAP program")),
 			mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code")),
 			mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
-		), Handler: HandleWriteProgram},
+		), Handler: HandleWriteProgram, Endpoints: []string{"/sap/bc/adt/programs/programs"}},
 
 		{Tool: mcp.NewTool("WriteClass",
 			mcp.WithDescription("Update an existing class with syntax check and activation (Lock -> SyntaxCheck -> Update -> Unlock -> Activate)"),
 			mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
 			mcp.WithString("source", mcp.Required(), mcp.Description("ABAP class source code (definition and implementation)")),
 			mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
-		), Handler: HandleWriteClass},
+		), Handler: HandleWriteClass, Endpoints: []string{"/sap/bc/adt/oo/classes"}},
 
 		{Tool: mcp.NewTool("CreateAndActivateProgram",
 			mcp.WithDescription("Create a new program with source code and activate it (Create -> Lock -> Update -> Unlock -> Activate)"),
@@ -35,7 +35,7 @@ func WorkflowToolDefs() []types.ToolDef {
 			mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name (e.g., $TMP for local)")),
 			mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code")),
 			mcp.WithString("connection", mcp.Description("Transport request number (required for non-local packages)")),
-		), Handler: HandleCreateAndActivateProgram},
+		), Handler: HandleCreateAndActivateProgram, Endpoints: []string{"/sap/bc/adt/programs/programs"}},
 
 		{Tool: mcp.NewTool("CreateClassWithTests",
 			mcp.WithDescription("Create a new class with unit tests and run them (Create -> Lock -> Update -> CreateTestInclude -> UpdateTest -> Unlock -> Activate -> RunTests)"),
@@ -45,7 +45,7 @@ func WorkflowToolDefs() []types.ToolDef {
 			mcp.WithString("class_source", mcp.Required(), mcp.Description("ABAP class source code (definition and implementation)")),
 			mcp.WithString("test_source", mcp.Required(), mcp.Description("ABAP unit test source code")),
 			mcp.WithString("connection", mcp.Description("Transport request number (required for non-local packages)")),
-		), Handler: HandleCreateClassWithTests},
+		), Handler: HandleCreateClassWithTests, Endpoints: []string{"/sap/bc/adt/oo/classes"}},
 	}
 }
 

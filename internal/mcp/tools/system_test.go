@@ -23,6 +23,8 @@ func (m *mockSystem) EnsureWSConnected(_ context.Context, _ string) *mcp.CallToo
 	return nil
 }
 
+func (m *mockSystem) DiscoveredEndpoints() adt.DiscoveredEndpoints { return nil }
+
 func (m *mockSystem) Connect(_ context.Context) error { return nil }
 
 func (m *mockSystem) Start(_ context.Context) error { return nil }

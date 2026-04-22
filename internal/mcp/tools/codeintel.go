@@ -26,14 +26,14 @@ func CodeIntelToolDefs() []types.ToolDef {
 			mcp.WithNumber("end_column", mcp.Required(), mcp.Description("End column of the symbol (1-based)")),
 			mcp.WithBoolean("implementation", mcp.Description("Navigate to implementation instead of definition (default: false)")),
 			mcp.WithString("main_program", mcp.Description("Main program for includes (optional)")),
-		), Handler: HandleFindDefinition, ReadOnly: true, Focused: true},
+		), Handler: HandleFindDefinition, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/navigation/target"}},
 
 		{Tool: mcp.NewTool("FindReferences",
 			mcp.WithDescription("Find all references to an ABAP object or symbol"),
 			mcp.WithString("object_url", mcp.Required(), mcp.Description("ADT URL of the object (e.g., /sap/bc/adt/oo/classes/ZCL_TEST)")),
 			mcp.WithNumber("line", mcp.Description("Line number for position-based reference search (1-based, optional)")),
 			mcp.WithNumber("column", mcp.Description("Column number for position-based reference search (1-based, optional)")),
-		), Handler: HandleFindReferences, ReadOnly: true, Focused: true},
+		), Handler: HandleFindReferences, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/repository/informationsystem/usageReferences"}},
 
 		{Tool: mcp.NewTool("CodeCompletion",
 			mcp.WithDescription("Get code completion suggestions at a position in source code"),
@@ -41,7 +41,7 @@ func CodeIntelToolDefs() []types.ToolDef {
 			mcp.WithString("source", mcp.Required(), mcp.Description("Full source code of the file")),
 			mcp.WithNumber("line", mcp.Required(), mcp.Description("Line number (1-based)")),
 			mcp.WithNumber("column", mcp.Required(), mcp.Description("Column number (1-based)")),
-		), Handler: HandleCodeCompletion, ReadOnly: true},
+		), Handler: HandleCodeCompletion, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/abapsource/codecompletion"}},
 
 		{Tool: mcp.NewTool("GetTypeHierarchy",
 			mcp.WithDescription("Get the type hierarchy (supertypes or subtypes) for a class/interface"),
@@ -50,12 +50,12 @@ func CodeIntelToolDefs() []types.ToolDef {
 			mcp.WithNumber("line", mcp.Required(), mcp.Description("Line number (1-based)")),
 			mcp.WithNumber("column", mcp.Required(), mcp.Description("Column number (1-based)")),
 			mcp.WithBoolean("super_types", mcp.Description("Get supertypes instead of subtypes (default: false = subtypes)")),
-		), Handler: HandleGetTypeHierarchy, ReadOnly: true},
+		), Handler: HandleGetTypeHierarchy, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/abapsource/typehierarchy"}},
 
 		{Tool: mcp.NewTool("GetClassComponents",
 			mcp.WithDescription("Get the structure of a class - lists all methods, attributes, events, and other components with their visibility and properties"),
 			mcp.WithString("class_url", mcp.Required(), mcp.Description("ADT URL of the class (e.g., /sap/bc/adt/oo/classes/ZCL_TEST)")),
-		), Handler: HandleGetClassComponents, ReadOnly: true},
+		), Handler: HandleGetClassComponents, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/oo/classes"}},
 	}
 }
 

@@ -34,38 +34,38 @@ func DebuggerLegacyToolDefs() []types.ToolDef {
 			mcp.WithDescription("Start a legacy ADT debugger listener. Block until a program hits a breakpoint or timeout."),
 			mcp.WithString("user", mcp.Description("Filter by user (default: connection user)")),
 			mcp.WithNumber("timeout", mcp.Description("Timeout in seconds (default: 60, max: 240)")),
-		), Handler: HandleDebuggerListen},
+		), Handler: HandleDebuggerListen, Endpoints: []string{"/sap/bc/adt/debugger"}},
 
 		{Tool: mcp.NewTool("DebuggerAttach",
 			mcp.WithDescription("Attach to a caught debuggee session."),
 			mcp.WithString("debuggee_id", mcp.Required(), mcp.Description("Debuggee ID from DebuggerListen")),
 			mcp.WithString("user", mcp.Description("Filter by user")),
-		), Handler: HandleDebuggerAttach},
+		), Handler: HandleDebuggerAttach, Endpoints: []string{"/sap/bc/adt/debugger"}},
 
 		{Tool: mcp.NewTool("DebuggerDetach",
 			mcp.WithDescription("Detach from the current debug session."),
-		), Handler: HandleDebuggerDetach},
+		), Handler: HandleDebuggerDetach, Endpoints: []string{"/sap/bc/adt/debugger"}},
 
 		{Tool: mcp.NewTool("DebuggerStep",
 			mcp.WithDescription("Execute a debug step."),
 			mcp.WithString("step_type", mcp.Required(), mcp.Description("stepInto, stepOver, stepReturn, stepContinue, stepRunToLine, stepJumpToLine")),
 			mcp.WithString("uri", mcp.Description("ADT URI for runToLine or jumpToLine")),
-		), Handler: HandleDebuggerStep},
+		), Handler: HandleDebuggerStep, Endpoints: []string{"/sap/bc/adt/debugger"}},
 
 		{Tool: mcp.NewTool("DebuggerGetStack",
 			mcp.WithDescription("Get the current call stack."),
-		), Handler: HandleDebuggerGetStack, ReadOnly: true},
+		), Handler: HandleDebuggerGetStack, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/debugger"}},
 
 		{Tool: mcp.NewTool("DebuggerGetVariables",
 			mcp.WithDescription("Read variable values."),
 			mcp.WithArray("variable_ids", mcp.Description("List of variable IDs to read (optional, default: @ROOT)"), mcp.WithStringItems()),
-		), Handler: HandleDebuggerGetVariables, ReadOnly: true},
+		), Handler: HandleDebuggerGetVariables, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/debugger"}},
 
 		{Tool: mcp.NewTool("DebuggerSetVariable",
 			mcp.WithDescription("Modify a variable value."),
 			mcp.WithString("variable_name", mcp.Required(), mcp.Description("Name of the variable")),
 			mcp.WithString("value", mcp.Required(), mcp.Description("New value")),
-		), Handler: HandleDebuggerSetVariable},
+		), Handler: HandleDebuggerSetVariable, Endpoints: []string{"/sap/bc/adt/debugger"}},
 	}
 }
 

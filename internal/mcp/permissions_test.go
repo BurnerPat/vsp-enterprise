@@ -6,6 +6,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
+	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
 func setupTestConfig() {
@@ -458,6 +459,113 @@ func TestPermissionManager_CompositeRoles(t *testing.T) {
 	// DataPreview should allow ZAPP
 	if err := pm.IsObjectAllowedForTool("prod", "DataPreview", "ZAPP", ""); err != nil {
 		t.Errorf("ZAPP should be allowed for DataPreview: %v", err)
+	}
+}
+
+func TestFilterToolsByEndpoints_EmptyDiscovery(t *testing.T) {
+	tools := []*types.ToolDef{
+		{Tool: mcp.NewTool("GetProgram"), Endpoints: []string{"/sap/bc/adt/programs/programs"}},
+		{Tool: mcp.NewTool("GetClass"), Endpoints: []string{"/sap/bc/adt/oo/classes"}},
+	}
+
+	// Nil endpoints = no filtering
+	result := FilterToolsByEndpoints(tools, nil)
+	if len(result) != 2 {
+		t.Errorf("expected 2 tools with nil endpoints, got %d", len(result))
+	}
+
+	// Empty endpoints = no filtering
+	result = FilterToolsByEndpoints(tools, adt.DiscoveredEndpoints{})
+	if len(result) != 2 {
+		t.Errorf("expected 2 tools with empty endpoints, got %d", len(result))
+	}
+}
+
+func TestFilterToolsByEndpoints_NoEndpointsDeclared(t *testing.T) {
+	tools := []*types.ToolDef{
+		{Tool: mcp.NewTool("GetConnectionInfo")},                                                // no Endpoints
+		{Tool: mcp.NewTool("GetProgram"), Endpoints: []string{"/sap/bc/adt/programs/programs"}}, // has Endpoints
+	}
+
+	// Only programs/programs is discovered — GetConnectionInfo (no endpoints) always passes
+	eps := adt.DiscoveredEndpoints{
+		"/sap/bc/adt/programs/programs": adt.ADTEndpoint{Path: "/sap/bc/adt/programs/programs"},
+	}
+
+	result := FilterToolsByEndpoints(tools, eps)
+	if len(result) != 2 {
+		t.Errorf("expected 2 tools (empty Endpoints always passes), got %d", len(result))
+	}
+}
+
+func TestFilterToolsByEndpoints_FiltersUnavailable(t *testing.T) {
+	tools := []*types.ToolDef{
+		{Tool: mcp.NewTool("GetProgram"), Endpoints: []string{"/sap/bc/adt/programs/programs"}},
+		{Tool: mcp.NewTool("GetClass"), Endpoints: []string{"/sap/bc/adt/oo/classes"}},
+		{Tool: mcp.NewTool("ListDumps"), Endpoints: []string{"/sap/bc/adt/runtime/dumps"}},
+		{Tool: mcp.NewTool("GetSystemInfo")}, // no Endpoints
+	}
+
+	// Only programs and classes are available
+	eps := adt.DiscoveredEndpoints{
+		"/sap/bc/adt/programs/programs": adt.ADTEndpoint{Path: "/sap/bc/adt/programs/programs"},
+		"/sap/bc/adt/oo/classes":        adt.ADTEndpoint{Path: "/sap/bc/adt/oo/classes"},
+	}
+
+	result := FilterToolsByEndpoints(tools, eps)
+	if len(result) != 3 {
+		t.Errorf("expected 3 tools (GetProgram, GetClass, GetSystemInfo), got %d", len(result))
+	}
+
+	// Verify ListDumps was filtered
+	for _, td := range result {
+		if td.Tool.Name == "ListDumps" {
+			t.Error("ListDumps should have been filtered out")
+		}
+	}
+}
+
+func TestFilterToolsByEndpoints_MultipleEndpoints_AllRequired(t *testing.T) {
+	tools := []*types.ToolDef{
+		{Tool: mcp.NewTool("CompareCallGraphs"), Endpoints: []string{"/sap/bc/adt/cai/callgraph", "/sap/bc/adt/runtime/traces"}},
+	}
+
+	// Only callgraph available, traces not
+	eps := adt.DiscoveredEndpoints{
+		"/sap/bc/adt/cai/callgraph": adt.ADTEndpoint{Path: "/sap/bc/adt/cai/callgraph"},
+	}
+
+	result := FilterToolsByEndpoints(tools, eps)
+	if len(result) != 0 {
+		t.Errorf("expected 0 tools (both endpoints needed), got %d", len(result))
+	}
+
+	// Both available
+	eps["/sap/bc/adt/runtime/traces"] = adt.ADTEndpoint{Path: "/sap/bc/adt/runtime/traces"}
+	result = FilterToolsByEndpoints(tools, eps)
+	if len(result) != 1 {
+		t.Errorf("expected 1 tool (both endpoints available), got %d", len(result))
+	}
+}
+
+func TestFilterToolsByEndpoints_PrefixMatching(t *testing.T) {
+	tools := []*types.ToolDef{
+		{Tool: mcp.NewTool("GetSQLTraceState"), Endpoints: []string{"/sap/bc/adt/st05/trace"}},
+	}
+
+	// Discovery returns /sap/bc/adt/st05/trace/state which is a sub-path of the tool's endpoint
+	// But the tool declares /sap/bc/adt/st05/trace and discovery has /sap/bc/adt/st05/trace/state
+	// The tool endpoint should match because it's a prefix of the discovered endpoint... actually no.
+	// HasEndpoint checks if a discovered endpoint is a prefix of the requested path.
+	// So if discovered has /sap/bc/adt/st05/trace and tool needs /sap/bc/adt/st05/trace, it matches.
+
+	eps := adt.DiscoveredEndpoints{
+		"/sap/bc/adt/st05/trace": adt.ADTEndpoint{Path: "/sap/bc/adt/st05/trace"},
+	}
+
+	result := FilterToolsByEndpoints(tools, eps)
+	if len(result) != 1 {
+		t.Errorf("expected 1 tool (exact match), got %d", len(result))
 	}
 }
 

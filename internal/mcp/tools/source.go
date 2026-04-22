@@ -41,7 +41,8 @@ func UnifiedToolDefs() []types.ToolDef {
 					mcp.Description("Maximum dependencies to resolve when include_context=true (default: 20)"),
 				),
 			),
-			Handler: HandleGetSource,
+			Handler:   HandleGetSource,
+			Endpoints: []string{"/sap/bc/adt/programs/programs"},
 			Routes: []types.UniversalRoute{
 				{Action: "read", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 					p["object_type"] = ot
@@ -86,7 +87,8 @@ func UnifiedToolDefs() []types.ToolDef {
 					mcp.Description("For CLAS only: update only this method (source must be METHOD...ENDMETHOD block). Method must already exist in the class."),
 				),
 			),
-			Handler: HandleWriteSource,
+			Handler:   HandleWriteSource,
+			Endpoints: []string{"/sap/bc/adt/programs/programs"},
 			Routes: []types.UniversalRoute{
 				{Action: "edit", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 					p["object_type"] = ot

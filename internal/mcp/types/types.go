@@ -24,6 +24,10 @@ type System interface {
 	// EnsureWSConnected ensures the WebSocket client for a tool is connected.
 	EnsureWSConnected(ctx context.Context, toolName string) *mcp.CallToolResult
 
+	// DiscoveredEndpoints returns the ADT endpoints discovered from /sap/bc/adt/discovery.
+	// Returns nil if discovery was not performed (e.g., RFC mode or discovery failed).
+	DiscoveredEndpoints() adt.DiscoveredEndpoints
+
 	// Connect validates credentials and establishes the connection connection.
 	// For HTTP mode, this performs an explicit authentication check (Ping).
 	// For RFC/SNC mode, this is a silent no-op as logon validation is deferred to first RFC call.
@@ -64,6 +68,12 @@ type ToolDef struct {
 	ReadOnly bool     // tool only reads data, never modifies the SAP system
 	Focused  bool     // included in "focused" mode (default mode)
 	Groups   []string // group codes for --disabled-groups (e.g., "D", "H", "X")
+
+	// Endpoints lists the ADT endpoint base paths required by this tool.
+	// Used for discovery-based filtering: if the SAP system does not advertise
+	// a required endpoint in /sap/bc/adt/discovery, the tool is disabled.
+	// Tools with an empty Endpoints slice are never filtered by discovery.
+	Endpoints []string
 
 	// Universal mode routing (optional).
 	Routes []UniversalRoute

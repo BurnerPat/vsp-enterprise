@@ -12,36 +12,36 @@ func TransportToolDefs() []types.ToolDef {
 	return []types.ToolDef{
 		{Tool: mcp.NewTool("GetUserTransports",
 			mcp.WithDescription("List open connection requests for the current user"),
-		), Handler: HandleGetUserTransports, ReadOnly: true, Focused: true,
+		), Handler: HandleGetUserTransports, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/cts/transports"},
 			Routes: []types.UniversalRoute{{Action: "query", ParamsType: "user_transports"}}},
 
 		{Tool: mcp.NewTool("GetTransportInfo",
 			mcp.WithDescription("Get detailed information about a connection request"),
 			mcp.WithString("connection", mcp.Required(), mcp.Description("Transport request number")),
-		), Handler: HandleGetTransportInfo, ReadOnly: true, Focused: true},
+		), Handler: HandleGetTransportInfo, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/cts/transports"}},
 
 		{Tool: mcp.NewTool("ListTransports",
 			mcp.WithDescription("Search for connection requests"),
 			mcp.WithString("user", mcp.Description("Filter by user (default: current)")),
 			mcp.WithString("status", mcp.Description("Filter by status (D=Modifiable, R=Released)")),
 			mcp.WithNumber("limit", mcp.Description("Maximum number of results (default 50)")),
-		), Handler: HandleListTransports, ReadOnly: true},
+		), Handler: HandleListTransports, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/cts/transports"}},
 
 		{Tool: mcp.NewTool("CreateTransport",
 			mcp.WithDescription("Create a new connection request"),
 			mcp.WithString("description", mcp.Required(), mcp.Description("Transport description")),
 			mcp.WithString("target", mcp.Description("Target system (optional)")),
-		), Handler: HandleCreateTransport},
+		), Handler: HandleCreateTransport, Endpoints: []string{"/sap/bc/adt/cts/transports"}},
 
 		{Tool: mcp.NewTool("ReleaseTransport",
 			mcp.WithDescription("Release a connection request"),
 			mcp.WithString("connection", mcp.Required(), mcp.Description("Transport request number")),
-		), Handler: HandleReleaseTransport},
+		), Handler: HandleReleaseTransport, Endpoints: []string{"/sap/bc/adt/cts/transports"}},
 
 		{Tool: mcp.NewTool("DeleteTransport",
 			mcp.WithDescription("Delete an empty connection request"),
 			mcp.WithString("connection", mcp.Required(), mcp.Description("Transport request number")),
-		), Handler: HandleDeleteTransport},
+		), Handler: HandleDeleteTransport, Endpoints: []string{"/sap/bc/adt/cts/transports"}},
 	}
 }
 

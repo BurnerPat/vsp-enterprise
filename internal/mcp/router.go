@@ -34,7 +34,7 @@ func (r *Router) AddSystem(id string, sys types.System) {
 }
 
 // RegisterTools registers all available tools from all packages.
-func (r *Router) RegisterTools(cfg *config.GlobalConfig) {
+func (r *Router) RegisterTools(cfg *config.GlobalConfig, systems map[string]types.System) {
 	var err error
 	r.permissionManager, err = NewPermissionManager(cfg, tools.AllToolDefs())
 	if err != nil {
@@ -42,6 +42,12 @@ func (r *Router) RegisterTools(cfg *config.GlobalConfig) {
 	}
 
 	r.allTools = tools.AllToolDefs()
+
+	// Apply endpoint-based filtering using ADT discovery results.
+	// This runs after permission-based filtering (inside NewPermissionManager)
+	// and further reduces the enabled tool set per system.
+	r.permissionManager.ApplyEndpointFilter(systems, cfg.Verbose)
+
 	r.permissionManager.LogEffectivePermissions()
 
 	// Register each globally-enabled tool once with a central handler

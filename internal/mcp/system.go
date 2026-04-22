@@ -22,12 +22,13 @@ import (
 // It holds the connection (ADT client), WebSocket clients, sidecar manager,
 // feature prober, and per-system state. System implements types.System.
 type System struct {
-	adtClient     *adt.Client
-	amdpWSClient  *adt.AMDPWebSocketClient // WebSocket-based AMDP client (ZADT_VSP)
-	config        *config.SystemConfig     // Per-system configuration
-	featureProber *adt.FeatureProber       // Feature detection system (safety network)
-	sidecar       *adt.SidecarManager      // JCo sidecar (RFC mode only)
-	cookies       map[string]string        // Runtime cookies (browser-auth, cookie-file, etc.)
+	adtClient           *adt.Client
+	amdpWSClient        *adt.AMDPWebSocketClient // WebSocket-based AMDP client (ZADT_VSP)
+	config              *config.SystemConfig     // Per-system configuration
+	featureProber       *adt.FeatureProber       // Feature detection system (safety network)
+	sidecar             *adt.SidecarManager      // JCo sidecar (RFC mode only)
+	cookies             map[string]string        // Runtime cookies (browser-auth, cookie-file, etc.)
+	discoveredEndpoints adt.DiscoveredEndpoints  // ADT endpoints from /sap/bc/adt/discovery
 }
 
 // Ensure System implements types.System at compile time.
@@ -46,6 +47,11 @@ func (s *System) IsRfcMode() bool {
 // FeatureProber implements types.System.
 func (s *System) FeatureProber() *adt.FeatureProber {
 	return s.featureProber
+}
+
+// DiscoveredEndpoints implements types.System.
+func (s *System) DiscoveredEndpoints() adt.DiscoveredEndpoints {
+	return s.discoveredEndpoints
 }
 
 // EnsureWSConnected implements types.System.
@@ -75,10 +81,21 @@ func (s *System) Connect(ctx context.Context) error {
 		var apiErr *adt.APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode == 400 {
 			_, _ = fmt.Fprintf(os.Stderr, "[WARN] System info unavailable (missing authorization?), connection continues: %v\n", err)
-			return nil
+		} else {
+			return fmt.Errorf("failed to connect to system: %w", err)
 		}
+	}
 
-		return fmt.Errorf("failed to connect to system: %w", err)
+	// Discover available ADT endpoints from the system's service document.
+	// Non-fatal: if discovery fails, all tools remain available.
+	endpoints, err := s.adtClient.DiscoverFeatures(ctx)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "[WARN] ADT discovery failed, all tools remain available: %v\n", err)
+	} else {
+		s.discoveredEndpoints = endpoints
+		if s.config.IsVerbose() {
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] ADT discovery: %d endpoints discovered\n", len(endpoints))
+		}
 	}
 
 	return nil

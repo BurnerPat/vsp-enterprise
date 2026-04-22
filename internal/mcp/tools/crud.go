@@ -56,7 +56,7 @@ func CRUDToolDefs() []types.ToolDef {
 			mcp.WithString("parent", mcp.Description("Parent package name (optional, e.g., $TMP, ZPROD). If not specified, creates a root-level package.")),
 			mcp.WithString("connection", mcp.Description("Transport request number (required for transportable packages, e.g., 'A4HK900114')")),
 			mcp.WithString("software_component", mcp.Description("Software component name (required for transportable packages, e.g., 'HOME', 'ZLOCAL'). Use GetInstalledComponents to list available components.")),
-		), Handler: HandleCreatePackage, Focused: true},
+		), Handler: HandleCreatePackage, Focused: true, Endpoints: []string{"/sap/bc/adt/packages"}},
 
 		{Tool: mcp.NewTool("CreateTable",
 			mcp.WithDescription("Create a DDIC transparent table from a simple JSON definition. Handles full workflow: create → set source → activate. Supports common ABAP types: CHAR, NUMC, INT4, DEC, STRING, TIMESTAMPL, UUID, etc."),
@@ -66,7 +66,7 @@ func CRUDToolDefs() []types.ToolDef {
 			mcp.WithString("fields", mcp.Required(), mcp.Description("JSON array of fields: [{\"name\":\"ID\",\"type\":\"CHAR32\",\"key\":true},{\"name\":\"VALUE\",\"type\":\"STRING\"}]. Types: CHAR/CHARnn, NUMC/NUMCnn, INT4, DEC, STRING, TIMESTAMPL, UUID, DATS, TIMS, or data element name.")),
 			mcp.WithString("connection", mcp.Description("Transport request number (optional for $TMP)")),
 			mcp.WithString("delivery_class", mcp.Description("Delivery class: A=Application (default), C=Customizing, L=Temporary")),
-		), Handler: HandleCreateTable, Focused: true},
+		), Handler: HandleCreateTable, Focused: true, Endpoints: []string{"/sap/bc/adt/ddic/tables"}},
 
 		{Tool: mcp.NewTool("CompareSource",
 			mcp.WithDescription("Compare source code of two objects and return unified diff. Supports all object types from GetSource."),

@@ -21,13 +21,13 @@ func TraceToolDefs() []types.ToolDef {
 			mcp.WithString("process_type", mcp.Description("Filter by process type")),
 			mcp.WithString("object_type", mcp.Description("Filter by object type")),
 			mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default: 100)")),
-		), Handler: HandleListTraces, ReadOnly: true, Focused: true},
+		), Handler: HandleListTraces, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/runtime/traces"}},
 
 		{Tool: mcp.NewTool("GetTrace",
 			mcp.WithDescription("Get trace analysis (hitlist, statements, or database accesses) for a specific trace."),
 			mcp.WithString("trace_id", mcp.Required(), mcp.Description("Trace ID from ListTraces result")),
 			mcp.WithString("tool_type", mcp.Description("Analysis type: 'hitlist' (default), 'statements', 'dbAccesses'")),
-		), Handler: HandleGetTrace, ReadOnly: true, Focused: true},
+		), Handler: HandleGetTrace, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/runtime/traces"}},
 	}
 }
 

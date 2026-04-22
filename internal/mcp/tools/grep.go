@@ -36,7 +36,7 @@ func GrepToolDefs() []types.ToolDef {
 			mcp.WithBoolean("case_insensitive", mcp.Description("If true, perform case-insensitive matching. Default: false")),
 			mcp.WithString("object_types", mcp.Description("Comma-separated object types to search (e.g., 'PROG/P,CLAS/OC'). Empty = search all source objects. Valid: PROG/P, CLAS/OC, INTF/OI, FUGR/F, FUGR/FF, PROG/I")),
 			mcp.WithNumber("max_results", mcp.Description("Maximum number of matching objects to return. 0 = unlimited. Default: 100")),
-		), Handler: HandleGrepPackage, ReadOnly: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGrepPackage, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/repository/nodestructure"}, Routes: []types.UniversalRoute{
 			{Action: "grep", TargetType: "DEVC", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				p["package_name"] = on
 				return p

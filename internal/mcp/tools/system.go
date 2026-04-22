@@ -15,12 +15,12 @@ func SystemToolDefs() []types.ToolDef {
 	return []types.ToolDef{
 		{Tool: mcp.NewTool("GetSystemInfo",
 			mcp.WithDescription("Get SAP system information (system ID, release, kernel, database)"),
-		), Handler: HandleGetSystemInfo, AlwaysOn: true, ReadOnly: true,
+		), Handler: HandleGetSystemInfo, AlwaysOn: true, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/datapreview/freestyle"},
 			Routes: []types.UniversalRoute{{Action: "system", TargetType: "INFO"}}},
 
 		{Tool: mcp.NewTool("GetInstalledComponents",
 			mcp.WithDescription("List installed software components with version information"),
-		), Handler: HandleGetInstalledComponents, AlwaysOn: true, ReadOnly: true,
+		), Handler: HandleGetInstalledComponents, AlwaysOn: true, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/system/components"},
 			Routes: []types.UniversalRoute{{Action: "system", TargetType: "COMPONENTS"}}},
 
 		{Tool: mcp.NewTool("GetConnectionInfo",

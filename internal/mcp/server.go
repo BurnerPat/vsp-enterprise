@@ -90,8 +90,8 @@ func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[str
 		}
 	}
 
-	// Register tools on the router
-	router.RegisterTools(globalCfg)
+	// NOTE: RegisterTools is NOT called here — it must be called after Connect()
+	// so that ADT discovery results are available for endpoint-based tool filtering.
 
 	return &Server{
 		mcpServer: mcpSrv,
@@ -103,18 +103,22 @@ func NewServer(globalCfg *config.GlobalConfig, runtimeCookies map[string]map[str
 // Connect validates credentials and establishes connections for all systems.
 // Iterates over all systems calling System.Connect(ctx).
 // Fails fast on first error and returns it wrapped with system ID context.
+// After attempting connections, registers tools with discovery-based filtering.
+// Tools are always registered even if connection fails, to support schema-only tests.
 func (s *Server) Connect(ctx context.Context) error {
 	if s.router == nil {
 		return fmt.Errorf("server router not initialized")
 	}
 
+	var connectErr error
 	for sysID, sys := range s.router.systems {
 		if s.config.Verbose {
 			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] Connecting to system %q...\n", sysID)
 		}
 
 		if err := sys.Connect(ctx); err != nil {
-			return fmt.Errorf("failed to connect to system %q: %w", sysID, err)
+			connectErr = fmt.Errorf("failed to connect to system %q: %w", sysID, err)
+			break
 		}
 
 		if s.config.Verbose {
@@ -122,7 +126,18 @@ func (s *Server) Connect(ctx context.Context) error {
 		}
 	}
 
-	return nil
+	// Register tools after connection attempts.
+	// This ensures ADT discovery results (if available) are used for endpoint-based filtering.
+	// Tools are registered even if connection failed (with no endpoint filtering).
+	s.RegisterTools()
+
+	return connectErr
+}
+
+// RegisterTools registers all tools with permission and endpoint-based filtering.
+// Must be called after Connect() so that ADT discovery results are available.
+func (s *Server) RegisterTools() {
+	s.router.RegisterTools(s.config, s.router.systems)
 }
 
 // Start activates runtime behavior for all systems (e.g., session keep-alive).

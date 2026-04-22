@@ -18,13 +18,13 @@ func ServiceBindingToolDefs() []types.ToolDef {
 			mcp.WithDescription("Publish a RAP service binding"),
 			mcp.WithString("service_name", mcp.Required(), mcp.Description("Service binding name")),
 			mcp.WithString("service_version", mcp.Description("Service version (default: 0001)")),
-		), Handler: HandlePublishServiceBinding},
+		), Handler: HandlePublishServiceBinding, Endpoints: []string{"/sap/bc/adt/businessservices/odatav2"}},
 
 		{Tool: mcp.NewTool("UnpublishServiceBinding",
 			mcp.WithDescription("Unpublish a RAP service binding"),
 			mcp.WithString("service_name", mcp.Required(), mcp.Description("Service binding name")),
 			mcp.WithString("service_version", mcp.Description("Service version (default: 0001)")),
-		), Handler: HandleUnpublishServiceBinding},
+		), Handler: HandleUnpublishServiceBinding, Endpoints: []string{"/sap/bc/adt/businessservices/odatav2"}},
 	}
 }
 

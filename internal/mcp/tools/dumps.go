@@ -24,12 +24,12 @@ func DumpToolDefs() []types.ToolDef {
 			mcp.WithString("date_from", mcp.Description("Start date (YYYYMMDD format)")),
 			mcp.WithString("date_to", mcp.Description("End date (YYYYMMDD format)")),
 			mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default: 100)")),
-		), Handler: HandleListDumps, ReadOnly: true, Focused: true},
+		), Handler: HandleListDumps, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/runtime/dumps"}},
 
 		{Tool: mcp.NewTool("GetDump",
 			mcp.WithDescription("Get full details of a specific runtime error (short dump) including stack trace."),
 			mcp.WithString("dump_id", mcp.Required(), mcp.Description("Dump ID from ListDumps result")),
-		), Handler: HandleGetDump, ReadOnly: true, Focused: true},
+		), Handler: HandleGetDump, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/runtime/dumps"}},
 	}
 }
 

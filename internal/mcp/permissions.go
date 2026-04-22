@@ -2,11 +2,13 @@ package mcp
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/oisee/vibing-steampunk/internal/config"
 	"github.com/oisee/vibing-steampunk/internal/log"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
+	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
 // PermissionManager manages all aspects of role-based permissions.
@@ -298,6 +300,78 @@ func (pm *PermissionManager) LogEffectivePermissions() {
 		// Log disabled tools
 		for toolName := range sp.DisabledTools {
 			log.Info("  ✗ %s", toolName)
+		}
+	}
+}
+
+// FilterToolsByEndpoints removes tools whose declared Endpoints are not available
+// on the target system according to its ADT discovery result.
+// Tools with an empty Endpoints slice are never filtered (always pass).
+// If discoveredEndpoints is nil or empty, no tools are filtered.
+func FilterToolsByEndpoints(tools []*types.ToolDef, discoveredEndpoints adt.DiscoveredEndpoints) []*types.ToolDef {
+	if len(discoveredEndpoints) == 0 {
+		return tools
+	}
+
+	var result []*types.ToolDef
+	for _, td := range tools {
+		if len(td.Endpoints) == 0 {
+			// No endpoint requirements declared → always available
+			result = append(result, td)
+			continue
+		}
+
+		allFound := true
+		for _, ep := range td.Endpoints {
+			if !discoveredEndpoints.HasEndpoint(ep) {
+				allFound = false
+				break
+			}
+		}
+
+		if allFound {
+			result = append(result, td)
+		}
+	}
+
+	return result
+}
+
+// ApplyEndpointFilter filters each system's enabled tools based on ADT discovery results.
+// This is called after permission-based filtering and after all systems have connected.
+func (pm *PermissionManager) ApplyEndpointFilter(systems map[string]types.System, verbose bool) {
+	for sysID, sp := range pm.systemPermissions {
+		sys, ok := systems[strings.ToLower(sysID)]
+		if !ok {
+			continue
+		}
+
+		endpoints := sys.DiscoveredEndpoints()
+		if len(endpoints) == 0 {
+			continue
+		}
+
+		before := len(sp.EnabledTools)
+		sp.EnabledTools = FilterToolsByEndpoints(sp.EnabledTools, endpoints)
+		after := len(sp.EnabledTools)
+
+		if before != after {
+			// Update disabled tools map
+			enabledSet := make(map[string]bool)
+			for _, td := range sp.EnabledTools {
+				enabledSet[td.Tool.Name] = true
+			}
+			for i := range pm.allTools {
+				toolName := pm.allTools[i].Tool.Name
+				if !enabledSet[toolName] {
+					sp.DisabledTools[toolName] = true
+				}
+			}
+
+			if verbose {
+				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] System %q: endpoint filter removed %d tools (%d → %d)\n",
+					sysID, before-after, before, after)
+			}
 		}
 	}
 }

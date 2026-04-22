@@ -20,8 +20,9 @@ func ClassIncludeToolDefs() []types.ToolDef {
 				mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
 				mcp.WithString("include_type", mcp.Required(), mcp.Description("Include type: main, definitions, implementations, macros, testclasses")),
 			),
-			Handler:  HandleGetClassInclude,
-			ReadOnly: true,
+			Handler:   HandleGetClassInclude,
+			ReadOnly:  true,
+			Endpoints: []string{"/sap/bc/adt/oo/classes"},
 		},
 		{
 			Tool: mcp.NewTool("CreateTestInclude",
@@ -30,7 +31,8 @@ func ClassIncludeToolDefs() []types.ToolDef {
 				mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from LockObject (lock the parent class first)")),
 				mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
 			),
-			Handler: HandleCreateTestInclude,
+			Handler:   HandleCreateTestInclude,
+			Endpoints: []string{"/sap/bc/adt/oo/classes"},
 		},
 		{
 			Tool: mcp.NewTool("UpdateClassInclude",
@@ -41,23 +43,8 @@ func ClassIncludeToolDefs() []types.ToolDef {
 				mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from LockObject (lock the parent class first)")),
 				mcp.WithString("connection", mcp.Description("Transport request number (optional for local packages)")),
 			),
-			Handler: HandleUpdateClassInclude,
-		},
-		{
-			Tool: mcp.NewTool("PublishServiceBinding",
-				mcp.WithDescription("Publish a service binding to make it available as OData service"),
-				mcp.WithString("service_name", mcp.Required(), mcp.Description("Service binding name (e.g., ZTRAVEL_SB)")),
-				mcp.WithString("service_version", mcp.Description("Service version (default: 0001)")),
-			),
-			Handler: HandlePublishServiceBinding,
-		},
-		{
-			Tool: mcp.NewTool("UnpublishServiceBinding",
-				mcp.WithDescription("Unpublish a service binding"),
-				mcp.WithString("service_name", mcp.Required(), mcp.Description("Service binding name (e.g., ZTRAVEL_SB)")),
-				mcp.WithString("service_version", mcp.Description("Service version (default: 0001)")),
-			),
-			Handler: HandleUnpublishServiceBinding,
+			Handler:   HandleUpdateClassInclude,
+			Endpoints: []string{"/sap/bc/adt/oo/classes"},
 		},
 	}
 }

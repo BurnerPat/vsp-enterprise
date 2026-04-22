@@ -16,13 +16,13 @@ func SQLTraceToolDefs() []types.ToolDef {
 	return []types.ToolDef{
 		{Tool: mcp.NewTool("GetSQLTraceState",
 			mcp.WithDescription("Check if SQL trace (ST05) is currently active."),
-		), Handler: HandleGetSQLTraceState, ReadOnly: true, Focused: true},
+		), Handler: HandleGetSQLTraceState, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/st05/trace"}},
 
 		{Tool: mcp.NewTool("ListSQLTraces",
 			mcp.WithDescription("List SQL trace files from ST05."),
 			mcp.WithString("user", mcp.Description("Filter by username")),
 			mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default: 100)")),
-		), Handler: HandleListSQLTraces, ReadOnly: true, Focused: true},
+		), Handler: HandleListSQLTraces, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/st05/trace"}},
 	}
 }
 

@@ -22,15 +22,17 @@ func ATCToolDefs() []types.ToolDef {
 				mcp.WithString("variant", mcp.Description("Optional: ATC check variant name (e.g., DEFAULT, CHECK_ALL). If omitted, system default is used.")),
 				mcp.WithNumber("max_results", mcp.Description("Maximum number of findings to return. Default: 100")),
 			),
-			Handler:  HandleRunATC,
-			ReadOnly: true,
+			Handler:   HandleRunATC,
+			ReadOnly:  true,
+			Endpoints: []string{"/sap/bc/adt/atc"},
 		},
 		{
 			Tool: mcp.NewTool("GetATCCustomizing",
 				mcp.WithDescription("Get ATC customizing settings, including available check variants and default settings."),
 			),
-			Handler:  HandleGetATCCustomizing,
-			ReadOnly: true,
+			Handler:   HandleGetATCCustomizing,
+			ReadOnly:  true,
+			Endpoints: []string{"/sap/bc/adt/atc"},
 		},
 	}
 }

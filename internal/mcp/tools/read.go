@@ -16,7 +16,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetProgram",
 			mcp.WithDescription("Retrieve ABAP program source code"),
 			mcp.WithString("program_name", mcp.Required(), mcp.Description("Name of the ABAP program")),
-		), Handler: HandleGetProgram, ReadOnly: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetProgram, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/programs/programs"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "PROG", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"program_name": on}
 			}},
@@ -25,7 +25,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetClass",
 			mcp.WithDescription("Retrieve ABAP class source code"),
 			mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
-		), Handler: HandleGetClass, ReadOnly: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetClass, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/oo/classes"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "CLAS", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"class_name": on}
 			}},
@@ -34,7 +34,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetInterface",
 			mcp.WithDescription("Retrieve ABAP interface source code"),
 			mcp.WithString("interface_name", mcp.Required(), mcp.Description("Name of the ABAP interface")),
-		), Handler: HandleGetInterface, ReadOnly: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetInterface, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/oo/interfaces"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "INTF", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"interface_name": on}
 			}},
@@ -44,7 +44,7 @@ func ReadToolDefs() []types.ToolDef {
 			mcp.WithDescription("Retrieve ABAP Function Module source code"),
 			mcp.WithString("function_name", mcp.Required(), mcp.Description("Name of the function module")),
 			mcp.WithString("function_group", mcp.Required(), mcp.Description("Name of the function group")),
-		), Handler: HandleGetFunction, ReadOnly: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetFunction, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/functions/groups"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "FUNC", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"function_name": on, "function_group": p["function_group"]}
 			}},
@@ -53,7 +53,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetFunctionGroup",
 			mcp.WithDescription("Retrieve ABAP Function Group source code"),
 			mcp.WithString("function_group", mcp.Required(), mcp.Description("Name of the function group")),
-		), Handler: HandleGetFunctionGroup, ReadOnly: true, Focused: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetFunctionGroup, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/functions/groups"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "FUGR", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"function_group": on}
 			}},
@@ -62,7 +62,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetInclude",
 			mcp.WithDescription("Retrieve ABAP Include Source Code"),
 			mcp.WithString("include_name", mcp.Required(), mcp.Description("Name of the ABAP Include")),
-		), Handler: HandleGetInclude, ReadOnly: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetInclude, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/programs/includes"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "INCL", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"include_name": on}
 			}},
@@ -71,7 +71,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetTable",
 			mcp.WithDescription("Retrieve ABAP table structure"),
 			mcp.WithString("table_name", mcp.Required(), mcp.Description("Name of the ABAP table")),
-		), Handler: HandleGetTable, ReadOnly: true, Focused: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetTable, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/ddic/tables"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "TABL", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"table_name": on}
 			}},
@@ -82,7 +82,7 @@ func ReadToolDefs() []types.ToolDef {
 			mcp.WithString("table_name", mcp.Required(), mcp.Description("Name of the ABAP table")),
 			mcp.WithNumber("max_rows", mcp.Description("Maximum number of rows to retrieve (default 100). Use this instead of SQL LIMIT clause")),
 			mcp.WithString("sql_query", mcp.Description("Optional ABAP SQL SELECT statement. Uses ABAP syntax: ASCENDING/DESCENDING work, ASC/DESC fail. Example: SELECT * FROM T000 WHERE MANDT = '001' ORDER BY MANDT DESCENDING")),
-		), Handler: HandleGetTableContents, ReadOnly: true, Focused: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetTableContents, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/datapreview/ddic"}, Routes: []types.UniversalRoute{
 			{Action: "query", TargetType: "TABL", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				p["table_name"] = on
 				return p
@@ -93,7 +93,7 @@ func ReadToolDefs() []types.ToolDef {
 			mcp.WithDescription("Execute a freestyle SQL query against the SAP database. IMPORTANT: Uses ABAP SQL syntax, NOT standard SQL. Use ASCENDING/DESCENDING instead of ASC/DESC. Use max_rows parameter instead of LIMIT. GROUP BY and WHERE work normally."),
 			mcp.WithString("sql_query", mcp.Required(), mcp.Description("ABAP SQL query. Example: SELECT carrid, COUNT(*) as cnt FROM sflight GROUP BY carrid ORDER BY cnt DESCENDING. Note: ASC/DESC keywords fail - use ASCENDING/DESCENDING")),
 			mcp.WithNumber("max_rows", mcp.Description("Maximum number of rows to retrieve (default 100). Use this instead of SQL LIMIT clause")),
-		), Handler: HandleRunQuery, ReadOnly: true, Focused: true, Routes: []types.UniversalRoute{
+		), Handler: HandleRunQuery, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/datapreview/freestyle"}, Routes: []types.UniversalRoute{
 			{Action: "query", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return p
 			}},
@@ -105,7 +105,7 @@ func ReadToolDefs() []types.ToolDef {
 			mcp.WithString("dependency_level", mcp.Description("Level of dependency resolution: 'unit' (direct only) or 'hierarchy' (recursive). Default: 'hierarchy'")),
 			mcp.WithBoolean("with_associations", mcp.Description("Include modeled associations in dependency tree. Default: false")),
 			mcp.WithString("context_package", mcp.Description("Filter dependencies to specific package context")),
-		), Handler: HandleGetCDSDependencies, ReadOnly: true, Focused: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetCDSDependencies, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/testcodegen/dependencies"}, Routes: []types.UniversalRoute{
 			{Action: "analyze", TargetType: "DDLS", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				p["ddls_name"] = on
 				return p
@@ -115,7 +115,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetStructure",
 			mcp.WithDescription("Retrieve ABAP Structure"),
 			mcp.WithString("structure_name", mcp.Required(), mcp.Description("Name of the ABAP Structure")),
-		), Handler: HandleGetStructure, ReadOnly: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetStructure, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/ddic/structures"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "STRU", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"structure_name": on}
 			}},
@@ -124,7 +124,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetPackage",
 			mcp.WithDescription("Retrieve ABAP package details"),
 			mcp.WithString("package_name", mcp.Required(), mcp.Description("Name of the ABAP package")),
-		), Handler: HandleGetPackage, ReadOnly: true, Focused: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetPackage, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/repository/nodestructure"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "DEVC", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"package_name": on}
 			}},
@@ -133,7 +133,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetMessages",
 			mcp.WithDescription("Get all messages from an ABAP message class (SE91). Returns message number, text for all messages in the class. Use SearchObject to find message classes first."),
 			mcp.WithString("message_class", mcp.Required(), mcp.Description("Name of the message class (e.g., 'ZRAY_00', 'SY')")),
-		), Handler: HandleGetMessages, ReadOnly: true, Focused: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetMessages, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/messageclass"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "MSAG", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"message_class": on}
 			}},
@@ -142,7 +142,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetTransaction",
 			mcp.WithDescription("Retrieve ABAP transaction details"),
 			mcp.WithString("transaction_name", mcp.Required(), mcp.Description("Name of the ABAP transaction")),
-		), Handler: HandleGetTransaction, ReadOnly: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetTransaction, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/vit/wb/object_type"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "TRAN", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"transaction_name": on}
 			}},
@@ -151,7 +151,7 @@ func ReadToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetTypeInfo",
 			mcp.WithDescription("Retrieve ABAP type information"),
 			mcp.WithString("type_name", mcp.Required(), mcp.Description("Name of the ABAP type")),
-		), Handler: HandleGetTypeInfo, ReadOnly: true, Routes: []types.UniversalRoute{
+		), Handler: HandleGetTypeInfo, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/ddic/dataelements"}, Routes: []types.UniversalRoute{
 			{Action: "read", TargetType: "TYPE", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				return map[string]any{"type_name": on}
 			}},
