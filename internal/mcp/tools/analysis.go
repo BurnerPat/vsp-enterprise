@@ -42,19 +42,6 @@ func AnalysisToolDefs() []types.ToolDef {
 			mcp.WithDescription("Compute metrics and statistics for a call graph"),
 			mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT URI of the object")),
 		), Handler: HandleAnalyzeCallGraph, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/cai/callgraph"}},
-
-		{Tool: mcp.NewTool("CompareCallGraphs",
-			mcp.WithDescription("Compare static vs dynamic (trace-based) call graphs"),
-			mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT URI of the object")),
-			mcp.WithString("trace_id", mcp.Required(), mcp.Description("Trace ID for dynamic call graph")),
-		), Handler: HandleCompareCallGraphs, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/cai/callgraph", "/sap/bc/adt/runtime/traces"}},
-
-		{Tool: mcp.NewTool("TraceExecution",
-			mcp.WithDescription("Execute ABAP code with coverage/performance tracing."),
-			mcp.WithString("object_type", mcp.Required(), mcp.Description("PROG, CLAS, FUNC")),
-			mcp.WithString("object_name", mcp.Required(), mcp.Description("Name of the object")),
-			mcp.WithString("method", mcp.Description("Method name for CLAS")),
-		), Handler: HandleTraceExecution, Focused: true},
 	}
 }
 
@@ -130,12 +117,4 @@ func HandleAnalyzeCallGraph(ctx context.Context, sys types.System, request mcp.C
 	stats := adt.AnalyzeCallGraph(graph)
 	result, _ := json.MarshalIndent(stats, "", "  ")
 	return mcp.NewToolResultText(string(result)), nil
-}
-
-func HandleCompareCallGraphs(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return mcp.NewToolResultText("CompareCallGraphs (placeholder)"), nil
-}
-
-func HandleTraceExecution(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return mcp.NewToolResultText("TraceExecution (placeholder)"), nil
 }

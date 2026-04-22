@@ -836,7 +836,7 @@ func GetAllToolNames() []string {
 		"CreateObject", "DeleteObject", "CloneObject", "RenameObject",
 		"LockObject", "UnlockObject",
 		// Search tools
-		"SearchObject", "GrepObjects", "GrepPackages", "GrepObject", "GrepPackage",
+		"SearchObject", "GrepObject", "GrepPackage",
 		// Development tools
 		"SyntaxCheck", "Activate", "ActivatePackage", "PrettyPrint",
 		"GetPrettyPrinterSettings", "SetPrettyPrinterSettings",
@@ -848,17 +848,12 @@ func GetAllToolNames() []string {
 		"FindDefinition", "FindReferences", "CodeCompletion", "GetTypeHierarchy",
 		// Call graph / analysis
 		"GetCallGraph", "GetCallersOf", "GetCalleesOf", "GetObjectStructure",
-		"AnalyzeCallGraph", "CompareCallGraphs", "TraceExecution",
+		"AnalyzeCallGraph",
 		// System info
 		"GetSystemInfo", "GetInstalledComponents", "GetConnectionInfo", "GetFeatures",
 		// Dumps / traces
 		"ListDumps", "GetDump", "ListTraces", "GetTrace",
 		"GetSQLTraceState", "ListSQLTraces",
-		// File I/O
-		"ImportFromFile", "ExportToFile", "DeployFromFile", "SaveToFile",
-		// Transport
-		"ListTransports", "GetTransport", "GetTransportInfo", "GetUserTransports",
-		"CreateTransport", "ReleaseTransport", "DeleteTransport",
 		// Report execution
 		"RunReport", "RunReportAsync", "GetAsyncResult",
 		"GetVariants", "GetTextElements", "SetTextElements",
@@ -887,7 +882,7 @@ func GetFocusedToolNames() []string {
 		// Unified tools
 		"GetSource", "WriteSource",
 		// Search tools
-		"GrepObjects", "GrepPackages", "SearchObject",
+		"SearchObject",
 		// Primary workflow
 		"EditSource",
 		// Data/Metadata read
@@ -902,13 +897,11 @@ func GetFocusedToolNames() []string {
 		"CompareSource", "CloneObject", "GetClassInfo",
 		// Lock/Unlock
 		"LockObject", "UnlockObject",
-		// File operations
-		"ImportFromFile", "ExportToFile",
 		// System info
 		"GetSystemInfo", "GetInstalledComponents", "GetConnectionInfo", "GetFeatures",
 		// Code analysis
 		"GetCallGraph", "GetObjectStructure", "GetCallersOf", "GetCalleesOf",
-		"AnalyzeCallGraph", "CompareCallGraphs", "TraceExecution",
+		"AnalyzeCallGraph",
 		// Dumps / Traces
 		"ListDumps", "GetDump", "ListTraces", "GetTrace",
 	}
