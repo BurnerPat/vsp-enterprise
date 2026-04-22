@@ -6,7 +6,6 @@ package mcp
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -59,38 +58,19 @@ func (s *System) EnsureWSConnected(ctx context.Context, toolName string) *mcp.Ca
 	return s.ensureWSConnected(ctx, toolName)
 }
 
-// Connect implements types.System by validating credentials and establishing connection connection.
-// For HTTP mode, performs a GetSystemInfo call to validate authentication and establish session.
+// Connect implements types.System by validating credentials and establishing connection.
+// Performs a GetSystemInfo call to validate authentication and establish session,
+// then discovers available ADT endpoints for tool filtering.
 // HTTP 400 from GetSystemInfo is treated as non-fatal (e.g., missing authorization for T000 query)
 // since the session was still established and other tools may work fine.
-// For RFC/SNC mode, is a silent no-op (logon validation via explicit RFC call is a future enhancement).
+// In RFC/JCo mode, requests are tunneled through the JCo proxy.
 // Connect is idempotent and safe to call multiple times.
 func (s *System) Connect(ctx context.Context) error {
-	if strings.EqualFold(s.config.ConnectionMode, "rfc") {
-		// Intentional no-op for RFC/JCo sidecar; explicit logon validation via RFC function call
-		// (e.g., STFC_CONNECTION) is a future enhancement. The sidecar is already started during
-		// instantiation, and actual logon occurs on the first RFC call to the SAP system.
-		return nil
-	}
-
-	// HTTP mode: validate credentials via GetSystemInfo (establishes session and validates auth)
-	if _, err := s.adtClient.GetSystemInfo(ctx); err != nil {
-		// If the server responded with HTTP 400, the session was established but the
-		// SQL query (e.g., SELECT FROM T000) failed — likely missing authorization.
-		// Warn and continue; other tools may still work.
-		var apiErr *adt.APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == 400 {
-			_, _ = fmt.Fprintf(os.Stderr, "[WARN] System info unavailable (missing authorization?), connection continues: %v\n", err)
-		} else {
-			return fmt.Errorf("failed to connect to system: %w", err)
-		}
-	}
-
 	// Discover available ADT endpoints from the system's service document.
 	// Non-fatal: if discovery fails, all tools remain available.
 	endpoints, err := s.adtClient.DiscoverFeatures(ctx)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "[WARN] ADT discovery failed, all tools remain available: %v\n", err)
+		return fmt.Errorf("failed to connect to system: %w", err)
 	} else {
 		s.discoveredEndpoints = endpoints
 		if s.config.IsVerbose() {
