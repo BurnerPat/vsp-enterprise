@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // --- Surgical Edit Tools ---
@@ -220,7 +222,7 @@ func (c *Client) EditSourceWithOptions(ctx context.Context, objectURL, oldString
 		sourceURL = objectURL + "/source/main"
 	}
 
-	resp, err := c.transport.Request(ctx, sourceURL, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourceURL, &connection.Request{
 		Method: "GET",
 		Accept: "text/plain",
 	})

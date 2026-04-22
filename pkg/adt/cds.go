@@ -5,20 +5,22 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/url"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // CDSDependencyNode represents a node in the CDS dependency tree
 type CDSDependencyNode struct {
-	Name                   string                `xml:"name,attr" json:"name"`
-	Type                   string                `xml:"type,attr" json:"type"`
-	ObjectType             string                `xml:"object_type,attr,omitempty" json:"objectType,omitempty"`
-	HasParams              bool                  `xml:"has_params,attr,omitempty" json:"hasParams,omitempty"`
-	Relation               string                `xml:"relation,attr,omitempty" json:"relation,omitempty"`
-	EntityName             string                `xml:"entity_name,attr,omitempty" json:"entityName,omitempty"`
-	UserDefinedEntityName  string                `xml:"user_defined_entity_name,attr,omitempty" json:"userDefinedEntityName,omitempty"`
-	ActivationState        string                `xml:"activation_state,attr,omitempty" json:"activationState,omitempty"`
-	DDLSName               string                `xml:"ddls_name,attr,omitempty" json:"ddlsName,omitempty"`
-	Children               []CDSDependencyNode   `xml:"node" json:"children,omitempty"`
+	Name                  string              `xml:"name,attr" json:"name"`
+	Type                  string              `xml:"type,attr" json:"type"`
+	ObjectType            string              `xml:"object_type,attr,omitempty" json:"objectType,omitempty"`
+	HasParams             bool                `xml:"has_params,attr,omitempty" json:"hasParams,omitempty"`
+	Relation              string              `xml:"relation,attr,omitempty" json:"relation,omitempty"`
+	EntityName            string              `xml:"entity_name,attr,omitempty" json:"entityName,omitempty"`
+	UserDefinedEntityName string              `xml:"user_defined_entity_name,attr,omitempty" json:"userDefinedEntityName,omitempty"`
+	ActivationState       string              `xml:"activation_state,attr,omitempty" json:"activationState,omitempty"`
+	DDLSName              string              `xml:"ddls_name,attr,omitempty" json:"ddlsName,omitempty"`
+	Children              []CDSDependencyNode `xml:"node" json:"children,omitempty"`
 }
 
 // CDSDependencyOptions configures dependency retrieval
@@ -45,7 +47,7 @@ func (c *Client) GetCDSDependencies(ctx context.Context, ddlsName string, opts C
 	endpoint := fmt.Sprintf("/sap/bc/adt/testcodegen/dependencies/doubledata?ddlsourceName=%s",
 		url.QueryEscape(ddlsName))
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method: "GET",
 		Accept: "application/vnd.sap.adt.codegen.data.v1+xml",
 	})

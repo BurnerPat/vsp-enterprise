@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // --- Syntax Check ---
@@ -54,7 +56,7 @@ func (c *Client) SyntaxCheck(ctx context.Context, objectURL string, content stri
   </chkrun:checkObject>
 </chkrun:checkObjectList>`, checkObjectURI, artifactURI, encodedContent)
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/checkruns?reporters=abapCheckRun", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/checkruns?reporters=abapCheckRun", &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(body),
 		ContentType: "application/*",
@@ -166,7 +168,7 @@ func (c *Client) Activate(ctx context.Context, objectURL string, objectName stri
   <adtcore:objectReference adtcore:uri="%s" adtcore:name="%s"/>
 </adtcore:objectReferences>`, objectURL, objectName)
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/activation?method=activate&preauditRequested=true", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/activation?method=activate&preauditRequested=true", &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(body),
 		ContentType: "application/xml",
@@ -266,7 +268,7 @@ func parseActivationResult(data []byte) (*ActivationResult, error) {
 // GetInactiveObjects retrieves all inactive objects for the current user.
 // Returns objects that have been modified but not yet activated.
 func (c *Client) GetInactiveObjects(ctx context.Context) ([]InactiveObjectRecord, error) {
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/activation/inactiveobjects", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/activation/inactiveobjects", &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/vnd.sap.adt.inactivectsobjects.v1+xml, application/xml;q=0.8",
 	})
@@ -643,7 +645,7 @@ func (c *Client) RunUnitTests(ctx context.Context, objectURL string, flags *Unit
 		flags.Short, flags.Medium, flags.Long,
 		objectURL)
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/abapunit/testruns", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/abapunit/testruns", &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(body),
 		ContentType: "application/*",
@@ -877,7 +879,7 @@ type ATCFinding struct {
 
 // GetATCCustomizing retrieves the ATC system configuration.
 func (c *Client) GetATCCustomizing(ctx context.Context) (*ATCCustomizing, error) {
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/atc/customizing", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/atc/customizing", &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml, application/vnd.sap.atc.customizing-v1+xml",
 	})
@@ -961,7 +963,7 @@ func (c *Client) GetATCCheckVariant(ctx context.Context, variant string) (string
 		}
 	}
 
-	resp, err := c.transport.Request(ctx, fmt.Sprintf("/sap/bc/adt/atc/worklists?checkVariant=%s", variant), &RequestOptions{
+	resp, err := c.sendRequest(ctx, fmt.Sprintf("/sap/bc/adt/atc/worklists?checkVariant=%s", variant), &connection.Request{
 		Method: http.MethodPost,
 		Accept: "text/plain",
 	})
@@ -991,7 +993,7 @@ func (c *Client) CreateATCRun(ctx context.Context, worklistID string, objectURL 
 	</objectSets>
 </atc:run>`, maxResults, objectURL)
 
-	resp, err := c.transport.Request(ctx, fmt.Sprintf("/sap/bc/adt/atc/runs?worklistId=%s", worklistID), &RequestOptions{
+	resp, err := c.sendRequest(ctx, fmt.Sprintf("/sap/bc/adt/atc/runs?worklistId=%s", worklistID), &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(body),
 		ContentType: "application/xml",
@@ -1046,7 +1048,7 @@ func parseATCRunResult(data []byte) (*ATCRunResult, error) {
 func (c *Client) GetATCWorklist(ctx context.Context, worklistID string, includeExempted bool) (*ATCWorklist, error) {
 	url := fmt.Sprintf("/sap/bc/adt/atc/worklists/%s?includeExemptedFindings=%t", worklistID, includeExempted)
 
-	resp, err := c.transport.Request(ctx, url, &RequestOptions{
+	resp, err := c.sendRequest(ctx, url, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/atc.worklist.v1+xml",
 	})

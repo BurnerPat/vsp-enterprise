@@ -9,7 +9,7 @@ import (
 )
 
 // --------------------------------------------------------------------------
-// mockAdtConnection implements connection.AdtConnection for testing.
+// mockAdtConnection implements connection.Connection for testing.
 // --------------------------------------------------------------------------
 
 type mockAdtConnection struct {
@@ -28,7 +28,7 @@ func (m *mockAdtConnection) Ping(_ context.Context) error { return m.pingErr }
 func (m *mockAdtConnection) Close() error                 { m.closed = true; return nil }
 
 // --------------------------------------------------------------------------
-// AdtClient interface tests via NewClientWithConnection
+// ClientInterface tests via NewClientWithConnection
 // --------------------------------------------------------------------------
 
 func TestNewClientWithConnection_ImplementsAdtClient(t *testing.T) {
@@ -41,7 +41,7 @@ func TestNewClientWithConnection_ImplementsAdtClient(t *testing.T) {
 	}
 }
 
-func TestClient_SendRequest_ViaNativeConnection(t *testing.T) {
+func TestClient_SendRequest_ViaConnection(t *testing.T) {
 	cfg := NewConfig("https://sap.example.com", "user", "pass")
 	conn := &mockAdtConnection{
 		sendFn: func(_ context.Context, req *connection.Request) (*connection.AdtResponse, error) {
@@ -104,46 +104,21 @@ func TestClient_Connection(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// Legacy Client (NewClient) still works — backward compatibility
+// NewClient creates an HttpConnection automatically
 // --------------------------------------------------------------------------
 
-func TestClient_LegacyClient_SendRequest(t *testing.T) {
-	// Legacy client created without an AdtConnection should still support SendRequest
-	// via the legacy Requester path.
-	cfg := NewConfig("https://sap.example.com", "user", "pass")
-	mockHTTP := &mockTransportClient{
-		responses: map[string]*http.Response{
-			"/sap/bc/adt/test": newTestResponse("legacy-body"),
-		},
-	}
-	legacyTransport := NewTransportWithClient(cfg, mockHTTP)
-	client := NewClientWithTransport(cfg, legacyTransport)
-
-	// SendRequest should work through the legacy fallback path.
-	resp, err := client.SendRequest(context.Background(), &connection.Request{
-		Path:   "/sap/bc/adt/test",
-		Method: http.MethodGet,
-	})
-	if err != nil {
-		t.Fatalf("SendRequest on legacy client: %v", err)
-	}
-	if string(resp.Body) != "legacy-body" {
-		t.Errorf("Body = %q, want legacy-body", string(resp.Body))
-	}
-}
-
-func TestClient_LegacyClient_ConnectionIsNil(t *testing.T) {
+func TestClient_NewClient_HasConnection(t *testing.T) {
 	client := NewClient("https://sap.example.com", "user", "pass")
-	if client.Connection() != nil {
-		t.Error("Legacy client should have nil Connection()")
+	if client.Connection() == nil {
+		t.Error("NewClient should set a non-nil Connection")
 	}
 }
 
 // --------------------------------------------------------------------------
-// connectionRequesterAdapter tests
+// Mock connection bridging test — sendRequest uses the connection directly
 // --------------------------------------------------------------------------
 
-func TestConnectionRequesterAdapter_BridgesNewToLegacy(t *testing.T) {
+func TestClient_SendRequest_BridgesViaConnection(t *testing.T) {
 	conn := &mockAdtConnection{
 		sendFn: func(_ context.Context, req *connection.Request) (*connection.AdtResponse, error) {
 			return connection.NewAdtResponseFromMap(200, map[string]string{
@@ -153,11 +128,10 @@ func TestConnectionRequesterAdapter_BridgesNewToLegacy(t *testing.T) {
 	}
 	client := NewClientWithConnection(NewConfig("https://sap.example.com", "user", "pass"), conn)
 
-	// Use legacy path (c.connection.Request) by calling an existing Client method
-	// that hasn't been migrated yet.
+	// Use an existing Client method that internally calls sendRequest.
 	source, err := client.GetProgram(context.Background(), "ZTEST")
 	if err != nil {
-		t.Fatalf("GetProgram via bridge: %v", err)
+		t.Fatalf("GetProgram via connection: %v", err)
 	}
 	if source != "bridged" {
 		t.Errorf("source = %q, want bridged", source)

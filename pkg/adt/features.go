@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // FeatureID identifies a specific optional feature that can be probed
@@ -270,7 +272,7 @@ func (p *FeatureProber) probeAbapGit(ctx context.Context) (bool, string, error) 
 // probeRAP checks if RAP development tools are available
 func (p *FeatureProber) probeRAP(ctx context.Context) (bool, string, error) {
 	// Check if DDLS endpoint exists
-	resp, err := p.client.transport.Request(ctx, "/sap/bc/adt/ddic/ddl/sources", &RequestOptions{
+	resp, err := p.client.sendRequest(ctx, "/sap/bc/adt/ddic/ddl/sources", &connection.Request{
 		Method: http.MethodOptions,
 	})
 	if err != nil {
@@ -298,7 +300,7 @@ func (p *FeatureProber) probeAMDP(ctx context.Context) (bool, string, error) {
 	}
 
 	// Check if AMDP debugger endpoint exists
-	resp, err := p.client.transport.Request(ctx, "/sap/bc/adt/debugger/amdp/sessions", &RequestOptions{
+	resp, err := p.client.sendRequest(ctx, "/sap/bc/adt/debugger/amdp/sessions", &connection.Request{
 		Method: http.MethodOptions,
 	})
 	if err != nil {
@@ -318,7 +320,7 @@ func (p *FeatureProber) probeAMDP(ctx context.Context) (bool, string, error) {
 // probeUI5 checks if UI5/Fiori BSP management is available
 func (p *FeatureProber) probeUI5(ctx context.Context) (bool, string, error) {
 	// Check if UI5 repository endpoint exists
-	resp, err := p.client.transport.Request(ctx, "/sap/bc/adt/filestore/ui5-bsp", &RequestOptions{
+	resp, err := p.client.sendRequest(ctx, "/sap/bc/adt/filestore/ui5-bsp", &connection.Request{
 		Method: http.MethodOptions,
 	})
 	if err != nil {
@@ -338,7 +340,7 @@ func (p *FeatureProber) probeUI5(ctx context.Context) (bool, string, error) {
 // probeTransport checks if CTS connection management is available
 func (p *FeatureProber) probeTransport(ctx context.Context) (bool, string, error) {
 	// Check if connection endpoint exists
-	resp, err := p.client.transport.Request(ctx, "/sap/bc/adt/cts/transports", &RequestOptions{
+	resp, err := p.client.sendRequest(ctx, "/sap/bc/adt/cts/transports", &connection.Request{
 		Method: http.MethodOptions,
 	})
 	if err != nil {

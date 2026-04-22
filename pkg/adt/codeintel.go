@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // --- Find Definition (Navigate to Definition) ---
@@ -43,7 +45,7 @@ func (c *Client) FindDefinition(ctx context.Context, sourceURL string, source st
 	endpoint := fmt.Sprintf("/sap/bc/adt/navigation/target?uri=%s&filter=%s",
 		url.QueryEscape(uri), filter)
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(source),
 		ContentType: "text/plain",
@@ -121,7 +123,7 @@ func (c *Client) FindReferences(ctx context.Context, objectURL string, line int,
 	endpoint := fmt.Sprintf("/sap/bc/adt/repository/informationsystem/usageReferences?uri=%s",
 		url.QueryEscape(uri))
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(body),
 		ContentType: "application/*",
@@ -205,8 +207,8 @@ func parseUsageReferences(data []byte) ([]UsageReference, error) {
 func extractTypeFromURI(uri string) string {
 	// Common patterns: /sap/bc/adt/oo/classes/..., /sap/bc/adt/programs/programs/...
 	patterns := map[string]string{
-		"/oo/classes/":      "CLAS/OC",
-		"/oo/interfaces/":   "INTF/OI",
+		"/oo/classes/":       "CLAS/OC",
+		"/oo/interfaces/":    "INTF/OI",
 		"/programs/programs": "PROG/P",
 		"/programs/includes": "PROG/I",
 		"/functions/groups/": "FUGR/F",
@@ -247,7 +249,7 @@ func (c *Client) CodeCompletion(ctx context.Context, sourceURL string, source st
 	endpoint := fmt.Sprintf("/sap/bc/adt/abapsource/codecompletion/proposal?uri=%s&signalCompleteness=true",
 		url.QueryEscape(uri))
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(source),
 		ContentType: "application/*",
@@ -326,7 +328,7 @@ func (c *Client) CodeCompletionFull(ctx context.Context, sourceURL string, sourc
 	endpoint := fmt.Sprintf("/sap/bc/adt/abapsource/codecompletion/insertion?uri=%s&patternKey=%s",
 		url.QueryEscape(uri), url.QueryEscape(patternKey))
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(source),
 		ContentType: "application/*",
@@ -360,7 +362,7 @@ type PrettyPrinterSettings struct {
 
 // GetPrettyPrinterSettings retrieves the current formatter settings.
 func (c *Client) GetPrettyPrinterSettings(ctx context.Context) (*PrettyPrinterSettings, error) {
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/abapsource/prettyprinter/settings", nil)
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/abapsource/prettyprinter/settings", nil)
 	if err != nil {
 		return nil, fmt.Errorf("get pretty printer settings failed: %w", err)
 	}
@@ -396,7 +398,7 @@ xmlns:prettyprintersettings="http://www.sap.com/adt/prettyprintersettings"
 prettyprintersettings:indentation="%t" prettyprintersettings:style="%s"/>`,
 		settings.Indentation, settings.Style)
 
-	_, err := c.transport.Request(ctx, "/sap/bc/adt/abapsource/prettyprinter/settings", &RequestOptions{
+	_, err := c.sendRequest(ctx, "/sap/bc/adt/abapsource/prettyprinter/settings", &connection.Request{
 		Method:      http.MethodPut,
 		Body:        []byte(body),
 		ContentType: "application/*",
@@ -410,7 +412,7 @@ prettyprintersettings:indentation="%t" prettyprintersettings:style="%s"/>`,
 
 // PrettyPrint formats ABAP source code according to the user's settings.
 func (c *Client) PrettyPrint(ctx context.Context, source string) (string, error) {
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/abapsource/prettyprinter", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/abapsource/prettyprinter", &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(source),
 		ContentType: "text/plain",
@@ -455,7 +457,7 @@ func (c *Client) GetClassComponents(ctx context.Context, classURL string) (*Clas
 	query.Set("version", "active")
 	query.Set("withShortDescriptions", "true")
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method:      http.MethodGet,
 		ContentType: "application/*",
 		Query:       query,
@@ -564,7 +566,7 @@ func (c *Client) GetTypeHierarchy(ctx context.Context, sourceURL string, source 
 	endpoint := fmt.Sprintf("/sap/bc/adt/abapsource/typehierarchy?uri=%s&type=%s",
 		url.QueryEscape(uri), typeParam)
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(source),
 		ContentType: "text/plain",

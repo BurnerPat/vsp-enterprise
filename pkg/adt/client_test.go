@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // mockTransportClient is a mock for testing the ADT client.
@@ -45,6 +47,13 @@ func newTestResponse(body string) *http.Response {
 	}
 }
 
+// newTestClient creates a Client backed by a mock HTTP connection for testing.
+func newTestClient(cfg *Config, mock *mockTransportClient) *Client {
+	httpCfg := HttpConfigFromConfig(cfg)
+	conn := connection.NewHttpConnectionWithClient(httpCfg, mock)
+	return NewClientWithConnection(cfg, conn)
+}
+
 func TestClient_SearchObject(t *testing.T) {
 	searchResponse := `<?xml version="1.0" encoding="UTF-8"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
@@ -59,8 +68,7 @@ func TestClient_SearchObject(t *testing.T) {
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newTestClient(cfg, mock)
 
 	results, err := client.SearchObject(context.Background(), "ZTEST*", 10)
 	if err != nil {
@@ -88,8 +96,7 @@ WRITE 'Hello World'.`
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newTestClient(cfg, mock)
 
 	source, err := client.GetProgram(context.Background(), "ztest")
 	if err != nil {
@@ -118,8 +125,7 @@ ENDCLASS.`
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newTestClient(cfg, mock)
 
 	sources, err := client.GetClass(context.Background(), "zcl_test")
 	if err != nil {
@@ -162,8 +168,7 @@ func TestClient_NameNormalization(t *testing.T) {
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newTestClient(cfg, mock)
 
 	// Call with lowercase - should make request with uppercase
 	_, _ = client.GetProgram(context.Background(), "lowercase_program")

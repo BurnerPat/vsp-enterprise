@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // mockWorkflowTransport for testing workflows
@@ -45,6 +47,13 @@ func newWorkflowTestResponse(body string) *http.Response {
 	}
 }
 
+// newWorkflowTestClient creates a Client backed by a mock HTTP connection for workflow testing.
+func newWorkflowTestClient(cfg *Config, mock *mockWorkflowTransport) *Client {
+	httpCfg := HttpConfigFromConfig(cfg)
+	conn := connection.NewHttpConnectionWithClient(httpCfg, mock)
+	return NewClientWithConnection(cfg, conn)
+}
+
 // TestClient_GetSource_Program tests GetSource for PROG type
 func TestClient_GetSource_Program(t *testing.T) {
 	sourceCode := `REPORT ztest.
@@ -58,8 +67,7 @@ WRITE: 'Hello, World!'.`
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newWorkflowTestClient(cfg, mock)
 
 	result, err := client.GetSource(context.Background(), "PROG", "ZTEST", &GetSourceOptions{})
 	if err != nil {
@@ -85,8 +93,7 @@ func TestClient_GetSource_Class(t *testing.T) {
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newWorkflowTestClient(cfg, mock)
 
 	// Test without include parameter (returns full class)
 	result, err := client.GetSource(context.Background(), "CLAS", "ZCL_TEST", &GetSourceOptions{})
@@ -112,8 +119,7 @@ ENDFUNCTION.`
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newWorkflowTestClient(cfg, mock)
 
 	result, err := client.GetSource(context.Background(), "FUNC", "Z_TEST_FUNCTION", &GetSourceOptions{
 		Parent: "ZFUGR",
@@ -130,12 +136,11 @@ ENDFUNCTION.`
 // TestClient_GetSource_InvalidType tests GetSource with invalid type
 func TestClient_GetSource_InvalidType(t *testing.T) {
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, &mockWorkflowTransport{
+	client := newWorkflowTestClient(cfg, &mockWorkflowTransport{
 		responses: map[string]*http.Response{
 			"discovery": newWorkflowTestResponse("OK"),
 		},
 	})
-	client := NewClientWithTransport(cfg, transport)
 
 	_, err := client.GetSource(context.Background(), "INVALID", "ZTEST", &GetSourceOptions{})
 	if err == nil {
@@ -160,15 +165,14 @@ WRITE: 'Hello, World!'.`
                      adtcore:type="PROG/P"
                      adtcore:responsible="USER"/>`),
 			"/sap/bc/adt/programs/programs/ZTEST/source/main": newWorkflowTestResponse("OK"),
-			"/sap/bc/adt/checkruns": newWorkflowTestResponse("OK"),
-			"/sap/bc/adt/activation": newWorkflowTestResponse("OK"),
-			"discovery": newWorkflowTestResponse("OK"),
+			"/sap/bc/adt/checkruns":                           newWorkflowTestResponse("OK"),
+			"/sap/bc/adt/activation":                          newWorkflowTestResponse("OK"),
+			"discovery":                                       newWorkflowTestResponse("OK"),
 		},
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newWorkflowTestClient(cfg, mock)
 
 	result, err := client.WriteSource(context.Background(), "PROG", "ZTEST", sourceCode, &WriteSourceOptions{
 		Mode:        WriteModeCreate,
@@ -190,14 +194,13 @@ func TestClient_WriteSource_Update(t *testing.T) {
 WRITE: 'Updated!'.`
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, &mockWorkflowTransport{
+	client := newWorkflowTestClient(cfg, &mockWorkflowTransport{
 		responses: map[string]*http.Response{
 			"/sap/bc/adt/programs/programs/ZTEST": newWorkflowTestResponse(`<?xml version="1.0"?>
 <program:abapProgram xmlns:program="http://www.sap.com/adt/programs"/>`),
 			"discovery": newWorkflowTestResponse("OK"),
 		},
 	})
-	client := NewClientWithTransport(cfg, transport)
 
 	result, err := client.WriteSource(context.Background(), "PROG", "ZTEST", sourceCode, &WriteSourceOptions{
 		Mode: WriteModeUpdate,
@@ -237,8 +240,7 @@ WRITE: 'Hello'.`
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newWorkflowTestClient(cfg, mock)
 
 	result, err := client.GrepObjects(context.Background(), []string{
 		"/sap/bc/adt/programs/programs/ZTEST1",
@@ -271,8 +273,7 @@ WRITE: 'Hello, World!'.`
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newWorkflowTestClient(cfg, mock)
 
 	result, err := client.GrepObjects(context.Background(), []string{
 		"/sap/bc/adt/programs/programs/ZTEST",
@@ -305,15 +306,14 @@ func TestClient_GrepPackages(t *testing.T) {
 
 	mock := &mockWorkflowTransport{
 		responses: map[string]*http.Response{
-			"/sap/bc/adt/packages/$TMP": newWorkflowTestResponse(packageContents),
+			"/sap/bc/adt/packages/$TMP":                        newWorkflowTestResponse(packageContents),
 			"/sap/bc/adt/programs/programs/ZTEST1/source/main": newWorkflowTestResponse(sourceCode),
 			"discovery": newWorkflowTestResponse("OK"),
 		},
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newWorkflowTestClient(cfg, mock)
 
 	result, err := client.GrepPackages(context.Background(), []string{"$TMP"}, false, "TODO", false, []string{}, 0)
 
@@ -352,16 +352,15 @@ func TestClient_GrepPackages_Recursive(t *testing.T) {
 
 	mock := &mockWorkflowTransport{
 		responses: map[string]*http.Response{
-			"/sap/bc/adt/packages/ZMAIN":       newWorkflowTestResponse(mainPackageContents),
-			"/sap/bc/adt/packages/ZSUB1":       newWorkflowTestResponse(subPackageContents),
+			"/sap/bc/adt/packages/ZMAIN":                          newWorkflowTestResponse(mainPackageContents),
+			"/sap/bc/adt/packages/ZSUB1":                          newWorkflowTestResponse(subPackageContents),
 			"/sap/bc/adt/programs/programs/ZTEST_SUB/source/main": newWorkflowTestResponse(sourceCode),
 			"discovery": newWorkflowTestResponse("OK"),
 		},
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newWorkflowTestClient(cfg, mock)
 
 	// Test with recursive flag
 	result, err := client.GrepPackages(context.Background(), []string{"ZMAIN"}, true, "TODO", false, []string{}, 0)
@@ -389,16 +388,15 @@ func TestClient_GrepPackages_MultiplePackages(t *testing.T) {
 
 	mock := &mockWorkflowTransport{
 		responses: map[string]*http.Response{
-			"/sap/bc/adt/packages/$TMP":  newWorkflowTestResponse(packageContents),
-			"/sap/bc/adt/packages/$LOCAL": newWorkflowTestResponse(packageContents),
+			"/sap/bc/adt/packages/$TMP":                        newWorkflowTestResponse(packageContents),
+			"/sap/bc/adt/packages/$LOCAL":                      newWorkflowTestResponse(packageContents),
 			"/sap/bc/adt/programs/programs/ZTEST1/source/main": newWorkflowTestResponse(sourceCode),
 			"discovery": newWorkflowTestResponse("OK"),
 		},
 	}
 
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	transport := NewTransportWithClient(cfg, mock)
-	client := NewClientWithTransport(cfg, transport)
+	client := newWorkflowTestClient(cfg, mock)
 
 	// Test with multiple packages
 	result, err := client.GrepPackages(context.Background(), []string{"$TMP", "$LOCAL"}, false, "FIXME", false, []string{}, 0)

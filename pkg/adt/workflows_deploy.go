@@ -6,21 +6,23 @@ import (
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // --- File-Based Deployment Workflows ---
 
 // DeployResult contains the result of a file deployment operation.
 type DeployResult struct {
-	ObjectURL     string   `json:"objectUrl"`
-	ObjectName    string   `json:"objectName"`
-	ObjectType    string   `json:"objectType"`
-	FilePath      string   `json:"filePath"`
-	Success       bool     `json:"success"`
-	Created       bool     `json:"created"` // true if created, false if updated
-	SyntaxErrors  []string `json:"syntaxErrors,omitempty"`
-	Errors        []string `json:"errors,omitempty"`
-	Message       string   `json:"message,omitempty"`
+	ObjectURL    string   `json:"objectUrl"`
+	ObjectName   string   `json:"objectName"`
+	ObjectType   string   `json:"objectType"`
+	FilePath     string   `json:"filePath"`
+	Success      bool     `json:"success"`
+	Created      bool     `json:"created"` // true if created, false if updated
+	SyntaxErrors []string `json:"syntaxErrors,omitempty"`
+	Errors       []string `json:"errors,omitempty"`
+	Message      string   `json:"message,omitempty"`
 }
 
 // CreateFromFile creates a new ABAP object from a file and activates it.
@@ -31,7 +33,8 @@ type DeployResult struct {
 // and content. Supported file extensions: .clas.abap, .prog.abap, .intf.abap
 //
 // Example:
-//   result, err := client.CreateFromFile(ctx, "/path/to/zcl_test.clas.abap", "$TMP", "")
+//
+//	result, err := client.CreateFromFile(ctx, "/path/to/zcl_test.clas.abap", "$TMP", "")
 func (c *Client) CreateFromFile(ctx context.Context, filePath, packageName, transport string) (*DeployResult, error) {
 	// Safety check
 	if err := c.checkSafety(OpCreate, "CreateFromFile"); err != nil {
@@ -193,7 +196,8 @@ func (c *Client) CreateFromFile(ctx context.Context, filePath, packageName, tran
 // Workflow: Parse → Lock → SyntaxCheck → Write → Unlock → Activate
 //
 // Example:
-//   result, err := client.UpdateFromFile(ctx, "/path/to/zcl_test.clas.abap", "")
+//
+//	result, err := client.UpdateFromFile(ctx, "/path/to/zcl_test.clas.abap", "")
 func (c *Client) UpdateFromFile(ctx context.Context, filePath, transport string) (*DeployResult, error) {
 	// Safety check
 	if err := c.checkSafety(OpUpdate, "UpdateFromFile"); err != nil {
@@ -382,8 +386,9 @@ func (c *Client) UpdateFromFile(ctx context.Context, filePath, transport string)
 // For class includes, the parent class must already exist.
 //
 // Example:
-//   result, err := client.DeployFromFile(ctx, "/path/to/zcl_test.clas.abap", "$TMP", "")
-//   result, err := client.DeployFromFile(ctx, "/path/to/zcl_test.clas.testclasses.abap", "$TMP", "")
+//
+//	result, err := client.DeployFromFile(ctx, "/path/to/zcl_test.clas.abap", "$TMP", "")
+//	result, err := client.DeployFromFile(ctx, "/path/to/zcl_test.clas.testclasses.abap", "$TMP", "")
 func (c *Client) DeployFromFile(ctx context.Context, filePath, packageName, transport string) (*DeployResult, error) {
 	// 1. Parse file
 	info, err := ParseABAPFile(filePath)
@@ -409,7 +414,7 @@ func (c *Client) DeployFromFile(ctx context.Context, filePath, packageName, tran
 	}
 
 	// Try to get object (if 404, doesn't exist)
-	_, err = c.transport.Request(ctx, objectURL, &RequestOptions{
+	_, err = c.sendRequest(ctx, objectURL, &connection.Request{
 		Method: "GET",
 		Accept: "text/plain",
 	})

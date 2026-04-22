@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // --- Transport Types ---
@@ -74,7 +76,7 @@ func (c *Client) GetUserTransports(ctx context.Context, userName string) (*UserT
 
 	userName = strings.ToUpper(userName)
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/cts/transportrequests", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/cts/transportrequests", &connection.Request{
 		Method: http.MethodGet,
 		Query:  map[string][]string{"user": {userName}, "targets": {"true"}},
 		Accept: acceptTransportOrganizerTreeV1 + ", " + acceptTransportOrganizerV1 + ";q=0.9",
@@ -215,7 +217,7 @@ func (c *Client) GetTransportInfo(ctx context.Context, objectURL string, devClas
   </asx:values>
 </asx:abap>`, devClass, objectURL)
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/cts/transportchecks", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/cts/transportchecks", &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(body),
 		ContentType: "application/vnd.sap.as+xml; charset=UTF-8; dataname=com.sap.adt.connection.service.checkData",
@@ -280,7 +282,7 @@ func (c *Client) CreateTransport(ctx context.Context, objectURL string, descript
   </tm:request>
 </tm:root>`, escapeXMLAttr(description), owner)
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/cts/transportrequests", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/cts/transportrequests", &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(body),
 		ContentType: acceptTransportOrganizerV1,
@@ -314,7 +316,7 @@ func (c *Client) ReleaseTransport(ctx context.Context, transportNumber string, i
 	}
 
 	endpoint := fmt.Sprintf("/sap/bc/adt/cts/transportrequests/%s/%s", transportNumber, action)
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method: http.MethodPost,
 		Accept: "application/*",
 	})
@@ -433,7 +435,7 @@ func (c *Client) ListTransports(ctx context.Context, user string) ([]TransportSu
 	}
 
 	// Try ADT API first
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/cts/transportrequests", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/cts/transportrequests", &connection.Request{
 		Method: http.MethodGet,
 		Query:  map[string][]string{"user": {strings.ToUpper(user)}},
 		Accept: acceptTransportOrganizerTreeV1,
@@ -590,7 +592,7 @@ func (c *Client) GetTransport(ctx context.Context, number string) (*TransportDet
 
 	path := fmt.Sprintf("/sap/bc/adt/cts/transportrequests/%s", strings.ToUpper(number))
 
-	resp, err := c.transport.Request(ctx, path, &RequestOptions{
+	resp, err := c.sendRequest(ctx, path, &connection.Request{
 		Method: http.MethodGet,
 		Accept: acceptTransportOrganizerV1,
 	})
@@ -759,7 +761,7 @@ func (c *Client) CreateTransportV2(ctx context.Context, opts CreateTransportOpti
 		query["transportLayer"] = []string{opts.TransportLayer}
 	}
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/cts/transportrequests", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/cts/transportrequests", &connection.Request{
 		Method:      http.MethodPost,
 		Query:       query,
 		Body:        []byte(body),
@@ -836,7 +838,7 @@ func (c *Client) ReleaseTransportV2(ctx context.Context, number string, opts Rel
 
 	path := fmt.Sprintf("/sap/bc/adt/cts/transportrequests/%s/%s", strings.ToUpper(number), action)
 
-	_, err := c.transport.Request(ctx, path, &RequestOptions{
+	_, err := c.sendRequest(ctx, path, &connection.Request{
 		Method: http.MethodPost,
 		Accept: acceptTransportOrganizerV1,
 	})
@@ -860,7 +862,7 @@ func (c *Client) DeleteTransport(ctx context.Context, number string) error {
 
 	path := fmt.Sprintf("/sap/bc/adt/cts/transportrequests/%s", strings.ToUpper(number))
 
-	_, err := c.transport.Request(ctx, path, &RequestOptions{
+	_, err := c.sendRequest(ctx, path, &connection.Request{
 		Method: http.MethodDelete,
 		Accept: acceptTransportOrganizerV1,
 	})

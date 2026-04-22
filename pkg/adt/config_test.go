@@ -1,7 +1,6 @@
 package adt
 
 import (
-	"net/http"
 	"testing"
 	"time"
 )
@@ -165,29 +164,6 @@ func TestNewConfig(t *testing.T) {
 				t.Errorf("Timeout = %v, want %v", got.Timeout, tt.want.Timeout)
 			}
 		})
-	}
-}
-
-func TestNewHTTPClient(t *testing.T) {
-	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	client := cfg.NewHTTPClient()
-
-	if client == nil {
-		t.Error("NewHTTPClient returned nil")
-	}
-	if client.Jar == nil {
-		t.Error("HTTP client should have cookie jar")
-	}
-	if client.Timeout != cfg.Timeout {
-		t.Errorf("HTTP client timeout = %v, want %v", client.Timeout, cfg.Timeout)
-	}
-
-	// Verify connection has proxy configured (fixes #13)
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok {
-		t.Error("HTTP client connection should be *http.Transport")
-	} else if transport.Proxy == nil {
-		t.Error("HTTP connection should have Proxy function set (for HTTP_PROXY/HTTPS_PROXY support)")
 	}
 }
 

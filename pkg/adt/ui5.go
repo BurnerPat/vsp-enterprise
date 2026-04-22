@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // UI5 Filestore API endpoints
@@ -25,12 +27,12 @@ type UI5App struct {
 
 // UI5AppDetails contains detailed information about a UI5 application.
 type UI5AppDetails struct {
-	Name           string     `json:"name"`
-	Description    string     `json:"description,omitempty"`
-	Package        string     `json:"package,omitempty"`
-	TransportLayer string     `json:"transportLayer,omitempty"`
-	Files          []UI5File  `json:"files,omitempty"`
-	Links          []Link     `json:"-"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description,omitempty"`
+	Package        string    `json:"package,omitempty"`
+	TransportLayer string    `json:"transportLayer,omitempty"`
+	Files          []UI5File `json:"files,omitempty"`
+	Links          []Link    `json:"-"`
 }
 
 // UI5File represents a file within a UI5 application.
@@ -102,7 +104,7 @@ func (c *Client) UI5ListApps(ctx context.Context, query string, maxResults int) 
 	}
 	params.Set("maxResults", fmt.Sprintf("%d", maxResults))
 
-	resp, err := c.transport.Request(ctx, ui5FilestoreBase, &RequestOptions{
+	resp, err := c.sendRequest(ctx, ui5FilestoreBase, &connection.Request{
 		Method: http.MethodGet,
 		Query:  params,
 		Accept: "application/atom+xml",
@@ -145,7 +147,7 @@ func (c *Client) UI5GetApp(ctx context.Context, appName string) (*UI5AppDetails,
 
 	// Get content structure
 	contentPath := fmt.Sprintf("%s/%s/content", ui5FilestoreBase, url.PathEscape(appName))
-	contentResp, err := c.transport.Request(ctx, contentPath, &RequestOptions{
+	contentResp, err := c.sendRequest(ctx, contentPath, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/atom+xml",
 	})
@@ -259,7 +261,7 @@ func (c *Client) UI5GetFileContent(ctx context.Context, appName, filePath string
 	fullPath := appName + "/" + filePath
 	contentPath := fmt.Sprintf("%s/%s/content", ui5FilestoreBase, url.PathEscape(fullPath))
 
-	resp, err := c.transport.Request(ctx, contentPath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, contentPath, &connection.Request{
 		Method: http.MethodGet,
 	})
 	if err != nil {
@@ -289,7 +291,7 @@ func (c *Client) UI5UploadFile(ctx context.Context, appName, filePath string, co
 	fullPath := appName + "/" + filePath
 	uploadPath := fmt.Sprintf("%s/%s/content", ui5FilestoreBase, url.PathEscape(fullPath))
 
-	_, err := c.transport.Request(ctx, uploadPath, &RequestOptions{
+	_, err := c.sendRequest(ctx, uploadPath, &connection.Request{
 		Method:      http.MethodPut,
 		Body:        content,
 		ContentType: contentType,
@@ -317,7 +319,7 @@ func (c *Client) UI5DeleteFile(ctx context.Context, appName, filePath string) er
 	fullPath := appName + "/" + filePath
 	deletePath := fmt.Sprintf("%s/%s", ui5FilestoreBase, url.PathEscape(fullPath))
 
-	_, err := c.transport.Request(ctx, deletePath, &RequestOptions{
+	_, err := c.sendRequest(ctx, deletePath, &connection.Request{
 		Method: http.MethodDelete,
 	})
 	if err != nil {
@@ -353,7 +355,7 @@ func (c *Client) UI5CreateApp(ctx context.Context, appName, description, package
 		params.Set("corrNr", transport)
 	}
 
-	_, err := c.transport.Request(ctx, ui5FilestoreBase, &RequestOptions{
+	_, err := c.sendRequest(ctx, ui5FilestoreBase, &connection.Request{
 		Method:      http.MethodPost,
 		Query:       params,
 		Body:        []byte(xmlPayload),
@@ -380,7 +382,7 @@ func (c *Client) UI5DeleteApp(ctx context.Context, appName, transport string) er
 		params.Set("corrNr", transport)
 	}
 
-	_, err := c.transport.Request(ctx, deletePath, &RequestOptions{
+	_, err := c.sendRequest(ctx, deletePath, &connection.Request{
 		Method: http.MethodDelete,
 		Query:  params,
 	})

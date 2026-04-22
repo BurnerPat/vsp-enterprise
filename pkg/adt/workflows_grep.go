@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // --- Grep/Search Tools ---
@@ -30,11 +32,11 @@ type GrepObjectResult struct {
 
 // GrepPackageResult represents the result of grepping an ABAP package.
 type GrepPackageResult struct {
-	Success     bool               `json:"success"`
-	PackageName string             `json:"packageName"`
-	Objects     []GrepObjectResult `json:"objects"`
-	TotalMatches int               `json:"totalMatches"`
-	Message     string             `json:"message,omitempty"`
+	Success      bool               `json:"success"`
+	PackageName  string             `json:"packageName"`
+	Objects      []GrepObjectResult `json:"objects"`
+	TotalMatches int                `json:"totalMatches"`
+	Message      string             `json:"message,omitempty"`
 }
 
 // GrepObject searches for a regex pattern in a single ABAP object's source code.
@@ -75,7 +77,7 @@ func (c *Client) GrepObject(ctx context.Context, objectURL, pattern string, case
 		sourceURL = objectURL + "/source/main"
 	}
 
-	resp, err := c.transport.Request(ctx, sourceURL, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourceURL, &connection.Request{
 		Method: "GET",
 		Accept: "text/plain",
 	})

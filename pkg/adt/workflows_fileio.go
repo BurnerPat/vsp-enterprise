@@ -6,17 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // --- Utility Workflows ---
 
 // RenameObjectResult contains the result of renaming an object.
 type RenameObjectResult struct {
-	OldName    string `json:"oldName"`
-	NewName    string `json:"newName"`
-	ObjectType string `json:"objectType"`
-	Success    bool   `json:"success"`
-	Message    string `json:"message,omitempty"`
+	OldName    string   `json:"oldName"`
+	NewName    string   `json:"newName"`
+	ObjectType string   `json:"objectType"`
+	Success    bool     `json:"success"`
+	Message    string   `json:"message,omitempty"`
 	Errors     []string `json:"errors,omitempty"`
 }
 
@@ -43,7 +45,7 @@ func (c *Client) RenameObject(ctx context.Context, objType CreatableObjectType, 
 		return nil, err
 	}
 
-	resp, err := c.transport.Request(ctx, oldURL+"/source/main", &RequestOptions{
+	resp, err := c.sendRequest(ctx, oldURL+"/source/main", &connection.Request{
 		Method: "GET",
 		Accept: "text/plain",
 	})
@@ -184,7 +186,7 @@ func (c *Client) SaveToFile(ctx context.Context, objType CreatableObjectType, ob
 		return nil, err
 	}
 
-	resp, err := c.transport.Request(ctx, objectURL+"/source/main", &RequestOptions{
+	resp, err := c.sendRequest(ctx, objectURL+"/source/main", &connection.Request{
 		Method: "GET",
 		Accept: "text/plain",
 	})

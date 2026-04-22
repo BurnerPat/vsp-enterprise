@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // --- Breakpoint Types ---
@@ -172,7 +174,7 @@ func (c *Client) SetExternalBreakpoint(ctx context.Context, req *BreakpointReque
 	}
 
 	// POST with XML body - all parameters are in the XML, no query params needed
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger/breakpoints", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/debugger/breakpoints", &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(body),
 		ContentType: "application/xml",
@@ -197,7 +199,7 @@ func (c *Client) GetExternalBreakpoints(ctx context.Context, user string) (*Brea
 	query.Set("terminalId", getTerminalID())
 	query.Set("ideId", "vsp")
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger/breakpoints", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/debugger/breakpoints", &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml",
 		Query:  query,
@@ -227,7 +229,7 @@ func (c *Client) DeleteExternalBreakpoint(ctx context.Context, breakpointID stri
 	query.Set("ideId", "vsp")
 
 	endpoint := fmt.Sprintf("/sap/bc/adt/debugger/breakpoints/%s", url.PathEscape(breakpointID))
-	_, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	_, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method: http.MethodDelete,
 		Query:  query,
 	})
@@ -263,7 +265,7 @@ func (c *Client) ValidateBreakpointCondition(ctx context.Context, condition stri
 <dbg:condition xmlns:dbg="http://www.sap.com/adt/debugger">%s</dbg:condition>`,
 		xmlEscape(condition))
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger/breakpoints/conditions", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/debugger/breakpoints/conditions", &connection.Request{
 		Method:      http.MethodPost,
 		Body:        []byte(body),
 		ContentType: "application/xml",
@@ -602,7 +604,7 @@ func (c *Client) DebuggerListen(ctx context.Context, opts *ListenOptions) (*List
 	listenCtx, cancel := context.WithTimeout(ctx, httpTimeout)
 	defer cancel()
 
-	resp, err := c.transport.Request(listenCtx, "/sap/bc/adt/debugger/listeners", &RequestOptions{
+	resp, err := c.sendRequest(listenCtx, "/sap/bc/adt/debugger/listeners", &connection.Request{
 		Method: http.MethodPost,
 		Accept: "application/vnd.sap.as+xml",
 		Query:  query,
@@ -659,7 +661,7 @@ func (c *Client) DebuggerCheckListener(ctx context.Context, opts *ListenOptions)
 		query.Set("requestUser", opts.User)
 	}
 
-	_, err := c.transport.Request(ctx, "/sap/bc/adt/debugger/listeners", &RequestOptions{
+	_, err := c.sendRequest(ctx, "/sap/bc/adt/debugger/listeners", &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml",
 		Query:  query,
@@ -703,7 +705,7 @@ func (c *Client) DebuggerStopListener(ctx context.Context, opts *ListenOptions) 
 		query.Set("requestUser", opts.User)
 	}
 
-	_, err := c.transport.Request(ctx, "/sap/bc/adt/debugger/listeners", &RequestOptions{
+	_, err := c.sendRequest(ctx, "/sap/bc/adt/debugger/listeners", &connection.Request{
 		Method: http.MethodDelete,
 		Query:  query,
 	})
@@ -987,7 +989,7 @@ func (c *Client) DebuggerAttach(ctx context.Context, debuggeeID string, user str
 		query.Set("requestUser", user)
 	}
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/debugger", &connection.Request{
 		Method: http.MethodPost,
 		Accept: "application/xml",
 		Query:  query,
@@ -1010,8 +1012,8 @@ func (c *Client) DebuggerDetach(ctx context.Context) error {
 // This is needed after debuggeeEnded to prevent "already attached" errors
 // on subsequent debug sessions, as the sap-contextid cookie carries stale debug state.
 func (c *Client) DebuggerResetSession() {
-	if rfc, ok := c.transport.(*RfcTransport); ok {
-		rfc.setSessionCookie("")
+	if jco, ok := c.connection.(*connection.JcoConnection); ok {
+		jco.ClearSession()
 	}
 }
 
@@ -1025,7 +1027,7 @@ func (c *Client) DebuggerStep(ctx context.Context, stepType DebugStepType, uri s
 		query.Set("uri", uri)
 	}
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/debugger", &connection.Request{
 		Method: http.MethodPost,
 		Accept: "application/xml",
 		Query:  query,
@@ -1047,7 +1049,7 @@ func (c *Client) DebuggerGetStack(ctx context.Context, semanticURIs bool) (*Debu
 		query.Set("semanticURIs", "true")
 	}
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger/stack", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/debugger/stack", &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml",
 		Query:  query,
@@ -1075,7 +1077,7 @@ func (c *Client) DebuggerGetVariables(ctx context.Context, variableIDs []string)
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0"><asx:values><DATA>%s</DATA></asx:values></asx:abap>`,
 		strings.Join(varElements, ""))
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/debugger", &connection.Request{
 		Method:      http.MethodPost,
 		ContentType: "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.debugger.Variables",
 		Accept:      "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.debugger.Variables",
@@ -1105,7 +1107,7 @@ func (c *Client) DebuggerGetChildVariables(ctx context.Context, parentIDs []stri
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0"><asx:values><DATA><HIERARCHIES>%s</HIERARCHIES></DATA></asx:values></asx:abap>`,
 		strings.Join(hierElements, ""))
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/debugger", &connection.Request{
 		Method:      http.MethodPost,
 		ContentType: "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.debugger.ChildVariables",
 		Accept:      "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.debugger.ChildVariables",
@@ -1127,7 +1129,7 @@ func (c *Client) DebuggerSetVariableValue(ctx context.Context, variableName, val
 	query.Set("method", "setVariableValue")
 	query.Set("variableName", variableName)
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/debugger", &connection.Request{
 		Method: http.MethodPost,
 		Query:  query,
 		Body:   []byte(value),
@@ -1142,7 +1144,7 @@ func (c *Client) DebuggerSetVariableValue(ctx context.Context, variableName, val
 // DebuggerGoToStack navigates to a specific stack entry.
 // stackURI: The stack URI (e.g., "/sap/bc/adt/debugger/stack/type/ABAP/position/3")
 func (c *Client) DebuggerGoToStack(ctx context.Context, stackURI string) error {
-	_, err := c.transport.Request(ctx, stackURI, &RequestOptions{
+	_, err := c.sendRequest(ctx, stackURI, &connection.Request{
 		Method: http.MethodPut,
 	})
 	if err != nil {
@@ -1693,7 +1695,7 @@ func (c *Client) DebuggerBatchRequest(ctx context.Context, operations []DebugBat
 
 	// Send batch request
 	contentType := fmt.Sprintf("multipart/mixed; boundary=%s", boundary)
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger/batch", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/debugger/batch", &connection.Request{
 		Method:      http.MethodPost,
 		ContentType: contentType,
 		Accept:      "multipart/mixed",
@@ -1708,7 +1710,7 @@ func (c *Client) DebuggerBatchRequest(ctx context.Context, operations []DebugBat
 	}
 
 	// Parse multipart response
-	respContentType := resp.Headers.Get("Content-Type")
+	respContentType := resp.Header("Content-Type")
 	return parseBatchResponse(resp.Body, respContentType)
 }
 

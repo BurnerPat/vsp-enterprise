@@ -14,14 +14,10 @@ import (
 )
 
 // Client is the main ADT API client.
-// It implements the ClientInterface interface while maintaining backward compatibility
-// with all existing methods.
+// It implements the ClientInterface and dispatches all requests through
+// the connection.Connection abstraction (HTTP or JCo).
 type Client struct {
-	transport Requester
-	config    *Config
-
-	// New transport layer (AdtConnection). When set, SendRequest delegates here.
-	// When nil, the legacy Requester path is used.
+	config     *Config
 	connection connection.Connection
 
 	// Keep-alive goroutine management
@@ -37,124 +33,47 @@ type Client struct {
 var _ ClientInterface = (*Client)(nil)
 
 // NewClient creates a new ADT client with the given configuration.
+// It uses an HTTP connection to the SAP system.
 func NewClient(baseURL, username, password string, opts ...Option) *Client {
 	cfg := NewConfig(baseURL, username, password, opts...)
+	conn := connection.NewHttpConnection(HttpConfigFromConfig(cfg))
 
 	return &Client{
-		transport: NewTransport(cfg),
-		config:    cfg,
+		connection: conn,
+		config:     cfg,
 	}
 }
 
-// NewClientWithTransport creates a new client with a custom connection.
-// This is useful for testing and for RFC mode (RfcTransport).
-//
-// Deprecated: Use NewClientWithConnection for new code.
-func NewClientWithTransport(cfg *Config, transport Requester) *Client {
-	return &Client{
-		transport: transport,
-		config:    cfg,
-	}
-}
-
-// NewClientWithConnection creates a new client backed by an AdtConnection.
-// This is the preferred constructor for new code.
+// NewClientWithConnection creates a new client backed by a Connection.
+// This is the preferred constructor when the caller manages the connection
+// (e.g., JCo sidecar, or tests with a mock connection).
 func NewClientWithConnection(cfg *Config, conn connection.Connection) *Client {
 	return &Client{
 		connection: conn,
 		config:     cfg,
-		// Also set the legacy connection field via an adapter so that all existing
-		// methods on Client continue to work without modification.
-		transport: &connectionRequesterAdapter{conn: conn},
 	}
 }
 
-// connectionRequesterAdapter adapts an AdtConnection to the legacy Requester interface.
-// This allows existing Client methods (which use c.connection.Request) to work
-// transparently with the new connection layer.
-type connectionRequesterAdapter struct {
-	conn connection.Connection
-}
+// --- ClientInterface implementation ---
 
-func (a *connectionRequesterAdapter) Request(ctx context.Context, path string, opts *RequestOptions) (*Response, error) {
-	if opts == nil {
-		opts = &RequestOptions{}
-	}
-	resp, err := a.conn.SendRequest(ctx, &connection.Request{
-		Path:        path,
-		Method:      opts.Method,
-		Query:       opts.Query,
-		Body:        opts.Body,
-		ContentType: opts.ContentType,
-		Accept:      opts.Accept,
-		Headers:     opts.Headers,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &Response{
-		StatusCode: resp.StatusCode,
-		Headers:    adtResponseToHTTPHeaders(resp),
-		Body:       resp.Body,
-	}, nil
-}
-
-func (a *connectionRequesterAdapter) Ping(ctx context.Context) error {
-	return a.conn.Ping(ctx)
-}
-
-// adtResponseToHTTPHeaders converts the flat header map from AdtResponse back to
-// http.Header for backward compatibility with code that reads Response.Headers.
-func adtResponseToHTTPHeaders(resp *connection.AdtResponse) http.Header {
-	h := http.Header{}
-	for k, v := range resp.AllHeaders() {
-		h.Set(k, v)
-	}
-	return h
-}
-
-// --- AdtClient interface implementation ---
-
-// Connect eagerly validates credentials. For HTTP it fetches a CSRF token.
+// Connect eagerly validates credentials and establishes the session.
+// For HTTP connections this fetches a CSRF token; for JCo it is currently a no-op.
 func (c *Client) Connect(ctx context.Context) error {
-	if c.connection != nil {
-		return c.connection.Ping(ctx)
-	}
-	// Legacy path: use the Requester.Ping method.
-	return c.transport.Ping(ctx)
+	return c.connection.Ping(ctx)
 }
 
 // Close releases all resources held by the client.
 func (c *Client) Close() error {
 	c.StopKeepAlive()
-	if c.connection != nil {
-		return c.connection.Close()
-	}
-	return nil
+	return c.connection.Close()
 }
 
 // SendRequest dispatches a request through the underlying connection.
 func (c *Client) SendRequest(ctx context.Context, req *connection.Request) (*connection.AdtResponse, error) {
-	if c.connection != nil {
-		return c.connection.SendRequest(ctx, req)
-	}
-	// Legacy path: convert to RequestOptions and use the old Requester.
-	opts := &RequestOptions{
-		Method:      req.Method,
-		Query:       req.Query,
-		Body:        req.Body,
-		ContentType: req.ContentType,
-		Accept:      req.Accept,
-		Headers:     req.Headers,
-	}
-	resp, err := c.transport.Request(ctx, req.Path, opts)
-	if err != nil {
-		return nil, err
-	}
-	return connection.NewAdtResponse(resp.StatusCode, resp.Headers, resp.Body), nil
+	return c.connection.SendRequest(ctx, req)
 }
 
-// Connection returns the underlying AdtConnection, or nil if using legacy connection.
+// Connection returns the underlying Connection.
 func (c *Client) Connection() connection.Connection {
 	return c.connection
 }
@@ -162,6 +81,16 @@ func (c *Client) Connection() connection.Connection {
 // GetConfig returns the client configuration.
 func (c *Client) GetConfig() *Config {
 	return c.config
+}
+
+// sendRequest is the internal helper used by all Client API methods.
+// It builds a connection.Request and dispatches it through the connection.
+func (c *Client) sendRequest(ctx context.Context, path string, opts *connection.Request) (*connection.AdtResponse, error) {
+	if opts == nil {
+		opts = &connection.Request{}
+	}
+	opts.Path = path
+	return c.connection.SendRequest(ctx, opts)
 }
 
 // StartKeepAlive starts a background goroutine that periodically pings the SAP server
@@ -197,7 +126,7 @@ func (c *Client) StartKeepAlive(interval time.Duration, verbose bool) {
 				}
 				return
 			case <-ticker.C:
-				if err := c.transport.Ping(ctx); err != nil {
+				if err := c.connection.Ping(ctx); err != nil {
 					if ctx.Err() != nil {
 						return // context cancelled, expected
 					}
@@ -297,7 +226,7 @@ func (c *Client) SearchObject(ctx context.Context, query string, maxResults int)
 	params.Set("query", query)
 	params.Set("maxResults", fmt.Sprintf("%d", maxResults))
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/repository/informationsystem/search", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/repository/informationsystem/search", &connection.Request{
 		Method: http.MethodGet,
 		Query:  params,
 		Accept: "application/xml",
@@ -318,7 +247,7 @@ func (c *Client) GetProgram(ctx context.Context, programName string) (string, er
 
 	// Go directly to source/main endpoint (URL encode for namespaced objects)
 	sourcePath := fmt.Sprintf("/sap/bc/adt/programs/programs/%s/source/main", url.PathEscape(programName))
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 	})
 	if err != nil {
@@ -338,7 +267,7 @@ func (c *Client) GetClass(ctx context.Context, className string) (map[string]str
 
 	// Go directly to source/main endpoint (URL encode for namespaced objects)
 	sourcePath := fmt.Sprintf("/sap/bc/adt/oo/classes/%s/source/main", url.PathEscape(className))
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 	})
 	if err != nil {
@@ -367,7 +296,7 @@ func (c *Client) GetClassMethods(ctx context.Context, className string) ([]Metho
 
 	// Fetch objectstructure endpoint
 	path := fmt.Sprintf("/sap/bc/adt/oo/classes/%s/objectstructure", url.PathEscape(className))
-	resp, err := c.transport.Request(ctx, path, &RequestOptions{
+	resp, err := c.sendRequest(ctx, path, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/vnd.sap.adt.objectstructure.v2+xml",
 	})
@@ -438,7 +367,7 @@ func (c *Client) GetInterface(ctx context.Context, interfaceName string) (string
 
 	// Go directly to source/main endpoint (URL encode for namespaced objects)
 	sourcePath := fmt.Sprintf("/sap/bc/adt/oo/interfaces/%s/source/main", url.PathEscape(interfaceName))
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 	})
 	if err != nil {
@@ -457,7 +386,7 @@ func (c *Client) GetFunctionGroup(ctx context.Context, groupName string) (*Funct
 
 	// URL encode for namespaced objects
 	structPath := fmt.Sprintf("/sap/bc/adt/functions/groups/%s", url.PathEscape(groupName))
-	resp, err := c.transport.Request(ctx, structPath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, structPath, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml",
 	})
@@ -483,7 +412,7 @@ func (c *Client) GetFunction(ctx context.Context, functionName, groupName string
 	sourcePath := fmt.Sprintf("/sap/bc/adt/functions/groups/%s/fmodules/%s/source/main",
 		url.PathEscape(groupName), url.PathEscape(functionName))
 
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "text/plain",
 	})
@@ -503,7 +432,7 @@ func (c *Client) GetInclude(ctx context.Context, includeName string) (string, er
 
 	// URL encode for namespaced objects
 	sourcePath := fmt.Sprintf("/sap/bc/adt/programs/includes/%s/source/main", url.PathEscape(includeName))
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "text/plain",
 	})
@@ -522,7 +451,7 @@ func (c *Client) GetDDLS(ctx context.Context, ddlsName string) (string, error) {
 
 	// URL encode the name to handle namespaced objects like /DMO/...
 	sourcePath := fmt.Sprintf("/sap/bc/adt/ddic/ddl/sources/%s/source/main", url.PathEscape(ddlsName))
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "text/plain",
 	})
@@ -544,7 +473,7 @@ func (c *Client) GetBDEF(ctx context.Context, bdefName string) (string, error) {
 	// URL encode the name to handle namespaced objects like /DMO/...
 	// BDEF endpoint is /sap/bc/adt/bo/behaviordefinitions/{name}/source/main
 	sourcePath := fmt.Sprintf("/sap/bc/adt/bo/behaviordefinitions/%s/source/main", url.PathEscape(bdefName))
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "text/plain",
 	})
@@ -562,7 +491,7 @@ func (c *Client) GetSRVD(ctx context.Context, srvdName string) (string, error) {
 
 	// URL encode the name to handle namespaced objects like /DMO/...
 	sourcePath := fmt.Sprintf("/sap/bc/adt/ddic/srvd/sources/%s/source/main", url.PathEscape(srvdName))
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "text/plain",
 	})
@@ -592,7 +521,7 @@ func (c *Client) GetSRVB(ctx context.Context, srvbName string) (*ServiceBinding,
 
 	// URL encode the name to handle namespaced objects like /DMO/...
 	path := fmt.Sprintf("/sap/bc/adt/businessservices/bindings/%s", url.PathEscape(srvbName))
-	resp, err := c.transport.Request(ctx, path, &RequestOptions{
+	resp, err := c.sendRequest(ctx, path, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "*/*", // Service bindings may require accepting any format
 	})
@@ -672,7 +601,7 @@ func (c *Client) GetMessageClass(ctx context.Context, msgClassName string) (*Mes
 
 	// URL encode for namespaced objects
 	path := fmt.Sprintf("/sap/bc/adt/messageclass/%s", url.PathEscape(strings.ToLower(msgClassName)))
-	resp, err := c.transport.Request(ctx, path, &RequestOptions{
+	resp, err := c.sendRequest(ctx, path, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/vnd.sap.adt.mc.messageclass+xml",
 	})
@@ -701,7 +630,7 @@ func (c *Client) GetPackage(ctx context.Context, packageName string) (*PackageCo
 	params.Set("parent_name", packageName)
 	params.Set("withShortDescriptions", "true")
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/repository/nodestructure", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/repository/nodestructure", &connection.Request{
 		Method: http.MethodPost,
 		Query:  params,
 	})
@@ -779,7 +708,7 @@ func (c *Client) GetTable(ctx context.Context, tableName string) (string, error)
 
 	// URL encode to handle namespaced objects like /DMO/TRAVEL
 	sourcePath := fmt.Sprintf("/sap/bc/adt/ddic/tables/%s/source/main", url.PathEscape(tableName))
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 	})
 	if err != nil {
@@ -796,7 +725,7 @@ func (c *Client) GetView(ctx context.Context, viewName string) (string, error) {
 
 	// URL encode the name to handle namespaced objects like /DMO/...
 	sourcePath := fmt.Sprintf("/sap/bc/adt/ddic/views/%s/source/main", url.PathEscape(viewName))
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 	})
 	if err != nil {
@@ -812,7 +741,7 @@ func (c *Client) GetStructure(ctx context.Context, structName string) (string, e
 
 	// URL encode to handle namespaced objects like /DMO/...
 	sourcePath := fmt.Sprintf("/sap/bc/adt/ddic/structures/%s/source/main", url.PathEscape(structName))
-	resp, err := c.transport.Request(ctx, sourcePath, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourcePath, &connection.Request{
 		Method: http.MethodGet,
 	})
 	if err != nil {
@@ -852,7 +781,7 @@ func (c *Client) GetTableContents(ctx context.Context, tableName string, maxRows
 	params.Set("rowNumber", fmt.Sprintf("%d", maxRows))
 	params.Set("ddicEntityName", tableName)
 
-	opts := &RequestOptions{
+	opts := &connection.Request{
 		Method: http.MethodPost,
 		Query:  params,
 		Accept: "application/*",
@@ -864,7 +793,7 @@ func (c *Client) GetTableContents(ctx context.Context, tableName string, maxRows
 		opts.ContentType = "text/plain"
 	}
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/datapreview/ddic", opts)
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/datapreview/ddic", opts)
 	if err != nil {
 		return nil, fmt.Errorf("getting table contents: %w", err)
 	}
@@ -890,7 +819,7 @@ func (c *Client) RunQuery(ctx context.Context, sqlQuery string, maxRows int) (*T
 	params := url.Values{}
 	params.Set("rowNumber", fmt.Sprintf("%d", maxRows))
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/datapreview/freestyle", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/datapreview/freestyle", &connection.Request{
 		Method:      http.MethodPost,
 		Query:       params,
 		Accept:      "application/*",
@@ -975,7 +904,7 @@ type Transaction struct {
 func (c *Client) GetTransaction(ctx context.Context, tcode string) (*Transaction, error) {
 	tcode = strings.ToUpper(tcode)
 
-	resp, err := c.transport.Request(ctx, fmt.Sprintf("/sap/bc/adt/vit/wb/object_type/TRAN/object_name/%s", tcode), &RequestOptions{
+	resp, err := c.sendRequest(ctx, fmt.Sprintf("/sap/bc/adt/vit/wb/object_type/TRAN/object_name/%s", tcode), &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml",
 	})
@@ -1017,7 +946,7 @@ type TypeInfo struct {
 func (c *Client) GetTypeInfo(ctx context.Context, typeName string) (*TypeInfo, error) {
 	typeName = strings.ToUpper(typeName)
 
-	resp, err := c.transport.Request(ctx, fmt.Sprintf("/sap/bc/adt/ddic/dataelements/%s", typeName), &RequestOptions{
+	resp, err := c.sendRequest(ctx, fmt.Sprintf("/sap/bc/adt/ddic/dataelements/%s", typeName), &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml",
 	})
@@ -1133,7 +1062,7 @@ type InstalledComponent struct {
 
 // GetInstalledComponents retrieves list of installed software components.
 func (c *Client) GetInstalledComponents(ctx context.Context) ([]InstalledComponent, error) {
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/system/components", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/system/components", &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml",
 	})
@@ -1218,7 +1147,7 @@ func (c *Client) GetCallGraph(ctx context.Context, objectURI string, opts *CallG
   <cai:objectUri>%s</cai:objectUri>
 </cai:callGraphRequest>`, objectURI)
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/cai/callgraph", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/cai/callgraph", &connection.Request{
 		Method:      http.MethodPost,
 		Query:       params,
 		Accept:      "application/xml",
@@ -1594,7 +1523,7 @@ func (c *Client) GetObjectStructureCAI(ctx context.Context, objectName string, m
 	params.Set("objectName", objectName)
 	params.Set("maxResults", fmt.Sprintf("%d", maxResults))
 
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/cai/objectexplorer/objects", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/cai/objectexplorer/objects", &connection.Request{
 		Method: http.MethodGet,
 		Query:  params,
 		Accept: "application/xml",
@@ -1615,7 +1544,7 @@ func (c *Client) GetObjectChildren(ctx context.Context, fullname string, childTy
 		params.Set("type", childType)
 	}
 
-	resp, err := c.transport.Request(ctx, path, &RequestOptions{
+	resp, err := c.sendRequest(ctx, path, &connection.Request{
 		Method: http.MethodGet,
 		Query:  params,
 		Accept: "application/xml",
@@ -1657,7 +1586,7 @@ func (c *Client) GetObjectChildren(ctx context.Context, fullname string, childTy
 func (c *Client) GetObjectEntryPoints(ctx context.Context, fullname string) ([]ObjectExplorerNode, error) {
 	path := fmt.Sprintf("/sap/bc/adt/cai/objectexplorer/%s/entrypoints", url.PathEscape(fullname))
 
-	resp, err := c.transport.Request(ctx, path, &RequestOptions{
+	resp, err := c.sendRequest(ctx, path, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml",
 	})
@@ -1836,7 +1765,7 @@ func (c *Client) GetDumps(ctx context.Context, opts *DumpQueryOptions) ([]Runtim
 		endpoint = endpoint + "?" + params.Encode()
 	}
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/atom+xml;type=feed",
 	})
@@ -1869,7 +1798,7 @@ func (c *Client) GetDump(ctx context.Context, dumpID string) (*DumpDetails, erro
 		endpoint = fmt.Sprintf("/sap/bc/adt/runtime/dump/%s", dumpID)
 	}
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "text/html",
 	})
@@ -2049,7 +1978,7 @@ func (c *Client) ListTraces(ctx context.Context, opts *TraceQueryOptions) ([]ABA
 		endpoint = endpoint + "?" + params.Encode()
 	}
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/atom+xml",
 	})
@@ -2069,7 +1998,7 @@ func (c *Client) GetTrace(ctx context.Context, traceID string, toolType string) 
 
 	endpoint := fmt.Sprintf("/sap/bc/adt/runtime/traces/abaptraces/%s/%s", traceID, toolType)
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml",
 	})
@@ -2225,7 +2154,7 @@ type SQLTraceEntry struct {
 
 // GetSQLTraceState checks if SQL trace is currently active.
 func (c *Client) GetSQLTraceState(ctx context.Context) (*SQLTraceState, error) {
-	resp, err := c.transport.Request(ctx, "/sap/bc/adt/st05/trace/state", &RequestOptions{
+	resp, err := c.sendRequest(ctx, "/sap/bc/adt/st05/trace/state", &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/xml",
 	})
@@ -2251,7 +2180,7 @@ func (c *Client) ListSQLTraces(ctx context.Context, user string, maxResults int)
 		endpoint = endpoint + "?" + params.Encode()
 	}
 
-	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+	resp, err := c.sendRequest(ctx, endpoint, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/atom+xml",
 	})

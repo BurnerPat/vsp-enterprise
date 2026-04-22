@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // --- Lock/Unlock Operations ---
@@ -41,7 +43,7 @@ func (c *Client) LockObject(ctx context.Context, objectURL string, accessMode st
 	params.Set("_action", "LOCK")
 	params.Set("accessMode", accessMode)
 
-	resp, err := c.transport.Request(ctx, objectURL, &RequestOptions{
+	resp, err := c.sendRequest(ctx, objectURL, &connection.Request{
 		Method: http.MethodPost,
 		Query:  params,
 		Accept: "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result",
@@ -93,7 +95,7 @@ func (c *Client) UnlockObject(ctx context.Context, objectURL string, lockHandle 
 	params.Set("_action", "UNLOCK")
 	params.Set("lockHandle", lockHandle)
 
-	_, err := c.transport.Request(ctx, objectURL, &RequestOptions{
+	_, err := c.sendRequest(ctx, objectURL, &connection.Request{
 		Method: http.MethodPost,
 		Query:  params,
 	})
@@ -128,7 +130,7 @@ func (c *Client) UpdateSource(ctx context.Context, objectSourceURL string, sourc
 		contentType = "application/*"
 	}
 
-	_, err := c.transport.Request(ctx, objectSourceURL, &RequestOptions{
+	_, err := c.sendRequest(ctx, objectSourceURL, &connection.Request{
 		Method:      http.MethodPut,
 		Query:       params,
 		Body:        []byte(source),
@@ -367,7 +369,7 @@ func (c *Client) CreateObject(ctx context.Context, opts CreateObjectOptions) err
 	}
 
 	// First attempt
-	_, err := c.transport.Request(ctx, creationURL, &RequestOptions{
+	_, err := c.sendRequest(ctx, creationURL, &connection.Request{
 		Method:      http.MethodPost,
 		Query:       params,
 		Body:        []byte(body),
@@ -382,7 +384,7 @@ func (c *Client) CreateObject(ctx context.Context, opts CreateObjectOptions) err
 			c.tryCleanupOrphanLock(ctx, objectURL)
 
 			// Retry creation
-			_, err = c.transport.Request(ctx, creationURL, &RequestOptions{
+			_, err = c.sendRequest(ctx, creationURL, &connection.Request{
 				Method:      http.MethodPost,
 				Query:       params,
 				Body:        []byte(body),
@@ -593,7 +595,7 @@ func (c *Client) DeleteObject(ctx context.Context, objectURL string, lockHandle 
 		params.Set("corrNr", transport)
 	}
 
-	_, err := c.transport.Request(ctx, objectURL, &RequestOptions{
+	_, err := c.sendRequest(ctx, objectURL, &connection.Request{
 		Method: http.MethodDelete,
 		Query:  params,
 	})
@@ -710,7 +712,7 @@ func (c *Client) CreateTestInclude(ctx context.Context, className string, lockHa
 
 	// URL encode for namespaced objects
 	includesURL := fmt.Sprintf("/sap/bc/adt/oo/classes/%s/includes", url.PathEscape(className))
-	_, err := c.transport.Request(ctx, includesURL, &RequestOptions{
+	_, err := c.sendRequest(ctx, includesURL, &connection.Request{
 		Method:      http.MethodPost,
 		Query:       params,
 		Body:        []byte(body),
@@ -727,7 +729,7 @@ func (c *Client) CreateTestInclude(ctx context.Context, className string, lockHa
 func (c *Client) GetClassInclude(ctx context.Context, className string, includeType ClassIncludeType) (string, error) {
 	sourceURL := GetClassIncludeSourceURL(className, includeType)
 
-	resp, err := c.transport.Request(ctx, sourceURL, &RequestOptions{
+	resp, err := c.sendRequest(ctx, sourceURL, &connection.Request{
 		Method: http.MethodGet,
 	})
 	if err != nil {
@@ -748,7 +750,7 @@ func (c *Client) UpdateClassInclude(ctx context.Context, className string, inclu
 		params.Set("corrNr", transport)
 	}
 
-	_, err := c.transport.Request(ctx, sourceURL, &RequestOptions{
+	_, err := c.sendRequest(ctx, sourceURL, &connection.Request{
 		Method:      http.MethodPut,
 		Query:       params,
 		Body:        []byte(source),
@@ -797,7 +799,7 @@ func (c *Client) publishUnpublishServiceBinding(ctx context.Context, action, ser
 
 	path := fmt.Sprintf("/sap/bc/adt/businessservices/odatav2/%s", action)
 
-	resp, err := c.transport.Request(ctx, path, &RequestOptions{
+	resp, err := c.sendRequest(ctx, path, &connection.Request{
 		Method:      http.MethodPost,
 		Query:       params,
 		Body:        []byte(body),
@@ -892,7 +894,7 @@ func (c *Client) CreateTable(ctx context.Context, opts CreateTableOptions) error
 		params.Set("corrNr", opts.Transport)
 	}
 
-	_, err := c.transport.Request(ctx, "/sap/bc/adt/ddic/tables", &RequestOptions{
+	_, err := c.sendRequest(ctx, "/sap/bc/adt/ddic/tables", &connection.Request{
 		Method:      http.MethodPost,
 		Query:       params,
 		Body:        []byte(createBody),
@@ -918,7 +920,7 @@ func (c *Client) CreateTable(ctx context.Context, opts CreateTableOptions) error
 		params.Set("corrNr", opts.Transport)
 	}
 
-	_, err = c.transport.Request(ctx, sourceURL, &RequestOptions{
+	_, err = c.sendRequest(ctx, sourceURL, &connection.Request{
 		Method:      http.MethodPut,
 		Query:       params,
 		Body:        []byte(ddlSource),
