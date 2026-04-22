@@ -57,10 +57,9 @@ func newTestRouterWithPerms(
 
 	for _, id := range systemIDs {
 		sp := &SystemPermissions{
-			SystemID:        id,
-			DisabledTools:   make(map[string]bool),
-			ToolPermissions: make(map[string]*config.ResolvedToolPermission),
-			RoleNames:       []string{"default"},
+			SystemID:  id,
+			Tools:     make(map[string]*EffectiveToolPermission),
+			RoleNames: []string{"default"},
 		}
 		if roleNames != nil {
 			if rn, ok := roleNames[id]; ok {
@@ -73,19 +72,20 @@ func newTestRouterWithPerms(
 		}
 		for i := range allDefs {
 			toolName := allDefs[i].Tool.Name
-			if enabledSet[toolName] {
-				sp.EnabledTools = append(sp.EnabledTools, &allDefs[i])
-				// Set tool permission if provided
-				if toolPerms != nil {
-					if sysPerms, ok := toolPerms[id]; ok {
-						if tp, ok := sysPerms[toolName]; ok {
-							sp.ToolPermissions[toolName] = tp
-						}
+			eff := &EffectiveToolPermission{
+				Enabled:   enabledSet[toolName],
+				Available: true,
+				ToolDef:   &allDefs[i],
+			}
+			// Set tool permission if provided
+			if enabledSet[toolName] && toolPerms != nil {
+				if sysPerms, ok := toolPerms[id]; ok {
+					if tp, ok := sysPerms[toolName]; ok {
+						eff.Resolved = tp
 					}
 				}
-			} else {
-				sp.DisabledTools[toolName] = true
 			}
+			sp.Tools[toolName] = eff
 		}
 		pm.systemPermissions[strings.ToLower(id)] = sp
 	}

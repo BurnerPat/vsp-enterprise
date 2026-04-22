@@ -23,18 +23,29 @@ type PermissionManager struct {
 	allTools []types.ToolDef
 }
 
+// EffectiveToolPermission holds the combined permission and availability state for a single tool on a system.
+type EffectiveToolPermission struct {
+	// Enabled indicates whether the tool is allowed by role-based permissions.
+	Enabled bool
+
+	// Available indicates whether the tool's required endpoints are present on the system.
+	// Defaults to true until endpoint filtering is applied.
+	Available bool
+
+	// Resolved holds the object-level permission details (allowed/blocked objects, etc.).
+	// May be nil if no specific permission was resolved for this tool.
+	Resolved *config.ResolvedToolPermission
+
+	// ToolDef points to the tool definition.
+	ToolDef *types.ToolDef
+}
+
 // SystemPermissions holds resolved permissions for a single system.
 type SystemPermissions struct {
 	SystemID string
 
-	// Tools globally disabled for this system (not in any role)
-	DisabledTools map[string]bool
-
-	// Per-tool resolved permissions (includes object restrictions)
-	ToolPermissions map[string]*config.ResolvedToolPermission
-
-	// Tools enabled for this system (pointers into allTools)
-	EnabledTools []*types.ToolDef
+	// Tools holds all tools with their effective permission and availability state.
+	Tools map[string]*EffectiveToolPermission
 
 	// Role names for logging
 	RoleNames []string
@@ -81,8 +92,8 @@ func (pm *PermissionManager) resolveSystemPermissions(
 	allToolNames []string,
 ) (*SystemPermissions, error) {
 	sp := &SystemPermissions{
-		SystemID:      sysID,
-		DisabledTools: make(map[string]bool),
+		SystemID: sysID,
+		Tools:    make(map[string]*EffectiveToolPermission),
 	}
 
 	// Step 1: Resolve which roles apply to this system
@@ -117,16 +128,18 @@ func (pm *PermissionManager) resolveSystemPermissions(
 
 	// Step 3: Merge permissions from all roles
 	merged := config.MergeRolePermissions(roleDefs, allToolNames)
-	sp.ToolPermissions = merged
 
-	// Step 4: Build enabled/disabled tool lists
+	// Step 4: Build the unified tool map
 	for i := range pm.allTools {
 		td := &pm.allTools[i]
 		toolName := td.Tool.Name
-		if resolved, exists := merged[toolName]; exists && !resolved.GloballyDisabled {
-			sp.EnabledTools = append(sp.EnabledTools, td)
-		} else {
-			sp.DisabledTools[toolName] = true
+		resolved, exists := merged[toolName]
+		enabled := exists && !resolved.GloballyDisabled
+		sp.Tools[toolName] = &EffectiveToolPermission{
+			Enabled:   enabled,
+			Available: true, // until endpoint filtering is applied
+			Resolved:  resolved,
+			ToolDef:   td,
 		}
 	}
 
@@ -147,15 +160,26 @@ func (pm *PermissionManager) GetEnabledToolsForSystem(systemID string) []*types.
 	if !exists {
 		return nil
 	}
-	return sp.EnabledTools
+	var result []*types.ToolDef
+	for _, eff := range sp.Tools {
+		if eff.Enabled && eff.Available {
+			result = append(result, eff.ToolDef)
+		}
+	}
+	return result
 }
 
 // GetEnabledToolNames returns sorted tool names enabled for a system (for discovery).
 func (pm *PermissionManager) GetEnabledToolNames(systemID string) []string {
-	tools := pm.GetEnabledToolsForSystem(systemID)
-	names := make([]string, len(tools))
-	for i, td := range tools {
-		names[i] = td.Tool.Name
+	sp, exists := pm.systemPermissions[strings.ToLower(systemID)]
+	if !exists {
+		return nil
+	}
+	var names []string
+	for name, eff := range sp.Tools {
+		if eff.Enabled && eff.Available {
+			names = append(names, name)
+		}
 	}
 	return names
 }
@@ -177,17 +201,19 @@ func (pm *PermissionManager) GetRestrictedTools(systemID string) []DiscoveryTool
 	}
 
 	var result []DiscoveryToolInfo
-	for _, td := range sp.EnabledTools {
-		resolved, ok := sp.ToolPermissions[td.Tool.Name]
-		if !ok || !resolved.ObjectRestricted {
+	for name, eff := range sp.Tools {
+		if !eff.Enabled || !eff.Available {
+			continue
+		}
+		if eff.Resolved == nil || !eff.Resolved.ObjectRestricted {
 			continue
 		}
 
 		result = append(result, DiscoveryToolInfo{
-			Name:            td.Tool.Name,
-			AllowedPackages: resolved.AllowedPackages,
-			AllowedObjects:  resolved.AllowedObjects,
-			BlockedObjects:  resolved.BlockedObjects,
+			Name:            name,
+			AllowedPackages: eff.Resolved.AllowedPackages,
+			AllowedObjects:  eff.Resolved.AllowedObjects,
+			BlockedObjects:  eff.Resolved.BlockedObjects,
 		})
 	}
 
@@ -199,8 +225,10 @@ func (pm *PermissionManager) GetRestrictedTools(systemID string) []DiscoveryTool
 func (pm *PermissionManager) GetGloballyEnabledTools() []*types.ToolDef {
 	enabledSet := make(map[string]bool)
 	for _, sp := range pm.systemPermissions {
-		for _, td := range sp.EnabledTools {
-			enabledSet[td.Tool.Name] = true
+		for name, eff := range sp.Tools {
+			if eff.Enabled && eff.Available {
+				enabledSet[name] = true
+			}
 		}
 	}
 
@@ -219,7 +247,11 @@ func (pm *PermissionManager) IsToolEnabledForSystem(systemID, toolName string) b
 	if !exists {
 		return false
 	}
-	return !sp.DisabledTools[toolName]
+	eff, exists := sp.Tools[toolName]
+	if !exists {
+		return false
+	}
+	return eff.Enabled && eff.Available
 }
 
 // IsObjectAllowedForTool checks if an object is allowed for a tool at runtime.
@@ -235,10 +267,12 @@ func (pm *PermissionManager) IsObjectAllowedForTool(
 		return nil // No permissions configured → allow
 	}
 
-	resolved, exists := sp.ToolPermissions[toolName]
-	if !exists || !resolved.ObjectRestricted {
+	eff, exists := sp.Tools[toolName]
+	if !exists || eff.Resolved == nil || !eff.Resolved.ObjectRestricted {
 		return nil // No object restrictions → allow
 	}
+
+	resolved := eff.Resolved
 
 	// Check blocked_objects (deny wins)
 	for _, pattern := range resolved.BlockedObjects {
@@ -287,19 +321,17 @@ func (pm *PermissionManager) LogEffectivePermissions() {
 		roleStr := strings.Join(sp.RoleNames, ", ")
 		log.Info("System %q (roles: [%s]):", sp.SystemID, roleStr)
 
-		for _, td := range sp.EnabledTools {
-			toolName := td.Tool.Name
-			resolved := sp.ToolPermissions[toolName]
-			if resolved != nil && resolved.ObjectRestricted {
-				log.Info("  ✓ %s (with object restrictions)", toolName)
-			} else {
-				log.Info("  ✓ %s", toolName)
+		for name, eff := range sp.Tools {
+			switch {
+			case !eff.Enabled:
+				log.Info("  ✗ %s (disabled by role)", name)
+			case !eff.Available:
+				log.Info("  ✗ %s (endpoint unavailable)", name)
+			case eff.Resolved != nil && eff.Resolved.ObjectRestricted:
+				log.Info("  ✓ %s (with object restrictions)", name)
+			default:
+				log.Info("  ✓ %s", name)
 			}
-		}
-
-		// Log disabled tools
-		for toolName := range sp.DisabledTools {
-			log.Info("  ✗ %s", toolName)
 		}
 	}
 }
@@ -337,7 +369,7 @@ func FilterToolsByEndpoints(tools []*types.ToolDef, discoveredEndpoints adt.Disc
 	return result
 }
 
-// ApplyEndpointFilter filters each system's enabled tools based on ADT discovery results.
+// ApplyEndpointFilter marks tools as unavailable based on ADT discovery results.
 // This is called after permission-based filtering and after all systems have connected.
 func (pm *PermissionManager) ApplyEndpointFilter(systems map[string]types.System, verbose bool) {
 	for sysID, sp := range pm.systemPermissions {
@@ -351,27 +383,29 @@ func (pm *PermissionManager) ApplyEndpointFilter(systems map[string]types.System
 			continue
 		}
 
-		before := len(sp.EnabledTools)
-		sp.EnabledTools = FilterToolsByEndpoints(sp.EnabledTools, endpoints)
-		after := len(sp.EnabledTools)
-
-		if before != after {
-			// Update disabled tools map
-			enabledSet := make(map[string]bool)
-			for _, td := range sp.EnabledTools {
-				enabledSet[td.Tool.Name] = true
+		filtered := 0
+		for _, eff := range sp.Tools {
+			if !eff.Enabled || len(eff.ToolDef.Endpoints) == 0 {
+				continue
 			}
-			for i := range pm.allTools {
-				toolName := pm.allTools[i].Tool.Name
-				if !enabledSet[toolName] {
-					sp.DisabledTools[toolName] = true
+
+			allFound := true
+			for _, ep := range eff.ToolDef.Endpoints {
+				if !endpoints.HasEndpoint(ep) {
+					allFound = false
+					break
 				}
 			}
 
-			if verbose {
-				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] System %q: endpoint filter removed %d tools (%d → %d)\n",
-					sysID, before-after, before, after)
+			if !allFound {
+				eff.Available = false
+				filtered++
 			}
+		}
+
+		if filtered > 0 && verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] System %q: endpoint filter marked %d tools as unavailable\n",
+				sysID, filtered)
 		}
 	}
 }
