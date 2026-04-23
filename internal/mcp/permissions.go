@@ -3,6 +3,7 @@ package mcp
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/oisee/vibing-steampunk/internal/config"
@@ -318,20 +319,40 @@ func (pm *PermissionManager) ObjectNotAllowedMessage(
 // LogEffectivePermissions logs startup information about enabled/disabled tools per system.
 func (pm *PermissionManager) LogEffectivePermissions() {
 	for _, sp := range pm.systemPermissions {
+		enabled := make([]string, 0)
+		disabled := make([]string, 0)
+		unavailable := make([]string, 0)
+
 		roleStr := strings.Join(sp.RoleNames, ", ")
 		log.Info("System %q (roles: [%s]):", sp.SystemID, roleStr)
 
 		for name, eff := range sp.Tools {
 			switch {
 			case !eff.Enabled:
-				log.Info("  ✗ %s (disabled by role)", name)
+				disabled = append(disabled, name)
 			case !eff.Available:
-				log.Info("  ✗ %s (endpoint unavailable)", name)
+				unavailable = append(unavailable, name)
 			case eff.Resolved != nil && eff.Resolved.ObjectRestricted:
-				log.Info("  ✓ %s (with object restrictions)", name)
+				enabled = append(enabled, fmt.Sprintf("%s (object restrictions)", name))
 			default:
-				log.Info("  ✓ %s", name)
+				enabled = append(enabled, name)
 			}
+		}
+
+		slices.Sort(enabled)
+		slices.Sort(disabled)
+		slices.Sort(unavailable)
+
+		for _, name := range enabled {
+			log.Info("  ✓ %s", name)
+		}
+
+		for _, name := range disabled {
+			log.Info("  ✗ %s (disabled by role)", name)
+		}
+
+		for _, name := range unavailable {
+			log.Info("  ✗ %s (endpoint unavailable)", name)
 		}
 	}
 }
