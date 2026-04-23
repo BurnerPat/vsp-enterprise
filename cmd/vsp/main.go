@@ -88,8 +88,9 @@ Configuration files:
 
 Configuration priority: CLI flags > env vars > .env file > defaults
 Ready-to-use configs for 8 AI agents: docs/cli-agents/`,
-	Version: fmt.Sprintf("%s (commit: %s, built: %s)", Version, Commit, BuildDate),
-	RunE:    runServer,
+	Version:      fmt.Sprintf("%s (commit: %s, built: %s)", Version, Commit, BuildDate),
+	SilenceUsage: true,
+	RunE:         runServer,
 }
 
 func init() {
