@@ -7,8 +7,7 @@ import (
 )
 
 // JcoTransport is the low-level connection interface for communicating with the
-// Java JCo sidecar. Two implementations exist:
-//   - JcoHttpTransport  — sends JSON via HTTP POST to the sidecar's /rfc-proxy endpoint
+// Java JCo sidecar. The implementation is:
 //   - AdtJcoStdioTransport — sends JSON via stdin/stdout pipes to the sidecar process
 type JcoTransport interface {
 	// Send transmits a ProxyRequest and returns the ProxyResponse.

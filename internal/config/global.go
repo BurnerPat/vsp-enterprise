@@ -94,7 +94,6 @@ type GlobalConfig struct {
 	JcoLibsDir       string
 	RfcProxyPort     int
 	RfcMaxConcurrent int
-	SidecarTransport string
 	JcoProxyJar      string
 	JavaPath         string
 
@@ -220,7 +219,6 @@ func (c *SystemConfig) BuildSidecarConfig() *adt.SidecarConfig {
 		JcoLibsDir:    g.JcoLibsDir,
 		Port:          g.RfcProxyPort,
 		MaxConcurrent: g.RfcMaxConcurrent,
-		Transport:     g.SidecarTransport,
 
 		// Per-system connection fields
 		AsHost:        c.AsHost,

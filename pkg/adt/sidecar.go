@@ -23,7 +23,6 @@ type SidecarConfig struct {
 	JavaPath      string // Java binary path (default: "java")
 	Port          int    // Fixed port (0 = auto-assign)
 	MaxConcurrent int    // Max concurrent RFC requests (default: 5)
-	Transport     string // Transport mode: "http" (default) or "stdio"
 
 	// SAP connection parameters forwarded to the Java sidecar
 	AsHost   string // Application server host (direct connection)

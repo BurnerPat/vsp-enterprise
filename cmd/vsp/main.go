@@ -168,7 +168,6 @@ func init() {
 	rootCmd.Flags().StringVar(&cfg.JavaPath, "java-path", "java", "Path to Java binary")
 	rootCmd.Flags().IntVar(&cfg.RfcProxyPort, "rfc-proxy-port", 0, "Fixed sidecar port (0=auto)")
 	rootCmd.Flags().IntVar(&cfg.RfcMaxConcurrent, "rfc-max-concurrent", 5, "Max concurrent RFC calls")
-	rootCmd.Flags().StringVar(&cfg.SidecarTransport, "jco-sidecar-transport", "http", "Sidecar transport: http (default) or stdio")
 
 	// SNC/SSO configuration (via SAP UI Landscape)
 	rootCmd.Flags().BoolVar(&singleSys.SNC, "snc", false, "Enable SNC single sign-on via JCo (requires --sysid)")
@@ -230,7 +229,6 @@ func init() {
 	_ = viper.BindPFlag("java-path", rootCmd.Flags().Lookup("java-path"))
 	_ = viper.BindPFlag("rfc-proxy-port", rootCmd.Flags().Lookup("rfc-proxy-port"))
 	_ = viper.BindPFlag("rfc-max-concurrent", rootCmd.Flags().Lookup("rfc-max-concurrent"))
-	_ = viper.BindPFlag("jco-sidecar-connection", rootCmd.Flags().Lookup("jco-sidecar-connection"))
 
 	// SNC/SSO configuration
 	_ = viper.BindPFlag("snc", rootCmd.Flags().Lookup("snc"))
@@ -394,11 +392,7 @@ func logFinalConfiguration(cfg *config.GlobalConfig) {
 	// Log per-system information
 	for sysID, sys := range cfg.Systems {
 		if strings.EqualFold(sys.ConnectionMode, "rfc") {
-			transport := cfg.SidecarTransport
-			if transport == "" {
-				transport = "http"
-			}
-			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] System %q: RFC mode (sidecar connection: %s)\n", sysID, transport)
+			_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE] System %q: RFC mode (sidecar connection: stdio)\n", sysID)
 			if sys.SNC {
 				_, _ = fmt.Fprintf(os.Stderr, "[VERBOSE]   Auth: SNC/SSO (system ID: %s, %d JCo properties)\n", sys.SysID, len(sys.JcoProperties))
 			} else if sys.AsHost != "" {

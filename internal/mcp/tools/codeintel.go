@@ -49,7 +49,6 @@ func CodeIntelToolDefs() []types.ToolDef {
 			mcp.WithNumber("column", mcp.Required(), mcp.Description("Column number (1-based)")),
 			mcp.WithBoolean("super_types", mcp.Description("Get supertypes instead of subtypes (default: false = subtypes)")),
 		), Handler: HandleGetTypeHierarchy, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/abapsource/typehierarchy"}},
-
 	}
 }
 
@@ -195,5 +194,3 @@ func HandleGetTypeHierarchy(ctx context.Context, sys types.System, request mcp.C
 	output, _ := json.MarshalIndent(hierarchy, "", "  ")
 	return mcp.NewToolResultText(string(output)), nil
 }
-
-

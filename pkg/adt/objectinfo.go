@@ -425,10 +425,10 @@ type WhereUsedSnippet struct {
 
 // WhereUsedResult contains the where-used list and optional code snippets.
 type WhereUsedResult struct {
-	NumberOfResults    int                `json:"numberOfResults"`
-	ResultDescription  string             `json:"resultDescription"`
-	References         []WhereUsedReference `json:"references"`
-	Snippets           []WhereUsedSnippet   `json:"snippets,omitempty"`
+	NumberOfResults   int                  `json:"numberOfResults"`
+	ResultDescription string               `json:"resultDescription"`
+	References        []WhereUsedReference `json:"references"`
+	Snippets          []WhereUsedSnippet   `json:"snippets,omitempty"`
 }
 
 // GetWhereUsed retrieves the where-used list for an ABAP object or member.
