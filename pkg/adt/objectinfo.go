@@ -245,10 +245,27 @@ func (c *Client) GetObjectOutline(ctx context.Context, objectType, name string, 
 		return nil, fmt.Errorf("get object outline failed: %w", err)
 	}
 
-	return parseObjectOutline(resp.Body)
+	return parseObjectOutline(resp.Body, endpoint)
 }
 
-func parseObjectOutline(data []byte) (*OutlineElement, error) {
+// resolveHref resolves a potentially relative href against a base path.
+func resolveHref(href, basePath string) string {
+	if href == "" || strings.HasPrefix(href, "/") {
+		return href
+	}
+	// Parse base to get the directory part (strip last segment)
+	base, err := url.Parse(basePath)
+	if err != nil {
+		return href
+	}
+	ref, err := url.Parse(href)
+	if err != nil {
+		return href
+	}
+	return base.ResolveReference(ref).String()
+}
+
+func parseObjectOutline(data []byte, basePath string) (*OutlineElement, error) {
 	xmlStr := string(data)
 	xmlStr = strings.ReplaceAll(xmlStr, "abapsource:", "")
 	xmlStr = strings.ReplaceAll(xmlStr, "adtcore:", "")
@@ -292,12 +309,12 @@ func parseObjectOutline(data []byte) (*OutlineElement, error) {
 		}
 		for _, l := range e.Links {
 			if strings.Contains(l.Rel, "definitionIdentifier") {
-				elem.Href = l.Href
+				elem.Href = resolveHref(l.Href, basePath)
 				break
 			}
 		}
 		if elem.Href == "" && len(e.Links) > 0 {
-			elem.Href = e.Links[0].Href
+			elem.Href = resolveHref(e.Links[0].Href, basePath)
 		}
 		for _, child := range e.Children {
 			childCopy := child
@@ -406,21 +423,21 @@ func parseObjectNetwork(data []byte) (*ObjectNetwork, error) {
 
 // WhereUsedReference represents an object that references the searched target.
 type WhereUsedReference struct {
-	URI              string `json:"uri"`
-	Name             string `json:"name"`
-	Type             string `json:"type,omitempty"`
-	Description      string `json:"description,omitempty"`
-	PackageName      string `json:"packageName,omitempty"`
-	ObjectIdentifier string `json:"objectIdentifier,omitempty"`
-	UsageInformation string `json:"usageInformation,omitempty"`
+	URI              string            `json:"uri"`
+	ParentURI        string            `json:"parentUri,omitempty"`
+	Name             string            `json:"name"`
+	Type             string            `json:"type,omitempty"`
+	Description      string            `json:"description,omitempty"`
+	PackageName      string            `json:"packageName,omitempty"`
+	ObjectIdentifier string            `json:"objectIdentifier,omitempty"`
+	UsageInformation string            `json:"usageInformation,omitempty"`
+	Snippet          *WhereUsedSnippet `json:"snippet,omitempty"`
 }
 
 // WhereUsedSnippet represents a code snippet showing a usage location.
 type WhereUsedSnippet struct {
-	ObjectIdentifier string `json:"objectIdentifier"`
-	URI              string `json:"uri"`
-	Content          string `json:"content"`
-	Description      string `json:"description,omitempty"`
+	URI     string `json:"uri"`
+	Content string `json:"content"`
 }
 
 // WhereUsedResult contains the where-used list and optional code snippets.
@@ -428,7 +445,13 @@ type WhereUsedResult struct {
 	NumberOfResults   int                  `json:"numberOfResults"`
 	ResultDescription string               `json:"resultDescription"`
 	References        []WhereUsedReference `json:"references"`
-	Snippets          []WhereUsedSnippet   `json:"snippets,omitempty"`
+}
+
+// rawSnippet is an internal type for snippet data before merging into references.
+type rawSnippet struct {
+	objectIdentifier string
+	URI              string
+	Content          string
 }
 
 // GetWhereUsed retrieves the where-used list for an ABAP object or member.
@@ -480,7 +503,19 @@ func (c *Client) GetWhereUsed(ctx context.Context, objectType, name string, memb
 		if len(identifiers) > 0 {
 			snippets, err := c.getWhereUsedSnippets(ctx, identifiers)
 			if err == nil {
-				result.Snippets = snippets
+				// Merge snippets into their matching references by objectIdentifier
+				snipMap := make(map[string]*WhereUsedSnippet, len(snippets))
+				for i := range snippets {
+					snipMap[snippets[i].objectIdentifier] = &WhereUsedSnippet{
+						URI:     snippets[i].URI,
+						Content: snippets[i].Content,
+					}
+				}
+				for i := range result.References {
+					if s, ok := snipMap[result.References[i].ObjectIdentifier]; ok {
+						result.References[i].Snippet = s
+					}
+				}
 			}
 		}
 	}
@@ -533,6 +568,7 @@ func parseWhereUsedResult(data []byte) (*WhereUsedResult, error) {
 	for _, obj := range resp.ReferencedObjects.Objects {
 		ref := WhereUsedReference{
 			URI:              obj.URI,
+			ParentURI:        obj.ParentURI,
 			Name:             obj.AdtObject.Name,
 			Type:             obj.AdtObject.Type,
 			Description:      obj.AdtObject.Description,
@@ -546,7 +582,7 @@ func parseWhereUsedResult(data []byte) (*WhereUsedResult, error) {
 	return result, nil
 }
 
-func (c *Client) getWhereUsedSnippets(ctx context.Context, identifiers []string) ([]WhereUsedSnippet, error) {
+func (c *Client) getWhereUsedSnippets(ctx context.Context, identifiers []string) ([]rawSnippet, error) {
 	var idElements strings.Builder
 	for _, id := range identifiers {
 		fmt.Fprintf(&idElements, `    <usagereferences:objectIdentifier optional="false">%s</usagereferences:objectIdentifier>`+"\n", id)
@@ -572,7 +608,7 @@ func (c *Client) getWhereUsedSnippets(ctx context.Context, identifiers []string)
 	return parseWhereUsedSnippets(resp.Body)
 }
 
-func parseWhereUsedSnippets(data []byte) ([]WhereUsedSnippet, error) {
+func parseWhereUsedSnippets(data []byte) ([]rawSnippet, error) {
 	xmlStr := string(data)
 	xmlStr = strings.ReplaceAll(xmlStr, "usageReferences:", "")
 
@@ -594,14 +630,13 @@ func parseWhereUsedSnippets(data []byte) ([]WhereUsedSnippet, error) {
 		return nil, fmt.Errorf("parsing usage snippets: %w", err)
 	}
 
-	var snippets []WhereUsedSnippet
+	var snippets []rawSnippet
 	for _, obj := range resp.SnippetObjects {
 		for _, s := range obj.CodeSnippets {
-			snippets = append(snippets, WhereUsedSnippet{
-				ObjectIdentifier: obj.ObjectIdentifier,
+			snippets = append(snippets, rawSnippet{
+				objectIdentifier: obj.ObjectIdentifier,
 				URI:              s.URI,
 				Content:          s.Content,
-				Description:      s.Description,
 			})
 		}
 	}

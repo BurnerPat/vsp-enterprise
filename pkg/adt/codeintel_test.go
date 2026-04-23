@@ -39,7 +39,7 @@ func TestParseObjectOutline(t *testing.T) {
   </abapsource:objectStructureElement>
 </abapsource:objectStructureElement>`
 
-	result, err := parseObjectOutline([]byte(xmlData))
+	result, err := parseObjectOutline([]byte(xmlData), "/sap/bc/adt/oo/classes/ZCL_TEST/objectstructure")
 	if err != nil {
 		t.Fatalf("parseObjectOutline failed: %v", err)
 	}
@@ -98,6 +98,44 @@ func TestParseObjectOutline(t *testing.T) {
 	if event.Name != "ON_CHANGE" {
 		t.Errorf("expected event name 'ON_CHANGE', got '%s'", event.Name)
 	}
+
+	// Check that hrefs are absolute
+	if constructor.Href != "/sap/bc/adt/oo/classes/ZCL_TEST/methods/CONSTRUCTOR" {
+		t.Errorf("expected absolute href, got '%s'", constructor.Href)
+	}
+}
+
+func TestParseObjectOutlineRelativeHref(t *testing.T) {
+	xmlData := `<?xml version="1.0" encoding="utf-8"?>
+<abapsource:objectStructureElement xmlns:abapsource="http://www.sap.com/adt/abapsource"
+    xmlns:adtcore="http://www.sap.com/adt/core"
+    xmlns:atom="http://www.w3.org/2005/Atom"
+    adtcore:name="ZCL_61CAR_TLOG_TOOL" adtcore:type="CLAS/OC" visibility="public">
+  <abapsource:objectStructureElement adtcore:name="GET_FILES_FOR_QUICK_ACCESS" adtcore:type="CLAS/OM" visibility="private">
+    <atom:link href="./../zcl_61car_tlog_tool/source/main#start=61,12;end=61,38" rel="http://www.sap.com/adt/relations/definitionIdentifier"/>
+  </abapsource:objectStructureElement>
+  <abapsource:objectStructureElement adtcore:name="ALREADY_ABSOLUTE" adtcore:type="CLAS/OM" visibility="public">
+    <atom:link href="/sap/bc/adt/oo/classes/ZCL_61CAR_TLOG_TOOL/methods/ALREADY_ABSOLUTE" rel="self"/>
+  </abapsource:objectStructureElement>
+</abapsource:objectStructureElement>`
+
+	result, err := parseObjectOutline([]byte(xmlData), "/sap/bc/adt/oo/classes/ZCL_61CAR_TLOG_TOOL/objectstructure")
+	if err != nil {
+		t.Fatalf("parseObjectOutline failed: %v", err)
+	}
+
+	// Relative href should be resolved to absolute
+	method := result.Children[0]
+	expected := "/sap/bc/adt/oo/classes/zcl_61car_tlog_tool/source/main#start=61,12;end=61,38"
+	if method.Href != expected {
+		t.Errorf("expected resolved href '%s', got '%s'", expected, method.Href)
+	}
+
+	// Already absolute href should stay absolute
+	abs := result.Children[1]
+	if abs.Href != "/sap/bc/adt/oo/classes/ZCL_61CAR_TLOG_TOOL/methods/ALREADY_ABSOLUTE" {
+		t.Errorf("expected absolute href unchanged, got '%s'", abs.Href)
+	}
 }
 
 func TestParseObjectOutlineEmpty(t *testing.T) {
@@ -107,7 +145,7 @@ func TestParseObjectOutlineEmpty(t *testing.T) {
     adtcore:name="ZCL_EMPTY" adtcore:type="CLAS/OC" visibility="public">
 </abapsource:objectStructureElement>`
 
-	result, err := parseObjectOutline([]byte(xmlData))
+	result, err := parseObjectOutline([]byte(xmlData), "/sap/bc/adt/oo/classes/ZCL_EMPTY/objectstructure")
 	if err != nil {
 		t.Fatalf("parseObjectOutline failed: %v", err)
 	}
@@ -132,7 +170,7 @@ func TestParseObjectOutlineNested(t *testing.T) {
   </abapsource:objectStructureElement>
 </abapsource:objectStructureElement>`
 
-	result, err := parseObjectOutline([]byte(xmlData))
+	result, err := parseObjectOutline([]byte(xmlData), "/sap/bc/adt/oo/classes/ZCL_NESTED/objectstructure")
 	if err != nil {
 		t.Fatalf("parseObjectOutline failed: %v", err)
 	}
