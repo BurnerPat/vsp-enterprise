@@ -19,7 +19,7 @@ func ObjectInfoToolDefs() []types.ToolDef {
 			mcp.WithString("name", mcp.Required(),
 				mcp.Description("Object name (e.g., ZCL_MY_CLASS, Z_MY_PROGRAM)")),
 		), Handler: HandleGetObjectProperties, ReadOnly: true, Focused: true,
-			Endpoints: []string{"/sap/bc/adt/repository/informationsystem/objectproperties"},
+			Endpoints: []string{},
 			Routes: []types.UniversalRoute{{Action: "analyze", MapArgs: func(ot, on string, p map[string]any) map[string]any {
 				p["object_type"] = ot
 				p["name"] = on

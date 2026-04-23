@@ -506,9 +506,14 @@ func (c *Client) GetWhereUsed(ctx context.Context, objectType, name string, memb
 				// Merge snippets into their matching references by objectIdentifier
 				snipMap := make(map[string]*WhereUsedSnippet, len(snippets))
 				for i := range snippets {
-					snipMap[snippets[i].objectIdentifier] = &WhereUsedSnippet{
-						URI:     snippets[i].URI,
-						Content: snippets[i].Content,
+					id := snippets[i].objectIdentifier
+					if existing, ok := snipMap[id]; ok {
+						existing.Content += "\n" + snippets[i].Content
+					} else {
+						snipMap[id] = &WhereUsedSnippet{
+							URI:     snippets[i].URI,
+							Content: snippets[i].Content,
+						}
 					}
 				}
 				for i := range result.References {
