@@ -830,7 +830,8 @@ func GetAllToolNames() []string {
 		"GetSource", "GetProgram", "GetClass", "GetInterface", "GetFunction",
 		"GetFunctionGroup", "GetInclude", "GetTable", "GetTableContents",
 		"GetStructure", "GetPackage", "GetMessages", "GetTransaction", "GetTypeInfo",
-		"GetClassInfo", "GetClassComponents", "GetClassInclude", "GetCDSDependencies",
+		"GetClassInfo", "GetClassInclude", "GetCDSDependencies",
+		"GetObjectProperties", "GetObjectOutline", "GetObjectNetwork", "GetWhereUsed",
 		// Core write tools
 		"WriteSource", "WriteClass", "WriteProgram", "EditSource", "UpdateSource",
 		"CreateObject", "DeleteObject", "CloneObject", "RenameObject",
@@ -847,7 +848,7 @@ func GetAllToolNames() []string {
 		// Code intelligence
 		"FindDefinition", "FindReferences", "CodeCompletion", "GetTypeHierarchy",
 		// Call graph / analysis
-		"GetCallGraph", "GetCallersOf", "GetCalleesOf", "GetObjectStructure",
+		"GetCallGraph", "GetCallersOf", "GetCalleesOf",
 		"AnalyzeCallGraph",
 		// System info
 		"GetSystemInfo", "GetInstalledComponents", "GetConnectionInfo", "GetFeatures",
@@ -900,7 +901,8 @@ func GetFocusedToolNames() []string {
 		// System info
 		"GetSystemInfo", "GetInstalledComponents", "GetConnectionInfo", "GetFeatures",
 		// Code analysis
-		"GetCallGraph", "GetObjectStructure", "GetCallersOf", "GetCalleesOf",
+		"GetCallGraph", "GetCallersOf", "GetCalleesOf",
+		"GetObjectProperties", "GetObjectOutline", "GetObjectNetwork", "GetWhereUsed",
 		"AnalyzeCallGraph",
 		// Dumps / Traces
 		"ListDumps", "GetDump", "ListTraces", "GetTrace",

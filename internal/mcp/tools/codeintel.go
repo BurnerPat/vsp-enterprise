@@ -7,11 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
-	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
 // CodeIntelToolDefs returns tool definitions for code intelligence tools.
@@ -52,10 +50,6 @@ func CodeIntelToolDefs() []types.ToolDef {
 			mcp.WithBoolean("super_types", mcp.Description("Get supertypes instead of subtypes (default: false = subtypes)")),
 		), Handler: HandleGetTypeHierarchy, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/abapsource/typehierarchy"}},
 
-		{Tool: mcp.NewTool("GetClassComponents",
-			mcp.WithDescription("Get the structure of a class - lists all methods, attributes, events, and other components with their visibility and properties"),
-			mcp.WithString("class_url", mcp.Required(), mcp.Description("ADT URL of the class (e.g., /sap/bc/adt/oo/classes/ZCL_TEST)")),
-		), Handler: HandleGetClassComponents, ReadOnly: true, Endpoints: []string{"/sap/bc/adt/oo/classes"}},
 	}
 }
 
@@ -202,115 +196,4 @@ func HandleGetTypeHierarchy(ctx context.Context, sys types.System, request mcp.C
 	return mcp.NewToolResultText(string(output)), nil
 }
 
-func HandleGetClassComponents(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	classURL, ok := request.GetArguments()["class_url"].(string)
-	if !ok || classURL == "" {
-		return types.ErrorResult("class_url is required"), nil
-	}
 
-	components, err := sys.ADT().GetClassComponents(ctx, classURL)
-	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("GetClassComponents failed: %v", err)), nil
-	}
-
-	// Format output with summary
-	output := formatClassComponents(components)
-	return mcp.NewToolResultText(output), nil
-}
-
-// formatClassComponents creates a readable summary of class components
-func formatClassComponents(comp *adt.ClassComponent) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Class: %s (%s)\n\n", comp.Name, comp.Type)
-
-	// Group components by type
-	methods := []adt.ClassComponent{}
-	attributes := []adt.ClassComponent{}
-	events := []adt.ClassComponent{}
-	types := []adt.ClassComponent{}
-	others := []adt.ClassComponent{}
-
-	for _, c := range comp.Components {
-		switch {
-		case strings.Contains(c.Type, "METH"):
-			methods = append(methods, c)
-		case strings.Contains(c.Type, "DATA") || strings.Contains(c.Type, "ATTR"):
-			attributes = append(attributes, c)
-		case strings.Contains(c.Type, "EVNT") || strings.Contains(c.Type, "EVENT"):
-			events = append(events, c)
-		case strings.Contains(c.Type, "TYPE"):
-			types = append(types, c)
-		default:
-			others = append(others, c)
-		}
-	}
-
-	if len(methods) > 0 {
-		fmt.Fprintf(&sb, "## Methods (%d)\n", len(methods))
-		for _, m := range methods {
-			flags := componentFlags(m)
-			fmt.Fprintf(&sb, "  - %s [%s]%s\n", m.Name, m.Visibility, flags)
-			if m.Description != "" {
-				fmt.Fprintf(&sb, "    %s\n", m.Description)
-			}
-		}
-		sb.WriteString("\n")
-	}
-
-	if len(attributes) > 0 {
-		fmt.Fprintf(&sb, "## Attributes (%d)\n", len(attributes))
-		for _, a := range attributes {
-			flags := componentFlags(a)
-			fmt.Fprintf(&sb, "  - %s [%s]%s\n", a.Name, a.Visibility, flags)
-		}
-		sb.WriteString("\n")
-	}
-
-	if len(events) > 0 {
-		fmt.Fprintf(&sb, "## Events (%d)\n", len(events))
-		for _, e := range events {
-			fmt.Fprintf(&sb, "  - %s [%s]\n", e.Name, e.Visibility)
-		}
-		sb.WriteString("\n")
-	}
-
-	if len(types) > 0 {
-		fmt.Fprintf(&sb, "## Types (%d)\n", len(types))
-		for _, t := range types {
-			fmt.Fprintf(&sb, "  - %s [%s]\n", t.Name, t.Visibility)
-		}
-		sb.WriteString("\n")
-	}
-
-	if len(others) > 0 {
-		fmt.Fprintf(&sb, "## Other Components (%d)\n", len(others))
-		for _, o := range others {
-			fmt.Fprintf(&sb, "  - %s (%s) [%s]\n", o.Name, o.Type, o.Visibility)
-		}
-	}
-
-	return sb.String()
-}
-
-func componentFlags(c adt.ClassComponent) string {
-	var flags []string
-	if c.IsStatic {
-		flags = append(flags, "static")
-	}
-	if c.IsFinal {
-		flags = append(flags, "final")
-	}
-	if c.IsAbstract {
-		flags = append(flags, "abstract")
-	}
-	if c.ReadOnly {
-		flags = append(flags, "read-only")
-	}
-	if c.Constant {
-		flags = append(flags, "constant")
-	}
-	if len(flags) > 0 {
-		return " " + strings.Join(flags, ", ")
-	}
-	return ""
-}

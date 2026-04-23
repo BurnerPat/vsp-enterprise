@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestParseClassComponents(t *testing.T) {
+func TestParseObjectOutline(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="utf-8"?>
 <abapsource:objectStructureElement xmlns:abapsource="http://www.sap.com/adt/abapsource"
     xmlns:adtcore="http://www.sap.com/adt/core"
@@ -39,9 +39,9 @@ func TestParseClassComponents(t *testing.T) {
   </abapsource:objectStructureElement>
 </abapsource:objectStructureElement>`
 
-	result, err := parseClassComponents([]byte(xmlData))
+	result, err := parseObjectOutline([]byte(xmlData))
 	if err != nil {
-		t.Fatalf("parseClassComponents failed: %v", err)
+		t.Fatalf("parseObjectOutline failed: %v", err)
 	}
 
 	// Check root element
@@ -55,28 +55,28 @@ func TestParseClassComponents(t *testing.T) {
 		t.Errorf("expected visibility 'public', got '%s'", result.Visibility)
 	}
 
-	// Check components count
-	if len(result.Components) != 6 {
-		t.Fatalf("expected 6 components, got %d", len(result.Components))
+	// Check children count
+	if len(result.Children) != 6 {
+		t.Fatalf("expected 6 children, got %d", len(result.Children))
 	}
 
 	// Check method with description
-	constructor := result.Components[0]
+	constructor := result.Children[0]
 	if constructor.Name != "CONSTRUCTOR" {
-		t.Errorf("expected first component name 'CONSTRUCTOR', got '%s'", constructor.Name)
+		t.Errorf("expected first child name 'CONSTRUCTOR', got '%s'", constructor.Name)
 	}
 	if constructor.Description != "Constructor" {
 		t.Errorf("expected description 'Constructor', got '%s'", constructor.Description)
 	}
 
 	// Check final method
-	processData := result.Components[1]
+	processData := result.Children[1]
 	if !processData.IsFinal {
 		t.Error("expected PROCESS_DATA to be final")
 	}
 
 	// Check static method
-	helper := result.Components[2]
+	helper := result.Children[2]
 	if !helper.IsStatic {
 		t.Error("expected HELPER to be static")
 	}
@@ -85,43 +85,43 @@ func TestParseClassComponents(t *testing.T) {
 	}
 
 	// Check constant attribute
-	constant := result.Components[4]
-	if !constant.Constant {
+	constant := result.Children[4]
+	if !constant.IsConstant {
 		t.Error("expected MC_CONSTANT to be constant")
 	}
-	if !constant.ReadOnly {
+	if !constant.IsReadOnly {
 		t.Error("expected MC_CONSTANT to be read-only")
 	}
 
 	// Check event
-	event := result.Components[5]
+	event := result.Children[5]
 	if event.Name != "ON_CHANGE" {
 		t.Errorf("expected event name 'ON_CHANGE', got '%s'", event.Name)
 	}
 }
 
-func TestParseClassComponentsEmpty(t *testing.T) {
+func TestParseObjectOutlineEmpty(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="utf-8"?>
 <abapsource:objectStructureElement xmlns:abapsource="http://www.sap.com/adt/abapsource"
     xmlns:adtcore="http://www.sap.com/adt/core"
     adtcore:name="ZCL_EMPTY" adtcore:type="CLAS/OC" visibility="public">
 </abapsource:objectStructureElement>`
 
-	result, err := parseClassComponents([]byte(xmlData))
+	result, err := parseObjectOutline([]byte(xmlData))
 	if err != nil {
-		t.Fatalf("parseClassComponents failed: %v", err)
+		t.Fatalf("parseObjectOutline failed: %v", err)
 	}
 
 	if result.Name != "ZCL_EMPTY" {
 		t.Errorf("expected name 'ZCL_EMPTY', got '%s'", result.Name)
 	}
-	if len(result.Components) != 0 {
-		t.Errorf("expected 0 components, got %d", len(result.Components))
+	if len(result.Children) != 0 {
+		t.Errorf("expected 0 children, got %d", len(result.Children))
 	}
 }
 
-func TestParseClassComponentsNested(t *testing.T) {
-	// Test nested components (e.g., local types within methods)
+func TestParseObjectOutlineNested(t *testing.T) {
+	// Test nested children (e.g., local types within methods)
 	xmlData := `<?xml version="1.0" encoding="utf-8"?>
 <abapsource:objectStructureElement xmlns:abapsource="http://www.sap.com/adt/abapsource"
     xmlns:adtcore="http://www.sap.com/adt/core"
@@ -132,26 +132,26 @@ func TestParseClassComponentsNested(t *testing.T) {
   </abapsource:objectStructureElement>
 </abapsource:objectStructureElement>`
 
-	result, err := parseClassComponents([]byte(xmlData))
+	result, err := parseObjectOutline([]byte(xmlData))
 	if err != nil {
-		t.Fatalf("parseClassComponents failed: %v", err)
+		t.Fatalf("parseObjectOutline failed: %v", err)
 	}
 
-	if len(result.Components) != 1 {
-		t.Fatalf("expected 1 component, got %d", len(result.Components))
+	if len(result.Children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(result.Children))
 	}
 
-	outerMethod := result.Components[0]
+	outerMethod := result.Children[0]
 	if outerMethod.Name != "OUTER_METHOD" {
 		t.Errorf("expected outer method name 'OUTER_METHOD', got '%s'", outerMethod.Name)
 	}
 
-	// Check nested component
-	if len(outerMethod.Components) != 1 {
-		t.Fatalf("expected 1 nested component, got %d", len(outerMethod.Components))
+	// Check nested child
+	if len(outerMethod.Children) != 1 {
+		t.Fatalf("expected 1 nested child, got %d", len(outerMethod.Children))
 	}
 
-	localType := outerMethod.Components[0]
+	localType := outerMethod.Children[0]
 	if localType.Name != "LT_LOCAL" {
 		t.Errorf("expected local type name 'LT_LOCAL', got '%s'", localType.Name)
 	}

@@ -20,12 +20,6 @@ func AnalysisToolDefs() []types.ToolDef {
 		), Handler: HandleGetCallGraph, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/cai/callgraph"},
 			Routes: []types.UniversalRoute{{Action: "analyze", TargetType: "CALL_GRAPH"}}},
 
-		{Tool: mcp.NewTool("GetObjectStructure",
-			mcp.WithDescription("Get structural overview of an ABAP object (classes, interfaces, FMs)"),
-			mcp.WithString("object_name", mcp.Required(), mcp.Description("Name of the object")),
-		), Handler: HandleGetObjectStructure, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/oo/classes"},
-			Routes: []types.UniversalRoute{{Action: "analyze", TargetType: "STRUCTURE"}}},
-
 		{Tool: mcp.NewTool("GetCallersOf",
 			mcp.WithDescription("Find all callers of a given ABAP object"),
 			mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT URI of the object")),
@@ -61,17 +55,6 @@ func HandleGetCallGraph(ctx context.Context, sys types.System, request mcp.CallT
 	}
 
 	result, _ := json.MarshalIndent(graph, "", "  ")
-	return mcp.NewToolResultText(string(result)), nil
-}
-
-func HandleGetObjectStructure(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	name, _ := request.GetArguments()["object_name"].(string)
-	structure, err := sys.ADT().GetObjectStructureCAI(ctx, name, 100)
-	if err != nil {
-		return types.ErrorResult(fmt.Sprintf("Failed to get structure: %v", err)), nil
-	}
-
-	result, _ := json.MarshalIndent(structure, "", "  ")
 	return mcp.NewToolResultText(string(result)), nil
 }
 

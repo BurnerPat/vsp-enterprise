@@ -23,5 +23,6 @@ func AllToolDefs() []types.ToolDef {
 	defs = append(defs, TraceToolDefs()...)
 	defs = append(defs, WorkflowToolDefs()...)
 	defs = append(defs, DebuggerLegacyToolDefs()...)
+	defs = append(defs, ObjectInfoToolDefs()...)
 	return defs
 }
