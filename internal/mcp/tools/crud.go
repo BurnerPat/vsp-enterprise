@@ -91,7 +91,7 @@ func CRUDToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetClassInfo",
 			mcp.WithDescription("Get class metadata without full source: methods, attributes, interfaces, superclass, abstract/final status."),
 			mcp.WithString("class_name", mcp.Required(), mcp.Description("Name of the ABAP class")),
-		), Handler: HandleGetClassInfo, ReadOnly: true, Focused: true},
+		), Handler: HandleGetClassInfo, ReadOnly: true, Focused: true, Endpoints: []string{"/sap/bc/adt/cai/objectexplorer/objects"}},
 
 		{Tool: mcp.NewTool("DeleteObject",
 			mcp.WithDescription("Delete an ABAP object (requires lock)"),
