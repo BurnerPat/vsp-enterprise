@@ -41,19 +41,15 @@ func VersionToolDefs() []types.ToolDef {
 		},
 		{
 			Tool: mcp.NewTool("CompareObjectVersions",
-				mcp.WithDescription("Compare two versions of an ABAP object with unified diff. Use version URIs from GetObjectVersions. Use 'current' as version2_uri to compare against the active version."),
-				mcp.WithString("type", mcp.Required(),
-					mcp.Description("Object type: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD")),
-				mcp.WithString("name", mcp.Required(),
-					mcp.Description("Object name")),
-				mcp.WithString("version1_uri", mcp.Required(),
-					mcp.Description("Version URI for first (older) version, from GetObjectVersions")),
-				mcp.WithString("version2_uri",
-					mcp.Description("Version URI for second (newer) version, from GetObjectVersions. Default: 'current' (compare against active version)")),
-				mcp.WithString("include",
-					mcp.Description("Class include type for CLAS: main, definitions, implementations, macros, testclasses")),
-				mcp.WithString("parent",
-					mcp.Description("Function group name (required for FUNC type)")),
+				mcp.WithDescription("Compare two versions of an ABAP object with unified diff. "+
+					"Works like `git diff <base> <target>`: lines prefixed with '-' exist only in base_version_uri, "+
+					"lines prefixed with '+' exist only in target_version_uri. "+
+					"Output is a git-style unified diff with `--- base/...` and `+++ target/...` headers. "+
+					"For chronological diffs, pass the OLDER version as base_version_uri and the NEWER as target_version_uri."),
+				mcp.WithString("base_version_uri", mcp.Required(),
+					mcp.Description("Version URI for the base (--- side), like the first argument in `git diff <base> <target>`. Use the OLDER version here. From GetObjectVersions.")),
+				mcp.WithString("target_version_uri", mcp.Required(),
+					mcp.Description("Version URI for the target (+++ side), like the second argument in `git diff <base> <target>`. Use the NEWER version here. From GetObjectVersions.")),
 			),
 			Handler:  HandleCompareObjectVersions,
 			ReadOnly: true,
@@ -104,27 +100,14 @@ func HandleGetObjectVersionSource(ctx context.Context, sys types.System, request
 }
 
 func HandleCompareObjectVersions(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	objectType, _ := request.GetArguments()["type"].(string)
-	name, _ := request.GetArguments()["name"].(string)
-	version1, _ := request.GetArguments()["version1_uri"].(string)
-	version2, _ := request.GetArguments()["version2_uri"].(string)
+	baseURI, _ := request.GetArguments()["base_version_uri"].(string)
+	targetURI, _ := request.GetArguments()["target_version_uri"].(string)
 
-	if objectType == "" || name == "" || version1 == "" {
-		return types.ErrorResult("type, name, and version1_uri are required"), nil
-	}
-	if version2 == "" {
-		version2 = "current"
+	if baseURI == "" || targetURI == "" {
+		return types.ErrorResult("base_version_uri and target_version_uri are required"), nil
 	}
 
-	opts := &adt.GetSourceOptions{}
-	if include, ok := request.GetArguments()["include"].(string); ok && include != "" {
-		opts.Include = include
-	}
-	if parent, ok := request.GetArguments()["parent"].(string); ok && parent != "" {
-		opts.Parent = parent
-	}
-
-	diff, err := sys.ADT().CompareObjectVersions(ctx, objectType, name, version1, version2, opts)
+	diff, err := sys.ADT().CompareObjectVersions(ctx, baseURI, targetURI)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("CompareObjectVersions failed: %v", err)), nil
 	}

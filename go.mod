@@ -6,6 +6,7 @@ toolchain go1.24.10
 
 require (
 	dario.cat/mergo v1.0.2
+	github.com/aymanbagabas/go-udiff v0.4.1
 	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d
 	github.com/chromedp/chromedp v0.14.2
 	github.com/joho/godotenv v1.5.1

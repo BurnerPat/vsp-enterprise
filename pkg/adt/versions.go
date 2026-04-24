@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/aymanbagabas/go-udiff"
 	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
@@ -65,39 +66,40 @@ func (c *Client) GetObjectVersionSource(ctx context.Context, versionURI string) 
 	return string(resp.Body), nil
 }
 
+// VersionDiff represents a unified diff between two object versions.
+type VersionDiff struct {
+	BaseVersionURI   string `json:"base_version_uri"`   // The base version URI (--- side)
+	TargetVersionURI string `json:"target_version_uri"` // The target version URI (+++ side)
+	Identical        bool   `json:"identical"`
+	AddedLines       int    `json:"addedLines"`   // Lines added going from base → target ('+' lines)
+	RemovedLines     int    `json:"removedLines"` // Lines removed going from base → target ('-' lines)
+	Diff             string `json:"diff"`
+}
+
 // CompareObjectVersions compares two versions of an ABAP object and returns a unified diff.
-// version1URI and version2URI are from GetObjectVersions output.
-// Use "current" as version2URI to compare against the active version.
-func (c *Client) CompareObjectVersions(ctx context.Context, objectType, name string, version1URI, version2URI string, opts *GetSourceOptions) (*SourceDiff, error) {
+// Like `git diff <base> <target>`: baseURI is the --- side, targetURI is the +++ side.
+func (c *Client) CompareObjectVersions(ctx context.Context, baseURI, targetURI string) (*VersionDiff, error) {
 	if err := c.checkSafety(OpRead, "CompareObjectVersions"); err != nil {
 		return nil, err
 	}
 
-	source1, err := c.GetObjectVersionSource(ctx, version1URI)
+	baseSource, err := c.GetObjectVersionSource(ctx, baseURI)
 	if err != nil {
-		return nil, fmt.Errorf("getting version 1 source: %w", err)
+		return nil, fmt.Errorf("getting base version source: %w", err)
 	}
 
-	var source2 string
-	if version2URI == "current" {
-		source2, err = c.GetSource(ctx, objectType, name, opts)
-		if err != nil {
-			return nil, fmt.Errorf("getting current source: %w", err)
-		}
-	} else {
-		source2, err = c.GetObjectVersionSource(ctx, version2URI)
-		if err != nil {
-			return nil, fmt.Errorf("getting version 2 source: %w", err)
-		}
+	targetSource, err := c.GetObjectVersionSource(ctx, targetURI)
+	if err != nil {
+		return nil, fmt.Errorf("getting target version source: %w", err)
 	}
 
-	label1 := fmt.Sprintf("%s:%s@%s", objectType, name, extractVersionLabel(version1URI))
-	label2 := fmt.Sprintf("%s:%s@%s", objectType, name, extractVersionLabel(version2URI))
+	baseLabel := fmt.Sprintf("base/%s", extractVersionLabel(baseURI))
+	targetLabel := fmt.Sprintf("target/%s", extractVersionLabel(targetURI))
 
-	result := &SourceDiff{
-		Object1:   label1,
-		Object2:   label2,
-		Identical: source1 == source2,
+	result := &VersionDiff{
+		BaseVersionURI:   baseURI,
+		TargetVersionURI: targetURI,
+		Identical:        baseSource == targetSource,
 	}
 
 	if result.Identical {
@@ -105,9 +107,7 @@ func (c *Client) CompareObjectVersions(ctx context.Context, objectType, name str
 		return result, nil
 	}
 
-	lines1 := strings.Split(source1, "\n")
-	lines2 := strings.Split(source2, "\n")
-	result.Diff = generateUnifiedDiff(label1, label2, lines1, lines2)
+	result.Diff = udiff.Unified(baseLabel, targetLabel, baseSource, targetSource)
 
 	for _, line := range strings.Split(result.Diff, "\n") {
 		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
