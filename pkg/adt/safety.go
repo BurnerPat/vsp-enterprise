@@ -264,12 +264,12 @@ func (s *SafetyConfig) CheckTransport(transport, opName string, isWrite bool) er
 	}
 
 	// For write operations or when neither flag is set, require EnableTransports
-	if !s.EnableTransports {
-		if s.AllowTransportableEdits && isWrite {
-			return fmt.Errorf("connection write operation '%s' requires --enable-transports flag (--allow-transportable-edits only enables read operations)", opName)
-		}
-		return fmt.Errorf("connection operation '%s' is blocked: transports not enabled (use --enable-transports or SAP_ENABLE_TRANSPORTS=true)", opName)
+	// if !s.EnableTransports {
+	if s.AllowTransportableEdits && isWrite && !s.EnableTransports {
+		return fmt.Errorf("connection write operation '%s' requires --enable-transports flag (--allow-transportable-edits only enables read operations)", opName)
 	}
+	// return fmt.Errorf("connection operation '%s' is blocked: transports not enabled (use --enable-transports or SAP_ENABLE_TRANSPORTS=true)", opName)
+	// }
 
 	// Check write permissions
 	if isWrite && s.TransportReadOnly {
