@@ -21,6 +21,11 @@ const (
 	SessionKeep      SessionType = "keep"
 )
 
+// ReauthFunc is a callback that re-authenticates and returns fresh cookies.
+// It is invoked automatically when the session expires and cookie-based auth
+// needs to be refreshed (e.g., browser SSO re-login).
+type ReauthFunc func(ctx context.Context) (map[string]string, error)
+
 // HttpConnectionConfig holds the parameters needed to create an HttpConnection.
 // The root adt.Config is translated into this struct by the Client constructor
 // so that the connection package has no dependency on adt.Config.
@@ -34,6 +39,7 @@ type HttpConnectionConfig struct {
 	SessionType        SessionType
 	Timeout            time.Duration
 	Cookies            map[string]string // Cookie-based auth (alternative to basic auth)
+	Reauth             ReauthFunc        // Optional: called on auth failure to get fresh cookies
 }
 
 // HasBasicAuth returns true if username and password are both non-empty.
@@ -132,6 +138,16 @@ func (c *HttpConnection) SendRequest(ctx context.Context, req *Request) (*AdtRes
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Detect SAP auth redirect pages (BTP/Cloud returns HTTP 200 with HTML
+	// containing an OAuth/SAML redirect when the session expires).
+	if resp.StatusCode == http.StatusOK && isAuthRedirectPage(body) {
+		c.ClearSession()
+		if err := c.fetchCSRFToken(ctx); err != nil {
+			return nil, fmt.Errorf("re-authenticating after auth redirect: %w", err)
+		}
+		return c.retryRequest(ctx, req)
 	}
 
 	// Handle CSRF token refresh on 403.
@@ -287,12 +303,67 @@ func (c *HttpConnection) fetchCSRFToken(ctx context.Context) error {
 	if token == "" || token == "Required" {
 		switch resp.StatusCode {
 		case http.StatusUnauthorized:
+			// If we have a reauth callback and are using cookie auth, try to re-authenticate.
+			if c.config.Reauth != nil && !c.config.HasBasicAuth() {
+				return c.reauthAndFetchCSRF(ctx)
+			}
 			return fmt.Errorf("authentication failed (401): check username/password")
 		case http.StatusForbidden:
 			return fmt.Errorf("access forbidden (403): check user authorizations")
 		default:
 			return fmt.Errorf("no CSRF token in response (HTTP %d)", resp.StatusCode)
 		}
+	}
+
+	c.SetCSRFToken(token)
+	return nil
+}
+
+// reauthAndFetchCSRF invokes the ReauthFunc to get fresh cookies, updates the
+// connection config, and retries the CSRF token fetch.
+func (c *HttpConnection) reauthAndFetchCSRF(ctx context.Context) error {
+	newCookies, err := c.config.Reauth(ctx)
+	if err != nil {
+		return fmt.Errorf("re-authentication failed: %w", err)
+	}
+	if len(newCookies) == 0 {
+		return fmt.Errorf("re-authentication returned no cookies")
+	}
+
+	// Hot-swap cookies in the config.
+	c.config.Cookies = newCookies
+
+	// Retry the CSRF token fetch with fresh cookies.
+	reqURL, err := BuildFullURL(c.config.BaseURL, "/sap/bc/adt/core/discovery", nil, c.config.Client, c.config.Language)
+	if err != nil {
+		return fmt.Errorf("building URL: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodHead, reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	for name, value := range c.config.Cookies {
+		httpReq.AddCookie(&http.Cookie{Name: name, Value: value})
+	}
+	httpReq.Header.Set("X-CSRF-Token", "fetch")
+	httpReq.Header.Set("Accept", "*/*")
+
+	if c.config.SessionType == SessionStateful {
+		httpReq.Header.Set("X-sap-adt-sessiontype", "stateful")
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("executing request after reauth: %w", err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	token := resp.Header.Get("X-CSRF-Token")
+	if token == "" || token == "Required" {
+		return fmt.Errorf("authentication still failing after reauth (HTTP %d)", resp.StatusCode)
 	}
 
 	c.SetCSRFToken(token)
@@ -394,4 +465,23 @@ func stripSecureFlag(cookie string) string {
 		}
 	}
 	return strings.Join(filtered, ";")
+}
+
+// isAuthRedirectPage detects SAP BTP/Cloud auth redirect pages.
+// When the session expires, SAP Cloud (XSUAA) returns HTTP 200 with an HTML page
+// containing a <script> that sets cookies and redirects to the OAuth authorize endpoint.
+// This is NOT a proper 401, so we detect it by content inspection.
+func isAuthRedirectPage(body []byte) bool {
+	if len(body) == 0 || len(body) > 8192 {
+		return false // Empty bodies or large real responses are not redirect pages
+	}
+	s := string(body)
+	// Must start with HTML markup
+	if !strings.Contains(s[:min(100, len(s))], "<html") && !strings.Contains(s[:min(100, len(s))], "<HTML") {
+		return false
+	}
+	// Look for OAuth/SAML redirect indicators in the page content
+	return (strings.Contains(s, "/oauth/authorize") || strings.Contains(s, "/saml2/idp/sso") ||
+		strings.Contains(s, "fragmentAfterLogin") || strings.Contains(s, "locationAfterLogin")) &&
+		strings.Contains(s, "<script")
 }
