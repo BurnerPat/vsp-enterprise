@@ -4,6 +4,8 @@ package adt
 import (
 	"strings"
 	"time"
+
+	"github.com/oisee/vibing-steampunk/pkg/adt/connection"
 )
 
 // SessionType defines how the client manages server sessions.
@@ -38,6 +40,8 @@ type Config struct {
 	Timeout time.Duration
 	// Cookies for cookie-based authentication (alternative to basic auth)
 	Cookies map[string]string
+	// ReauthFunc is called when cookie-based auth expires to obtain fresh cookies.
+	ReauthFunc connection.ReauthFunc
 	// Verbose enables verbose logging
 	Verbose bool
 	// Safety defines protection parameters to prevent unintended modifications
@@ -106,6 +110,14 @@ func WithTimeout(d time.Duration) Option {
 func WithCookies(cookies map[string]string) Option {
 	return func(c *Config) {
 		c.Cookies = cookies
+	}
+}
+
+// WithReauthFunc sets a callback for automatic session re-authentication.
+// When cookie-based auth expires (401), this function is called to obtain fresh cookies.
+func WithReauthFunc(fn connection.ReauthFunc) Option {
+	return func(c *Config) {
+		c.ReauthFunc = fn
 	}
 }
 

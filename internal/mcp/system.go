@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/oisee/vibing-steampunk/internal/config"
@@ -126,6 +127,31 @@ func newSystemInstance(cfg config.SystemConfig, cookies map[string]string) (*Sys
 	// the ADT client so the HTTP connection includes them from the first request.
 	if len(cookies) > 0 {
 		opts = append(opts, adt.WithCookies(cookies))
+	}
+
+	// If browser auth is configured, set up automatic re-authentication
+	// so that expired sessions can be transparently refreshed.
+	if cfg.BrowserAuth && cfg.URL != "" {
+		sysCfg := cfg // capture for closure
+		opts = append(opts, adt.WithReauthFunc(func(ctx context.Context) (map[string]string, error) {
+			timeout := 120 * time.Second
+			if sysCfg.BrowserAuthTimeout != "" {
+				if d, err := time.ParseDuration(sysCfg.BrowserAuthTimeout); err == nil {
+					timeout = d
+				}
+			}
+			_, _ = fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Session expired, re-authenticating...\n")
+			newCookies, err := adt.BrowserLoginWithTarget(ctx, sysCfg.URL, sysCfg.BrowserAuthURL, sysCfg.Insecure, timeout, sysCfg.BrowserExec, sysCfg.IsVerbose())
+			if err != nil {
+				return nil, err
+			}
+			if sysCfg.CookieSave != "" {
+				if saveErr := adt.SaveCookiesToFile(newCookies, sysCfg.URL, sysCfg.CookieSave); saveErr != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "[BROWSER-AUTH] Warning: failed to save refreshed cookies: %v\n", saveErr)
+				}
+			}
+			return newCookies, nil
+		}))
 	}
 
 	adtClient, sidecar, err := createADTClient(&cfg, opts)

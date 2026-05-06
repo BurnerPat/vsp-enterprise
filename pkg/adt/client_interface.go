@@ -49,5 +49,6 @@ func HttpConfigFromConfig(cfg *Config) *connection.HttpConnectionConfig {
 		SessionType:        connection.SessionType(cfg.SessionType),
 		Timeout:            cfg.Timeout,
 		Cookies:            cfg.Cookies,
+		Reauth:             cfg.ReauthFunc,
 	}
 }
