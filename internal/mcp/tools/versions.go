@@ -7,7 +7,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/oisee/vibing-steampunk/internal/mcp/types"
-	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
 // VersionToolDefs returns tool definitions for object version history tools.
@@ -17,7 +16,7 @@ func VersionToolDefs() []types.ToolDef {
 			Tool: mcp.NewTool("GetObjectVersions",
 				mcp.WithDescription("List version history (revisions) of an ABAP object. Returns versions with dates, authors, and transport requests. Use version URIs with GetObjectVersionSource or CompareObjectVersions."),
 				mcp.WithString("type", mcp.Required(),
-					mcp.Description("Object type: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD, TABL")),
+					mcp.Description("Object type: program, class, interface, function_module, include, cds_view, behavior_definition, service_definition, table (also accepts short codes: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD, TABL)")),
 				mcp.WithString("name", mcp.Required(),
 					mcp.Description("Object name")),
 				mcp.WithString("include",
@@ -68,15 +67,15 @@ func HandleGetObjectVersions(ctx context.Context, sys types.System, request mcp.
 		return types.ErrorResult("type and name are required"), nil
 	}
 
-	opts := &adt.GetSourceOptions{}
-	if include, ok := request.GetArguments()["include"].(string); ok && include != "" {
-		opts.Include = include
-	}
-	if parent, ok := request.GetArguments()["parent"].(string); ok && parent != "" {
-		opts.Parent = parent
+	include, _ := request.GetArguments()["include"].(string)
+	parent, _ := request.GetArguments()["parent"].(string)
+
+	ref, err := resolveRef(objectType, name, parent, include, "")
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("Invalid object reference: %v", err)), nil
 	}
 
-	revisions, err := sys.ADT().GetObjectVersions(ctx, objectType, name, opts)
+	revisions, err := sys.ADT().GetObjectVersions(ctx, ref)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("GetObjectVersions failed: %v", err)), nil
 	}

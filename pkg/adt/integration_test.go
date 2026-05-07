@@ -1475,7 +1475,11 @@ func TestIntegration_GetSource_RAP(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			source, err := client.GetSource(ctx, tc.objectType, tc.objectName, nil)
+			ref, err := NewObjectRef(tc.objectType, tc.objectName)
+			if err != nil {
+				t.Fatalf("NewObjectRef(%s, %s) failed: %v", tc.objectType, tc.objectName, err)
+			}
+			source, err := client.GetSource(ctx, ref)
 			if err != nil {
 				t.Fatalf("GetSource(%s, %s) failed: %v", tc.objectType, tc.objectName, err)
 			}
@@ -1541,7 +1545,8 @@ define view ZTEST_MCP_I_FLIGHT as select from sflight {
       seatsocc as SeatsOccupied
 }`
 
-	ddlsResult, err := client.WriteSource(ctx, "DDLS", ddlsName, ddlsSource, &WriteSourceOptions{
+	ddlsRef, _ := NewObjectRef("DDLS", ddlsName)
+	ddlsResult, err := client.WriteSource(ctx, ddlsRef, ddlsSource, &WriteSourceOptions{
 		Mode:        WriteModeUpsert,
 		Package:     pkg,
 		Description: "Flight Data for OData Test",
@@ -1561,7 +1566,8 @@ define service ZTEST_MCP_SD_FLIGHT {
   expose ZTEST_MCP_I_FLIGHT as Flights;
 }`
 
-	srvdResult, err := client.WriteSource(ctx, "SRVD", srvdName, srvdSource, &WriteSourceOptions{
+	srvdRef, _ := NewObjectRef("SRVD", srvdName)
+	srvdResult, err := client.WriteSource(ctx, srvdRef, srvdSource, &WriteSourceOptions{
 		Mode:        WriteModeUpsert,
 		Package:     pkg,
 		Description: "Flight Service Definition",

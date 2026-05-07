@@ -219,8 +219,13 @@ func HandleGetTransportDiff(ctx context.Context, sys types.System, request mcp.C
 			continue
 		}
 
-		opts := &adt.GetSourceOptions{Include: q.Include}
-		revisions, err := sys.ADT().GetObjectVersions(ctx, q.ObjectType, q.Name, opts)
+		ref, refErr := resolveRef(q.ObjectType, q.Name, "", q.Include, "")
+		if refErr != nil {
+			objDiff.Message = fmt.Sprintf("Cannot resolve object reference: %v", refErr)
+			result.Objects = append(result.Objects, objDiff)
+			continue
+		}
+		revisions, err := sys.ADT().GetObjectVersions(ctx, ref)
 		if err != nil {
 			objDiff.Message = fmt.Sprintf("Cannot retrieve version history: %v", err)
 			result.Objects = append(result.Objects, objDiff)

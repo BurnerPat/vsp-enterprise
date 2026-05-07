@@ -146,7 +146,9 @@ func (c *Client) UpdateSource(ctx context.Context, objectSourceURL string, sourc
 // --- Create Object Operations ---
 
 // CreatableObjectType defines types of ABAP objects that can be created.
-type CreatableObjectType string
+// These are qualified ADT type strings (e.g., "CLAS/OC").
+// Prefer using the ObjectType registry (ResolveObjectType) for new code.
+type CreatableObjectType = string
 
 const (
 	ObjectTypeProgram       CreatableObjectType = "PROG/P"
@@ -196,69 +198,24 @@ type CreateObjectOptions struct {
 }
 
 // objectTypeInfo contains metadata for creating object types.
+// This is now derived from the central ObjectType registry.
 type objectTypeInfo struct {
 	creationPath string
 	rootName     string
 	namespace    string
 }
 
-var objectTypes = map[CreatableObjectType]objectTypeInfo{
-	ObjectTypeProgram: {
-		creationPath: "/sap/bc/adt/programs/programs",
-		rootName:     "program:abapProgram",
-		namespace:    `xmlns:program="http://www.sap.com/adt/programs/programs"`,
-	},
-	ObjectTypeInclude: {
-		creationPath: "/sap/bc/adt/programs/includes",
-		rootName:     "include:abapInclude",
-		namespace:    `xmlns:include="http://www.sap.com/adt/programs/includes"`,
-	},
-	ObjectTypeClass: {
-		creationPath: "/sap/bc/adt/oo/classes",
-		rootName:     "class:abapClass",
-		namespace:    `xmlns:class="http://www.sap.com/adt/oo/classes"`,
-	},
-	ObjectTypeInterface: {
-		creationPath: "/sap/bc/adt/oo/interfaces",
-		rootName:     "intf:abapInterface",
-		namespace:    `xmlns:intf="http://www.sap.com/adt/oo/interfaces"`,
-	},
-	ObjectTypeFunctionGroup: {
-		creationPath: "/sap/bc/adt/functions/groups",
-		rootName:     "group:abapFunctionGroup",
-		namespace:    `xmlns:group="http://www.sap.com/adt/functions/groups"`,
-	},
-	ObjectTypeFunctionMod: {
-		creationPath: "/sap/bc/adt/functions/groups/%s/fmodules",
-		rootName:     "fmodule:abapFunctionModule",
-		namespace:    `xmlns:fmodule="http://www.sap.com/adt/functions/fmodules"`,
-	},
-	ObjectTypePackage: {
-		creationPath: "/sap/bc/adt/packages",
-		rootName:     "pack:package",
-		namespace:    `xmlns:pack="http://www.sap.com/adt/packages"`,
-	},
-	// RAP object types
-	ObjectTypeDDLS: {
-		creationPath: "/sap/bc/adt/ddic/ddl/sources",
-		rootName:     "ddl:ddlSource",
-		namespace:    `xmlns:ddl="http://www.sap.com/adt/ddic/ddlsources"`,
-	},
-	ObjectTypeBDEF: {
-		creationPath: "/sap/bc/adt/bo/behaviordefinitions",
-		rootName:     "bdef:behaviorDefinition",
-		namespace:    `xmlns:bdef="http://www.sap.com/adt/bo/behaviordefinitions"`,
-	},
-	ObjectTypeSRVD: {
-		creationPath: "/sap/bc/adt/ddic/srvd/sources",
-		rootName:     "srvd:srvdSource",
-		namespace:    `xmlns:srvd="http://www.sap.com/adt/ddic/srvdsources"`,
-	},
-	ObjectTypeSRVB: {
-		creationPath: "/sap/bc/adt/businessservices/bindings",
-		rootName:     "srvb:serviceBinding",
-		namespace:    `xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings"`,
-	},
+// getObjectTypeInfo looks up creation info from the central registry.
+func getObjectTypeInfo(adtType CreatableObjectType) (objectTypeInfo, bool) {
+	ot := ObjectTypeByADTType(adtType)
+	if ot == nil || ot.CreationPath == "" {
+		return objectTypeInfo{}, false
+	}
+	return objectTypeInfo{
+		creationPath: ot.CreationPath,
+		rootName:     ot.CreationRootName,
+		namespace:    ot.CreationNamespace,
+	}, true
 }
 
 // tryCleanupOrphanLock attempts to clear an orphan lock left behind by a failed creation.
@@ -303,7 +260,7 @@ func (c *Client) CreateObject(ctx context.Context, opts CreateObjectOptions) err
 		return err
 	}
 
-	typeInfo, ok := objectTypes[opts.ObjectType]
+	typeInfo, ok := getObjectTypeInfo(opts.ObjectType)
 	if !ok {
 		return fmt.Errorf("unsupported object type: %s", opts.ObjectType)
 	}
@@ -611,47 +568,28 @@ func (c *Client) DeleteObject(ctx context.Context, objectURL string, lockHandle 
 // GetObjectURL returns the ADT URL for an object based on its type and name.
 // All names are URL-encoded to support namespaced objects like /UI5/CL_REPOSITORY_LOAD.
 func GetObjectURL(objectType CreatableObjectType, name string, parentName string) string {
-	name = strings.ToUpper(name)
-	encodedName := url.PathEscape(name)
-
-	switch objectType {
-	case ObjectTypeProgram:
-		return fmt.Sprintf("/sap/bc/adt/programs/programs/%s", encodedName)
-	case ObjectTypeInclude:
-		return fmt.Sprintf("/sap/bc/adt/programs/includes/%s", encodedName)
-	case ObjectTypeClass:
-		return fmt.Sprintf("/sap/bc/adt/oo/classes/%s", encodedName)
-	case ObjectTypeInterface:
-		return fmt.Sprintf("/sap/bc/adt/oo/interfaces/%s", encodedName)
-	case ObjectTypeFunctionGroup:
-		return fmt.Sprintf("/sap/bc/adt/functions/groups/%s", encodedName)
-	case ObjectTypeFunctionMod:
-		parentName = strings.ToUpper(parentName)
-		encodedParent := url.PathEscape(parentName)
-		return fmt.Sprintf("/sap/bc/adt/functions/groups/%s/fmodules/%s", encodedParent, encodedName)
-	case ObjectTypePackage:
-		return fmt.Sprintf("/sap/bc/adt/packages/%s", encodedName)
-	// RAP object types - use lowercase for CDS objects
-	case ObjectTypeDDLS:
-		return fmt.Sprintf("/sap/bc/adt/ddic/ddl/sources/%s", url.PathEscape(strings.ToLower(name)))
-	case ObjectTypeBDEF:
-		return fmt.Sprintf("/sap/bc/adt/bo/behaviordefinitions/%s", url.PathEscape(strings.ToLower(name)))
-	case ObjectTypeSRVD:
-		return fmt.Sprintf("/sap/bc/adt/ddic/srvd/sources/%s", url.PathEscape(strings.ToLower(name)))
-	case ObjectTypeSRVB:
-		return fmt.Sprintf("/sap/bc/adt/businessservices/bindings/%s", url.PathEscape(strings.ToLower(name)))
-	default:
+	var opts []RefOption
+	if parentName != "" {
+		opts = append(opts, WithParent(parentName))
+	}
+	ref, err := NewObjectRef(objectType, name, opts...)
+	if err != nil {
 		return ""
 	}
+	return ref.BaseURI()
 }
 
 // GetSourceURL returns the source URL for an object.
 func GetSourceURL(objectType CreatableObjectType, name string, parentName string) string {
-	objectURL := GetObjectURL(objectType, name, parentName)
-	if objectURL == "" {
+	var opts []RefOption
+	if parentName != "" {
+		opts = append(opts, WithParent(parentName))
+	}
+	ref, err := NewObjectRef(objectType, name, opts...)
+	if err != nil {
 		return ""
 	}
-	return objectURL + "/source/main"
+	return ref.SourceURI()
 }
 
 // --- Class Include Operations ---

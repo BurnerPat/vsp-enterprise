@@ -69,7 +69,8 @@ WRITE: 'Hello, World!'.`
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
 	client := newWorkflowTestClient(cfg, mock)
 
-	result, err := client.GetSource(context.Background(), "PROG", "ZTEST", &GetSourceOptions{})
+	ref, _ := NewObjectRef("PROG", "ZTEST")
+	result, err := client.GetSource(context.Background(), ref)
 	if err != nil {
 		t.Fatalf("GetSource failed: %v", err)
 	}
@@ -96,7 +97,8 @@ func TestClient_GetSource_Class(t *testing.T) {
 	client := newWorkflowTestClient(cfg, mock)
 
 	// Test without include parameter (returns full class)
-	result, err := client.GetSource(context.Background(), "CLAS", "ZCL_TEST", &GetSourceOptions{})
+	ref, _ := NewObjectRef("CLAS", "ZCL_TEST")
+	result, err := client.GetSource(context.Background(), ref)
 	if err != nil {
 		t.Fatalf("GetSource failed: %v", err)
 	}
@@ -121,9 +123,8 @@ ENDFUNCTION.`
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
 	client := newWorkflowTestClient(cfg, mock)
 
-	result, err := client.GetSource(context.Background(), "FUNC", "Z_TEST_FUNCTION", &GetSourceOptions{
-		Parent: "ZFUGR",
-	})
+	ref, _ := NewObjectRef("FUNC", "Z_TEST_FUNCTION", WithParent("ZFUGR"))
+	result, err := client.GetSource(context.Background(), ref)
 	if err != nil {
 		t.Fatalf("GetSource failed: %v", err)
 	}
@@ -135,20 +136,13 @@ ENDFUNCTION.`
 
 // TestClient_GetSource_InvalidType tests GetSource with invalid type
 func TestClient_GetSource_InvalidType(t *testing.T) {
-	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
-	client := newWorkflowTestClient(cfg, &mockWorkflowTransport{
-		responses: map[string]*http.Response{
-			"discovery": newWorkflowTestResponse("OK"),
-		},
-	})
-
-	_, err := client.GetSource(context.Background(), "INVALID", "ZTEST", &GetSourceOptions{})
+	_, err := NewObjectRef("INVALID", "ZTEST")
 	if err == nil {
-		t.Fatal("GetSource should fail with invalid type")
+		t.Fatal("NewObjectRef should fail with invalid type")
 	}
 
-	if !strings.Contains(err.Error(), "unsupported object type") {
-		t.Errorf("Expected 'unsupported object type' error, got: %v", err)
+	if !strings.Contains(err.Error(), "unknown object type") {
+		t.Errorf("Expected 'unknown object type' error, got: %v", err)
 	}
 }
 
@@ -174,7 +168,8 @@ WRITE: 'Hello, World!'.`
 	cfg := NewConfig("https://sap.example.com:44300", "user", "pass")
 	client := newWorkflowTestClient(cfg, mock)
 
-	result, err := client.WriteSource(context.Background(), "PROG", "ZTEST", sourceCode, &WriteSourceOptions{
+	ref, _ := NewObjectRef("PROG", "ZTEST")
+	result, err := client.WriteSource(context.Background(), ref, sourceCode, &WriteSourceOptions{
 		Mode:        WriteModeCreate,
 		Description: "Test program",
 		Package:     "$TMP",
@@ -202,7 +197,8 @@ WRITE: 'Updated!'.`
 		},
 	})
 
-	result, err := client.WriteSource(context.Background(), "PROG", "ZTEST", sourceCode, &WriteSourceOptions{
+	ref, _ := NewObjectRef("PROG", "ZTEST")
+	result, err := client.WriteSource(context.Background(), ref, sourceCode, &WriteSourceOptions{
 		Mode: WriteModeUpdate,
 	})
 

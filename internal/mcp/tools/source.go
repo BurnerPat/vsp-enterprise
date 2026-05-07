@@ -19,7 +19,7 @@ func UnifiedToolDefs() []types.ToolDef {
 				mcp.WithDescription("Unified tool for reading ABAP source code across different object types. Replaces GetProgram, GetClass, GetInterface, GetFunction, GetInclude, GetFunctionGroup, GetClassInclude."),
 				mcp.WithString("object_type",
 					mcp.Required(),
-					mcp.Description("Object type: PROG (program), CLAS (class), INTF (interface), FUNC (function module), FUGR (function group), INCL (include), DDLS (CDS DDL source), VIEW (DDIC view), BDEF (behavior definition), SRVD (service definition), SRVB (service binding), MSAG (message class)"),
+					mcp.Description("Object type: program, class, interface, function_module, function_group, include, cds_view, view, behavior_definition, service_definition, service_binding, message_class (also accepts: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, VIEW, BDEF, SRVD, SRVB, MSAG)"),
 				),
 				mcp.WithString("name",
 					mcp.Required(),
@@ -58,7 +58,7 @@ func UnifiedToolDefs() []types.ToolDef {
 				mcp.WithDescription("Unified tool for writing ABAP source code with automatic create/update detection. Supports PROG, CLAS, INTF, and RAP types (DDLS, BDEF, SRVD)."),
 				mcp.WithString("object_type",
 					mcp.Required(),
-					mcp.Description("Object type: PROG (program), CLAS (class), INTF (interface), DDLS (CDS view), BDEF (behavior definition), SRVD (service definition)"),
+					mcp.Description("Object type: program, class, interface, cds_view, behavior_definition, service_definition (also accepts: PROG, CLAS, INTF, DDLS, BDEF, SRVD, SRVB)"),
 				),
 				mcp.WithString("name",
 					mcp.Required(),
@@ -121,13 +121,12 @@ func HandleGetSource(ctx context.Context, sys types.System, request mcp.CallTool
 	include, _ := request.GetArguments()["include"].(string)
 	method, _ := request.GetArguments()["method"].(string)
 
-	opts := &adt.GetSourceOptions{
-		Parent:  parent,
-		Include: include,
-		Method:  method,
+	ref, err := resolveRef(objectType, name, parent, include, method)
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("Invalid object reference: %v", err)), nil
 	}
 
-	source, err := sys.ADT().GetSource(ctx, objectType, name, opts)
+	source, err := sys.ADT().GetSource(ctx, ref)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("GetSource failed: %v", err)), nil
 	}
@@ -159,19 +158,23 @@ func HandleWriteSource(ctx context.Context, sys types.System, request mcp.CallTo
 	transport, _ := request.GetArguments()["connection"].(string)
 	method, _ := request.GetArguments()["method"].(string)
 
+	ref, err := resolveRef(objectType, name, "", "", method)
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("Invalid object reference: %v", err)), nil
+	}
+
 	opts := &adt.WriteSourceOptions{
 		Description: description,
 		Package:     packageName,
 		TestSource:  testSource,
 		Transport:   transport,
-		Method:      method,
 	}
 
 	if mode != "" {
 		opts.Mode = adt.WriteSourceMode(mode)
 	}
 
-	result, err := sys.ADT().WriteSource(ctx, objectType, name, source, opts)
+	result, err := sys.ADT().WriteSource(ctx, ref, source, opts)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("WriteSource failed: %v", err)), nil
 	}

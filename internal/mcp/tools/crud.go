@@ -386,25 +386,22 @@ func HandleCompareSource(ctx context.Context, sys types.System, request mcp.Call
 		return types.ErrorResult("type1, name1, type2, and name2 are all required"), nil
 	}
 
-	// Build options for first object
-	opts1 := &adt.GetSourceOptions{}
-	if inc, ok := request.GetArguments()["include1"].(string); ok && inc != "" {
-		opts1.Include = inc
+	// Build refs for first and second objects
+	include1, _ := request.GetArguments()["include1"].(string)
+	parent1, _ := request.GetArguments()["parent1"].(string)
+	include2, _ := request.GetArguments()["include2"].(string)
+	parent2, _ := request.GetArguments()["parent2"].(string)
+
+	ref1, err := resolveRef(type1, name1, parent1, include1, "")
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("Invalid first object reference: %v", err)), nil
 	}
-	if parent, ok := request.GetArguments()["parent1"].(string); ok && parent != "" {
-		opts1.Parent = parent
+	ref2, err := resolveRef(type2, name2, parent2, include2, "")
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("Invalid second object reference: %v", err)), nil
 	}
 
-	// Build options for second object
-	opts2 := &adt.GetSourceOptions{}
-	if inc, ok := request.GetArguments()["include2"].(string); ok && inc != "" {
-		opts2.Include = inc
-	}
-	if parent, ok := request.GetArguments()["parent2"].(string); ok && parent != "" {
-		opts2.Parent = parent
-	}
-
-	diff, err := sys.ADT().CompareSource(ctx, type1, name1, type2, name2, opts1, opts2)
+	diff, err := sys.ADT().CompareSource(ctx, ref1, ref2)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("CompareSource failed: %v", err)), nil
 	}

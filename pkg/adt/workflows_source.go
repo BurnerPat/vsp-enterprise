@@ -18,7 +18,9 @@ var _ = time.Now
 
 // --- Unified Tools (Focused Mode) ---
 
-// GetSourceOptions configures GetSource behavior
+// GetSourceOptions configures GetSource behavior.
+// Deprecated: Use ObjectRef fields (Include, Method, Parent) instead.
+// This struct is kept only for backward-compatible internal helpers.
 type GetSourceOptions struct {
 	Parent  string // Function group name (required for FUNC type)
 	Include string // Class include type: definitions, implementations, macros, testclasses (optional for CLAS type)
@@ -26,7 +28,7 @@ type GetSourceOptions struct {
 }
 
 // GetSource is a unified tool for reading ABAP source code across different object types.
-// Replaces GetProgram, GetClass, GetInterface, GetFunction, GetInclude, GetFunctionGroup, GetClassInclude.
+// The ObjectRef carries the type, name, parent, include, and method fields.
 //
 // Supported types:
 //   - PROG: Programs (name = program name)
@@ -41,46 +43,36 @@ type GetSourceOptions struct {
 //   - SRVD: Service Definitions (name = SRVD name) - RAP service exposure
 //   - SRVB: Service Bindings (name = SRVB name) - RAP protocol binding (returns JSON metadata)
 //   - MSAG: Message classes (name = message class name) - returns JSON with all messages
-func (c *Client) GetSource(ctx context.Context, objectType, name string, opts *GetSourceOptions) (string, error) {
+func (c *Client) GetSource(ctx context.Context, ref *ObjectRef) (string, error) {
 	// Safety check for read operations
 	if err := c.checkSafety(OpRead, "GetSource"); err != nil {
 		return "", err
 	}
 
-	if opts == nil {
-		opts = &GetSourceOptions{}
-	}
-
-	objectType = strings.ToUpper(objectType)
-	name = strings.ToUpper(name)
-
-	switch objectType {
+	switch ref.Type.ShortCode {
 	case "PROG":
-		return c.GetProgram(ctx, name)
+		return c.GetProgram(ctx, ref.Name)
 
 	case "CLAS":
 		// Method-level source extraction
-		if opts.Method != "" {
-			return c.GetClassMethodSource(ctx, name, opts.Method)
+		if ref.Method != "" {
+			return c.GetClassMethodSource(ctx, ref.Name, ref.Method)
 		}
 		// Include-level source extraction
-		if opts.Include != "" {
-			return c.GetClassInclude(ctx, name, ClassIncludeType(opts.Include))
+		if ref.Include != "" {
+			return c.GetClassInclude(ctx, ref.Name, ClassIncludeType(ref.Include))
 		}
-		return c.GetClassSource(ctx, name)
+		return c.GetClassSource(ctx, ref.Name)
 
 	case "INTF":
-		return c.GetInterface(ctx, name)
+		return c.GetInterface(ctx, ref.Name)
 
 	case "FUNC":
-		if opts.Parent == "" {
-			return "", fmt.Errorf("parent (function group name) is required for FUNC type")
-		}
-		return c.GetFunction(ctx, name, opts.Parent)
+		return c.GetFunction(ctx, ref.Name, ref.Parent)
 
 	case "FUGR":
 		// GetFunctionGroup returns JSON metadata (function module list), not source
-		fg, err := c.GetFunctionGroup(ctx, name)
+		fg, err := c.GetFunctionGroup(ctx, ref.Name)
 		if err != nil {
 			return "", err
 		}
@@ -92,23 +84,23 @@ func (c *Client) GetSource(ctx context.Context, objectType, name string, opts *G
 		return string(data), nil
 
 	case "INCL":
-		return c.GetInclude(ctx, name)
+		return c.GetInclude(ctx, ref.Name)
 
 	case "DDLS":
-		return c.GetDDLS(ctx, name)
+		return c.GetDDLS(ctx, ref.Name)
 
 	case "VIEW":
-		return c.GetView(ctx, name)
+		return c.GetView(ctx, ref.Name)
 
 	case "BDEF":
-		return c.GetBDEF(ctx, name)
+		return c.GetBDEF(ctx, ref.Name)
 
 	case "SRVD":
-		return c.GetSRVD(ctx, name)
+		return c.GetSRVD(ctx, ref.Name)
 
 	case "SRVB":
 		// GetSRVB returns metadata structure, serialize to JSON
-		sb, err := c.GetSRVB(ctx, name)
+		sb, err := c.GetSRVB(ctx, ref.Name)
 		if err != nil {
 			return "", err
 		}
@@ -120,7 +112,7 @@ func (c *Client) GetSource(ctx context.Context, objectType, name string, opts *G
 
 	case "MSAG":
 		// GetMessageClass returns JSON metadata (message list), not source
-		mc, err := c.GetMessageClass(ctx, name)
+		mc, err := c.GetMessageClass(ctx, ref.Name)
 		if err != nil {
 			return "", err
 		}
@@ -132,7 +124,7 @@ func (c *Client) GetSource(ctx context.Context, objectType, name string, opts *G
 		return string(data), nil
 
 	default:
-		return "", fmt.Errorf("unsupported object type: %s (supported: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, VIEW, BDEF, SRVD, SRVB, MSAG)", objectType)
+		return "", fmt.Errorf("unsupported object type: %s (supported: %s)", ref.Type.ShortCode, SupportedTypeDescription())
 	}
 }
 
@@ -152,7 +144,6 @@ type WriteSourceOptions struct {
 	Package     string          // Package name (for create)
 	TestSource  string          // Test source for CLAS (auto-creates test include)
 	Transport   string          // Transport request number
-	Method      string          // For CLAS only: update only this method (source must be METHOD...ENDMETHOD block)
 }
 
 // WriteSourceResult represents the result of WriteSource operation
@@ -170,7 +161,7 @@ type WriteSourceResult struct {
 }
 
 // WriteSource is a unified tool for writing ABAP source code across different object types.
-// Replaces WriteProgram, WriteClass, CreateAndActivateProgram, CreateClassWithTests.
+// The ObjectRef carries the type, name, and optional method for method-level updates.
 //
 // Supported types:
 //   - PROG: Programs
@@ -181,10 +172,10 @@ type WriteSourceResult struct {
 //   - upsert (default): Auto-detect if object exists, create or update accordingly
 //   - create: Create new object only (fails if exists)
 //   - update: Update existing object only (fails if not exists)
-func (c *Client) WriteSource(ctx context.Context, objectType, name, source string, opts *WriteSourceOptions) (*WriteSourceResult, error) {
+func (c *Client) WriteSource(ctx context.Context, ref *ObjectRef, source string, opts *WriteSourceOptions) (*WriteSourceResult, error) {
 	// Debug logging
 	if os.Getenv("VSP_DEBUG") == "true" {
-		fmt.Fprintf(os.Stderr, "[DEBUG] WriteSource: BaseURL=%s, objectType=%s, name=%s\n", c.config.BaseURL, objectType, name)
+		fmt.Fprintf(os.Stderr, "[DEBUG] WriteSource: BaseURL=%s, objectType=%s, name=%s\n", c.config.BaseURL, ref.Type.ShortCode, ref.Name)
 	}
 
 	// Safety check for workflow operations
@@ -204,8 +195,8 @@ func (c *Client) WriteSource(ctx context.Context, objectType, name, source strin
 		return nil, err
 	}
 
-	objectType = strings.ToUpper(objectType)
-	name = strings.ToUpper(name)
+	objectType := ref.Type.ShortCode
+	name := ref.Name
 
 	result := &WriteSourceResult{
 		ObjectType: objectType,
@@ -274,14 +265,17 @@ func (c *Client) WriteSource(ctx context.Context, objectType, name, source strin
 
 	// Execute create or update workflow
 	if actualMode == WriteModeCreate {
-		return c.writeSourceCreate(ctx, objectType, name, source, opts)
+		return c.writeSourceCreate(ctx, ref, source, opts)
 	} else {
-		return c.writeSourceUpdate(ctx, objectType, name, source, opts)
+		return c.writeSourceUpdate(ctx, ref, source, opts)
 	}
 }
 
 // writeSourceCreate handles creation workflow
-func (c *Client) writeSourceCreate(ctx context.Context, objectType, name, source string, opts *WriteSourceOptions) (*WriteSourceResult, error) {
+func (c *Client) writeSourceCreate(ctx context.Context, ref *ObjectRef, source string, opts *WriteSourceOptions) (*WriteSourceResult, error) {
+	objectType := ref.Type.ShortCode
+	name := ref.Name
+
 	result := &WriteSourceResult{
 		ObjectType: objectType,
 		ObjectName: name,
@@ -656,7 +650,10 @@ func (c *Client) writeSourceCreate(ctx context.Context, objectType, name, source
 }
 
 // writeSourceUpdate handles update workflow
-func (c *Client) writeSourceUpdate(ctx context.Context, objectType, name, source string, opts *WriteSourceOptions) (*WriteSourceResult, error) {
+func (c *Client) writeSourceUpdate(ctx context.Context, ref *ObjectRef, source string, opts *WriteSourceOptions) (*WriteSourceResult, error) {
+	objectType := ref.Type.ShortCode
+	name := ref.Name
+
 	result := &WriteSourceResult{
 		ObjectType: objectType,
 		ObjectName: name,
@@ -680,8 +677,8 @@ func (c *Client) writeSourceUpdate(ctx context.Context, objectType, name, source
 
 	case "CLAS":
 		// Method-level update: replace only the specified method
-		if opts.Method != "" {
-			methodResult, err := c.writeClassMethodUpdate(ctx, name, opts.Method, source, opts.Transport)
+		if ref.Method != "" {
+			methodResult, err := c.writeClassMethodUpdate(ctx, name, ref.Method, source, opts.Transport)
 			if err != nil {
 				result.Message = fmt.Sprintf("Failed to update method: %v", err)
 				return result, nil
@@ -1039,22 +1036,22 @@ type SourceDiff struct {
 
 // CompareSource compares source code of two objects and returns a unified diff.
 // Supports comparing any two objects that can be read via GetSource.
-func (c *Client) CompareSource(ctx context.Context, type1, name1, type2, name2 string, opts1, opts2 *GetSourceOptions) (*SourceDiff, error) {
+func (c *Client) CompareSource(ctx context.Context, ref1, ref2 *ObjectRef) (*SourceDiff, error) {
 	// Get source of first object
-	source1, err := c.GetSource(ctx, type1, name1, opts1)
+	source1, err := c.GetSource(ctx, ref1)
 	if err != nil {
-		return nil, fmt.Errorf("getting source for %s %s: %w", type1, name1, err)
+		return nil, fmt.Errorf("getting source for %s: %w", ref1, err)
 	}
 
 	// Get source of second object
-	source2, err := c.GetSource(ctx, type2, name2, opts2)
+	source2, err := c.GetSource(ctx, ref2)
 	if err != nil {
-		return nil, fmt.Errorf("getting source for %s %s: %w", type2, name2, err)
+		return nil, fmt.Errorf("getting source for %s: %w", ref2, err)
 	}
 
 	result := &SourceDiff{
-		Object1:   fmt.Sprintf("%s:%s", type1, name1),
-		Object2:   fmt.Sprintf("%s:%s", type2, name2),
+		Object1:   ref1.String(),
+		Object2:   ref2.String(),
 		Identical: source1 == source2,
 	}
 
@@ -1236,7 +1233,12 @@ func (c *Client) CloneObject(ctx context.Context, objectType, sourceName, target
 	}
 
 	// Get source of original object
-	source, err := c.GetSource(ctx, objectType, sourceName, nil)
+	sourceRef, err := NewObjectRef(objectType, sourceName)
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to resolve type: %v", err)
+		return result, nil
+	}
+	source, err := c.GetSource(ctx, sourceRef)
 	if err != nil {
 		result.Message = fmt.Sprintf("Failed to get source: %v", err)
 		return result, nil
@@ -1269,7 +1271,8 @@ func (c *Client) CloneObject(ctx context.Context, objectType, sourceName, target
 
 	// Write as new object
 	description := fmt.Sprintf("Copy of %s", sourceName)
-	writeResult, err := c.WriteSource(ctx, objectType, targetName, newSource, &WriteSourceOptions{
+	targetRef, _ := NewObjectRef(objectType, targetName)
+	writeResult, err := c.WriteSource(ctx, targetRef, newSource, &WriteSourceOptions{
 		Package:     targetPackage,
 		Description: description,
 		Mode:        "create",

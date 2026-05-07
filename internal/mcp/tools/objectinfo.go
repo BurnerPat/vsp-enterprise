@@ -15,7 +15,7 @@ func ObjectInfoToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetObjectProperties",
 			mcp.WithDescription("Get metadata about an ABAP object: creator, package hierarchy, creation date, language, system, API release state, and description."),
 			mcp.WithString("object_type", mcp.Required(),
-				mcp.Description("Object type: CLAS, INTF, PROG, FUGR, FUNC, TABL, DDLS, DTEL, DOMA, SRVD, BDEF, SRVB")),
+				mcp.Description("Object type: class, interface, program, function_group, function_module, table, cds_view, data_element, domain, service_definition, behavior_definition, service_binding (also accepts short codes: CLAS, INTF, PROG, etc.)")),
 			mcp.WithString("name", mcp.Required(),
 				mcp.Description("Object name (e.g., ZCL_MY_CLASS, Z_MY_PROGRAM)")),
 		), Handler: HandleGetObjectProperties, ReadOnly: true, Focused: true,
@@ -29,7 +29,7 @@ func ObjectInfoToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetObjectOutline",
 			mcp.WithDescription("Get the structural outline of an ABAP object: methods, attributes, events, types, and other components with their visibility and properties. For classes/interfaces, optionally includes inherited members."),
 			mcp.WithString("object_type", mcp.Required(),
-				mcp.Description("Object type: CLAS, INTF, PROG, FUGR, FUNC, TABL, DDLS, DTEL, DOMA, SRVD, BDEF, SRVB")),
+				mcp.Description("Object type: class, interface, program, function_group, function_module, table, cds_view, data_element, domain, service_definition, behavior_definition, service_binding (also accepts short codes: CLAS, INTF, PROG, etc.)")),
 			mcp.WithString("name", mcp.Required(),
 				mcp.Description("Object name (e.g., ZCL_MY_CLASS)")),
 			mcp.WithBoolean("include_inherited",
@@ -45,7 +45,7 @@ func ObjectInfoToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetObjectNetwork",
 			mcp.WithDescription("Get the dependency network of an ABAP object: all directly used objects (classes, interfaces, tables, data elements, etc.) with their types, descriptions, and packages."),
 			mcp.WithString("object_type", mcp.Required(),
-				mcp.Description("Object type: CLAS, INTF, PROG, FUGR, FUNC, TABL, DDLS, DTEL, DOMA, SRVD, BDEF, SRVB")),
+				mcp.Description("Object type: class, interface, program, function_group, function_module, table, cds_view, data_element, domain, service_definition, behavior_definition, service_binding (also accepts short codes: CLAS, INTF, PROG, etc.)")),
 			mcp.WithString("name", mcp.Required(),
 				mcp.Description("Object name (e.g., ZCL_MY_CLASS)")),
 		), Handler: HandleGetObjectNetwork, ReadOnly: true, Focused: true,
@@ -59,7 +59,7 @@ func ObjectInfoToolDefs() []types.ToolDef {
 		{Tool: mcp.NewTool("GetWhereUsed",
 			mcp.WithDescription("Get where-used list: find all objects that reference a given ABAP object or one of its members. Optionally includes code snippets showing exact usage locations."),
 			mcp.WithString("object_type", mcp.Required(),
-				mcp.Description("Object type: CLAS, INTF, PROG, FUGR, FUNC, TABL, DDLS, DTEL, DOMA, SRVD, BDEF, SRVB")),
+				mcp.Description("Object type: class, interface, program, function_group, function_module, table, cds_view, data_element, domain, service_definition, behavior_definition, service_binding (also accepts short codes: CLAS, INTF, PROG, etc.)")),
 			mcp.WithString("name", mcp.Required(),
 				mcp.Description("Object name (e.g., ZCL_MY_CLASS)")),
 			mcp.WithString("member_uri",
@@ -79,16 +79,15 @@ func ObjectInfoToolDefs() []types.ToolDef {
 // --- Object Info Handlers ---
 
 func HandleGetObjectProperties(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	objectType, ok := request.GetArguments()["object_type"].(string)
-	if !ok || objectType == "" {
-		return types.ErrorResult("object_type is required"), nil
-	}
-	name, ok := request.GetArguments()["name"].(string)
-	if !ok || name == "" {
-		return types.ErrorResult("name is required"), nil
+	objectType, _ := request.GetArguments()["object_type"].(string)
+	name, _ := request.GetArguments()["name"].(string)
+
+	ref, err := resolveRefSimple(objectType, name)
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("Invalid object reference: %v", err)), nil
 	}
 
-	props, err := sys.ADT().GetObjectProperties(ctx, objectType, name)
+	props, err := sys.ADT().GetObjectProperties(ctx, ref)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("GetObjectProperties failed: %v", err)), nil
 	}
@@ -98,13 +97,12 @@ func HandleGetObjectProperties(ctx context.Context, sys types.System, request mc
 }
 
 func HandleGetObjectOutline(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	objectType, ok := request.GetArguments()["object_type"].(string)
-	if !ok || objectType == "" {
-		return types.ErrorResult("object_type is required"), nil
-	}
-	name, ok := request.GetArguments()["name"].(string)
-	if !ok || name == "" {
-		return types.ErrorResult("name is required"), nil
+	objectType, _ := request.GetArguments()["object_type"].(string)
+	name, _ := request.GetArguments()["name"].(string)
+
+	ref, err := resolveRefSimple(objectType, name)
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("Invalid object reference: %v", err)), nil
 	}
 
 	includeInherited := false
@@ -112,7 +110,7 @@ func HandleGetObjectOutline(ctx context.Context, sys types.System, request mcp.C
 		includeInherited = v
 	}
 
-	outline, err := sys.ADT().GetObjectOutline(ctx, objectType, name, includeInherited)
+	outline, err := sys.ADT().GetObjectOutline(ctx, ref, includeInherited)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("GetObjectOutline failed: %v", err)), nil
 	}
@@ -122,16 +120,15 @@ func HandleGetObjectOutline(ctx context.Context, sys types.System, request mcp.C
 }
 
 func HandleGetObjectNetwork(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	objectType, ok := request.GetArguments()["object_type"].(string)
-	if !ok || objectType == "" {
-		return types.ErrorResult("object_type is required"), nil
-	}
-	name, ok := request.GetArguments()["name"].(string)
-	if !ok || name == "" {
-		return types.ErrorResult("name is required"), nil
+	objectType, _ := request.GetArguments()["object_type"].(string)
+	name, _ := request.GetArguments()["name"].(string)
+
+	ref, err := resolveRefSimple(objectType, name)
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("Invalid object reference: %v", err)), nil
 	}
 
-	network, err := sys.ADT().GetObjectNetwork(ctx, objectType, name)
+	network, err := sys.ADT().GetObjectNetwork(ctx, ref)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("GetObjectNetwork failed: %v", err)), nil
 	}
@@ -141,13 +138,12 @@ func HandleGetObjectNetwork(ctx context.Context, sys types.System, request mcp.C
 }
 
 func HandleGetWhereUsed(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	objectType, ok := request.GetArguments()["object_type"].(string)
-	if !ok || objectType == "" {
-		return types.ErrorResult("object_type is required"), nil
-	}
-	name, ok := request.GetArguments()["name"].(string)
-	if !ok || name == "" {
-		return types.ErrorResult("name is required"), nil
+	objectType, _ := request.GetArguments()["object_type"].(string)
+	name, _ := request.GetArguments()["name"].(string)
+
+	ref, err := resolveRefSimple(objectType, name)
+	if err != nil {
+		return types.ErrorResult(fmt.Sprintf("Invalid object reference: %v", err)), nil
 	}
 
 	memberURI, _ := request.GetArguments()["member_uri"].(string)
@@ -157,7 +153,7 @@ func HandleGetWhereUsed(ctx context.Context, sys types.System, request mcp.CallT
 		includeSnippets = v
 	}
 
-	result, err := sys.ADT().GetWhereUsed(ctx, objectType, name, memberURI, includeSnippets)
+	result, err := sys.ADT().GetWhereUsed(ctx, ref, memberURI, includeSnippets)
 	if err != nil {
 		return types.ErrorResult(fmt.Sprintf("GetWhereUsed failed: %v", err)), nil
 	}

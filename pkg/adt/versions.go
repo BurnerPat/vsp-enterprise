@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/aymanbagabas/go-udiff"
@@ -14,31 +13,25 @@ import (
 // --- Object Version History ---
 
 // GetObjectVersions retrieves the version history (revisions) of an ABAP object.
-// For classes, use opts.Include to get versions of a specific include.
+// The ObjectRef carries type, name, parent, and include fields.
 //
 // Supported object types: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD, TABL
-func (c *Client) GetObjectVersions(ctx context.Context, objectType, name string, opts *GetSourceOptions) ([]Revision, error) {
+func (c *Client) GetObjectVersions(ctx context.Context, ref *ObjectRef) ([]Revision, error) {
 	if err := c.checkSafety(OpRead, "GetObjectVersions"); err != nil {
 		return nil, err
 	}
 
-	objectType = strings.ToUpper(objectType)
-	name = strings.ToUpper(name)
-	if opts == nil {
-		opts = &GetSourceOptions{}
+	versionURL := ref.VersionURI()
+	if versionURL == "" {
+		return nil, fmt.Errorf("unsupported object type for versions: %s", ref.Type.ShortCode)
 	}
 
-	revisionURL, err := resolveRevisionURL(objectType, name, opts)
-	if err != nil {
-		return nil, fmt.Errorf("resolving revision URL for %s %s: %w", objectType, name, err)
-	}
-
-	resp, err := c.sendRequest(ctx, revisionURL, &connection.Request{
+	resp, err := c.sendRequest(ctx, versionURL, &connection.Request{
 		Method: http.MethodGet,
 		Accept: "application/atom+xml;type=feed",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("getting versions for %s %s: %w", objectType, name, err)
+		return nil, fmt.Errorf("getting versions for %s: %w", ref, err)
 	}
 
 	return ParseRevisionFeed(resp.Body)
@@ -121,48 +114,26 @@ func (c *Client) CompareObjectVersions(ctx context.Context, baseURI, targetURI s
 }
 
 // resolveRevisionURL builds the ADT revision feed URL for a given object type.
-//
-// Key discovery: classes use /includes/{type}/versions (not /source/main/versions).
-// Programs and other source objects use /source/main/versions.
-// Interfaces also use /includes/main/versions (same pattern as classes).
+// Delegates to the central ObjectType registry via ObjectRef.VersionURI().
 func resolveRevisionURL(objectType, name string, opts *GetSourceOptions) (string, error) {
-	encodedName := url.PathEscape(name)
-	// DDIC objects (DDLS, TABL, SRVD) require lowercase names in the URL path
-	encodedNameLower := url.PathEscape(strings.ToLower(name))
-
-	switch objectType {
-	case "PROG":
-		return fmt.Sprintf("/sap/bc/adt/programs/programs/%s/source/main/versions", encodedName), nil
-	case "CLAS":
-		include := opts.Include
-		if include == "" {
-			include = "main"
-		}
-		// Classes always use /includes/{type}/versions — even for main
-		return fmt.Sprintf("/sap/bc/adt/oo/classes/%s/includes/%s/versions", encodedName, include), nil
-	case "INTF":
-		// Interfaces use the same /includes/main/versions pattern as classes
-		return fmt.Sprintf("/sap/bc/adt/oo/interfaces/%s/includes/main/versions", encodedName), nil
-	case "FUNC":
-		if opts.Parent == "" {
-			return "", fmt.Errorf("parent (function group name) is required for FUNC type")
-		}
-		encodedParent := url.PathEscape(strings.ToUpper(opts.Parent))
-		return fmt.Sprintf("/sap/bc/adt/functions/groups/%s/fmodules/%s/source/main/versions", encodedParent, encodedName), nil
-	case "INCL":
-		return fmt.Sprintf("/sap/bc/adt/programs/includes/%s/source/main/versions", encodedName), nil
-	case "DDLS":
-		// DDLS uses /versions directly (no /source/main prefix) and requires lowercase name
-		return fmt.Sprintf("/sap/bc/adt/ddic/ddl/sources/%s/versions", encodedNameLower), nil
-	case "BDEF":
-		return fmt.Sprintf("/sap/bc/adt/bo/behaviordefinitions/%s/source/main/versions", encodedName), nil
-	case "SRVD":
-		return fmt.Sprintf("/sap/bc/adt/ddic/srvd/sources/%s/source/main/versions", encodedNameLower), nil
-	case "TABL":
-		return fmt.Sprintf("/sap/bc/adt/ddic/tables/%s/source/main/versions", encodedNameLower), nil
-	default:
-		return "", fmt.Errorf("unsupported object type for versions: %s (supported: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD, TABL)", objectType)
+	var refOpts []RefOption
+	if opts != nil && opts.Include != "" {
+		refOpts = append(refOpts, WithInclude(opts.Include))
 	}
+	if opts != nil && opts.Parent != "" {
+		refOpts = append(refOpts, WithParent(opts.Parent))
+	}
+
+	ref, err := NewObjectRef(objectType, name, refOpts...)
+	if err != nil {
+		return "", err
+	}
+
+	versionURI := ref.VersionURI()
+	if versionURI == "" {
+		return "", fmt.Errorf("unsupported object type for versions: %s", objectType)
+	}
+	return versionURI, nil
 }
 
 // extractVersionLabel extracts a short label from a version URI for display.

@@ -33,7 +33,11 @@ type adtSourceAdapter struct {
 }
 
 func (a *adtSourceAdapter) GetSource(ctx context.Context, objectType, name string, opts interface{}) (string, error) {
-	return a.sys.ADT().GetSource(ctx, objectType, name, nil)
+	ref, err := resolveRefSimple(objectType, name)
+	if err != nil {
+		return "", err
+	}
+	return a.sys.ADT().GetSource(ctx, ref)
 }
 
 func HandleGetContext(ctx context.Context, sys types.System, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -55,10 +59,14 @@ func HandleGetContext(ctx context.Context, sys types.System, request mcp.CallToo
 
 	// Fetch source from SAP if not provided
 	if source == "" {
-		var err error
-		source, err = sys.ADT().GetSource(ctx, objectType, name, nil)
+		ref, err := resolveRefSimple(objectType, name)
 		if err != nil {
-			return types.ErrorResult(fmt.Sprintf("GetContext: failed to fetch source for %s %s: %v", objectType, name, err)), nil
+			return types.ErrorResult(fmt.Sprintf("GetContext: invalid object reference: %v", err)), nil
+		}
+		var fetchErr error
+		source, fetchErr = sys.ADT().GetSource(ctx, ref)
+		if fetchErr != nil {
+			return types.ErrorResult(fmt.Sprintf("GetContext: failed to fetch source for %s %s: %v", objectType, name, fetchErr)), nil
 		}
 	}
 

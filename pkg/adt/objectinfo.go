@@ -12,79 +12,23 @@ import (
 )
 
 // objectURIFromType maps a short object type string and name to an ADT URI path.
+// Delegates to the central ObjectType registry.
 func objectURIFromType(objectType, name string) (string, error) {
-	objectType = strings.ToUpper(objectType)
-	name = strings.ToUpper(name)
-	encoded := url.PathEscape(name)
-
-	switch objectType {
-	case "CLAS":
-		return fmt.Sprintf("/sap/bc/adt/oo/classes/%s", encoded), nil
-	case "INTF":
-		return fmt.Sprintf("/sap/bc/adt/oo/interfaces/%s", encoded), nil
-	case "PROG":
-		return fmt.Sprintf("/sap/bc/adt/programs/programs/%s", encoded), nil
-	case "FUGR":
-		return fmt.Sprintf("/sap/bc/adt/functions/groups/%s", encoded), nil
-	case "FUNC":
-		return fmt.Sprintf("/sap/bc/adt/functions/groups/%s", encoded), nil
-	case "TABL":
-		return fmt.Sprintf("/sap/bc/adt/ddic/tables/%s", encoded), nil
-	case "DDLS":
-		return fmt.Sprintf("/sap/bc/adt/ddic/ddl/sources/%s", url.PathEscape(strings.ToLower(name))), nil
-	case "DTEL":
-		return fmt.Sprintf("/sap/bc/adt/ddic/dataelements/%s", encoded), nil
-	case "DOMA":
-		return fmt.Sprintf("/sap/bc/adt/ddic/domains/%s", encoded), nil
-	case "SRVD":
-		return fmt.Sprintf("/sap/bc/adt/ddic/srvd/sources/%s", url.PathEscape(strings.ToLower(name))), nil
-	case "BDEF":
-		return fmt.Sprintf("/sap/bc/adt/bo/behaviordefinitions/%s", url.PathEscape(strings.ToLower(name))), nil
-	case "SRVB":
-		return fmt.Sprintf("/sap/bc/adt/businessservices/bindings/%s", url.PathEscape(strings.ToLower(name))), nil
-	case "XSLT":
-		return fmt.Sprintf("/sap/bc/adt/xslt/transformations/%s", encoded), nil
-	case "MSAG":
-		return fmt.Sprintf("/sap/bc/adt/messageclass/%s", encoded), nil
-	default:
+	ref, err := NewObjectRef(objectType, name)
+	if err != nil {
 		return "", fmt.Errorf("unsupported object type: %s", objectType)
 	}
+	return ref.BaseURI(), nil
 }
 
 // adtTypeFromShort maps a short object type to the ADT type identifier used in XML bodies.
+// Delegates to the central ObjectType registry.
 func adtTypeFromShort(objectType string) string {
-	switch strings.ToUpper(objectType) {
-	case "CLAS":
-		return "CLAS/OC"
-	case "INTF":
-		return "INTF/OI"
-	case "PROG":
-		return "PROG/P"
-	case "FUGR":
-		return "FUGR/F"
-	case "FUNC":
-		return "FUGR/FF"
-	case "TABL":
-		return "TABL/DT"
-	case "DDLS":
-		return "DDLS/DF"
-	case "DTEL":
-		return "DTEL/DE"
-	case "DOMA":
-		return "DOMA/DD"
-	case "SRVD":
-		return "SRVD/SRV"
-	case "BDEF":
-		return "BDEF/BDO"
-	case "SRVB":
-		return "SRVB/SVB"
-	case "XSLT":
-		return "XSLT/VT"
-	case "MSAG":
-		return "MSAG/N"
-	default:
-		return objectType
+	ot := ResolveObjectType(objectType)
+	if ot == nil || ot.ADTType == "" {
+		return strings.ToUpper(objectType)
 	}
+	return ot.ADTType
 }
 
 // --- Object Properties ---
@@ -114,11 +58,8 @@ type ObjectProperties struct {
 }
 
 // GetObjectProperties retrieves general metadata about an ABAP object.
-func (c *Client) GetObjectProperties(ctx context.Context, objectType, name string) (*ObjectProperties, error) {
-	objectURI, err := objectURIFromType(objectType, name)
-	if err != nil {
-		return nil, err
-	}
+func (c *Client) GetObjectProperties(ctx context.Context, ref *ObjectRef) (*ObjectProperties, error) {
+	objectURI := ref.BaseURI()
 
 	query := url.Values{}
 	query.Set("uri", objectURI)
@@ -221,11 +162,8 @@ type OutlineElement struct {
 }
 
 // GetObjectOutline retrieves the structural outline (methods, fields, components) of an ABAP object.
-func (c *Client) GetObjectOutline(ctx context.Context, objectType, name string, includeInherited bool) (*OutlineElement, error) {
-	objectURI, err := objectURIFromType(objectType, name)
-	if err != nil {
-		return nil, err
-	}
+func (c *Client) GetObjectOutline(ctx context.Context, ref *ObjectRef, includeInherited bool) (*OutlineElement, error) {
+	objectURI := ref.BaseURI()
 
 	endpoint := fmt.Sprintf("%s/objectstructure", objectURI)
 
@@ -343,18 +281,18 @@ type ObjectNetwork struct {
 }
 
 // GetObjectNetwork retrieves the dependency network (used objects) for an ABAP object.
-func (c *Client) GetObjectNetwork(ctx context.Context, objectType, name string) (*ObjectNetwork, error) {
-	objectURI, err := objectURIFromType(objectType, name)
-	if err != nil {
-		return nil, err
-	}
+func (c *Client) GetObjectNetwork(ctx context.Context, ref *ObjectRef) (*ObjectNetwork, error) {
+	objectURI := ref.BaseURI()
 
-	adtType := adtTypeFromShort(objectType)
+	adtType := ref.Type.ADTType
+	if adtType == "" {
+		adtType = ref.Type.ShortCode
+	}
 
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <oro:request xmlns:adtcore="http://www.sap.com/adt/core" xmlns:oro="http://www.sap.com/adt/objectrelations">
   <oro:reference adtcore:name="%s" adtcore:type="%s" adtcore:uri="%s"/>
-</oro:request>`, strings.ToUpper(name), adtType, objectURI)
+</oro:request>`, ref.Name, adtType, objectURI)
 
 	resp, err := c.sendRequest(ctx, "/sap/bc/adt/objectrelations/network", &connection.Request{
 		Method:      http.MethodPost,
@@ -457,16 +395,12 @@ type rawSnippet struct {
 // GetWhereUsed retrieves the where-used list for an ABAP object or member.
 // If memberURI is non-empty, it is used as the search URI (e.g., from outline href with position).
 // If includeSnippets is true, code snippets for each usage are fetched in a second request.
-func (c *Client) GetWhereUsed(ctx context.Context, objectType, name string, memberURI string, includeSnippets bool) (*WhereUsedResult, error) {
+func (c *Client) GetWhereUsed(ctx context.Context, ref *ObjectRef, memberURI string, includeSnippets bool) (*WhereUsedResult, error) {
 	var searchURI string
 	if memberURI != "" {
 		searchURI = memberURI
 	} else {
-		uri, err := objectURIFromType(objectType, name)
-		if err != nil {
-			return nil, err
-		}
-		searchURI = uri
+		searchURI = ref.BaseURI()
 	}
 
 	body := `<?xml version="1.0" encoding="ASCII"?>
