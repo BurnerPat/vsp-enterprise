@@ -17,7 +17,7 @@ func VersionToolDefs() []types.ToolDef {
 			Tool: mcp.NewTool("GetObjectVersions",
 				mcp.WithDescription("List version history (revisions) of an ABAP object. Returns versions with dates, authors, and transport requests. Use version URIs with GetObjectVersionSource or CompareObjectVersions."),
 				mcp.WithString("type", mcp.Required(),
-					mcp.Description("Object type: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD")),
+					mcp.Description("Object type: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD, TABL")),
 				mcp.WithString("name", mcp.Required(),
 					mcp.Description("Object name")),
 				mcp.WithString("include",

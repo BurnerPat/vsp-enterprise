@@ -81,8 +81,8 @@ func TransportToolDefs() []types.ToolDef {
 						"Automatically includes objects from all tasks within the transport. "+
 						"Each object diff uses `--- base/...` and `+++ target/...` headers (oldest vs newest version in the transport). "+
 						"If other transports modified an object between the versions in this transport, multiple diffs are returned for that object (one per contiguous segment). "+
-						"Objects without source code (tables, data elements, etc.) are listed with a message indicating no diff is available. "+
-						"Supports: PROG, CLAS (all includes), INTF, DDLS, BDEF, SRVD, INCL."),
+						"Objects without source code (data elements, domains, etc.) are listed with a message indicating no diff is available. "+
+						"Supports: PROG, CLAS (all includes), INTF, DDLS, BDEF, SRVD, INCL, TABL."),
 				mcp.WithString("number", mcp.Required(),
 					mcp.Description("Transport request number (e.g. DEVK900001, D61K907178). Can be a workbench request, customizing request, or task.")),
 			),
@@ -397,11 +397,13 @@ func mapR3TRObject(obj adt.TransportObjectV2) []versionQuery {
 		return []versionQuery{{ObjectType: "SRVD", Name: obj.Name, Sources: []adt.TransportObjectV2{obj}}}
 	case "INCL":
 		return []versionQuery{{ObjectType: "INCL", Name: obj.Name, Sources: []adt.TransportObjectV2{obj}}}
+	case "TABL":
+		return []versionQuery{{ObjectType: "TABL", Name: obj.Name, Sources: []adt.TransportObjectV2{obj}}}
 	case "FUGR":
 		// Function group: cannot diff as a whole (individual function modules need parent)
 		return []versionQuery{{ObjectType: "", Sources: []adt.TransportObjectV2{obj}}}
 	default:
-		// TABL, DOMA, DTEL, TTYP, VIEW, ENQU, MSAG, etc. — no source code to diff
+		// DOMA, DTEL, TTYP, VIEW, ENQU, MSAG, etc. — no source code to diff
 		return []versionQuery{{ObjectType: "", Sources: []adt.TransportObjectV2{obj}}}
 	}
 }

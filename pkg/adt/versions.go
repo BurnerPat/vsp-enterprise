@@ -16,7 +16,7 @@ import (
 // GetObjectVersions retrieves the version history (revisions) of an ABAP object.
 // For classes, use opts.Include to get versions of a specific include.
 //
-// Supported object types: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD
+// Supported object types: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD, TABL
 func (c *Client) GetObjectVersions(ctx context.Context, objectType, name string, opts *GetSourceOptions) ([]Revision, error) {
 	if err := c.checkSafety(OpRead, "GetObjectVersions"); err != nil {
 		return nil, err
@@ -127,6 +127,8 @@ func (c *Client) CompareObjectVersions(ctx context.Context, baseURI, targetURI s
 // Interfaces also use /includes/main/versions (same pattern as classes).
 func resolveRevisionURL(objectType, name string, opts *GetSourceOptions) (string, error) {
 	encodedName := url.PathEscape(name)
+	// DDIC objects (DDLS, TABL, SRVD) require lowercase names in the URL path
+	encodedNameLower := url.PathEscape(strings.ToLower(name))
 
 	switch objectType {
 	case "PROG":
@@ -150,13 +152,16 @@ func resolveRevisionURL(objectType, name string, opts *GetSourceOptions) (string
 	case "INCL":
 		return fmt.Sprintf("/sap/bc/adt/programs/includes/%s/source/main/versions", encodedName), nil
 	case "DDLS":
-		return fmt.Sprintf("/sap/bc/adt/ddic/ddl/sources/%s/source/main/versions", encodedName), nil
+		// DDLS uses /versions directly (no /source/main prefix) and requires lowercase name
+		return fmt.Sprintf("/sap/bc/adt/ddic/ddl/sources/%s/versions", encodedNameLower), nil
 	case "BDEF":
 		return fmt.Sprintf("/sap/bc/adt/bo/behaviordefinitions/%s/source/main/versions", encodedName), nil
 	case "SRVD":
-		return fmt.Sprintf("/sap/bc/adt/ddic/srvd/sources/%s/source/main/versions", encodedName), nil
+		return fmt.Sprintf("/sap/bc/adt/ddic/srvd/sources/%s/source/main/versions", encodedNameLower), nil
+	case "TABL":
+		return fmt.Sprintf("/sap/bc/adt/ddic/tables/%s/source/main/versions", encodedNameLower), nil
 	default:
-		return "", fmt.Errorf("unsupported object type for versions: %s (supported: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD)", objectType)
+		return "", fmt.Errorf("unsupported object type for versions: %s (supported: PROG, CLAS, INTF, FUNC, INCL, DDLS, BDEF, SRVD, TABL)", objectType)
 	}
 }
 
