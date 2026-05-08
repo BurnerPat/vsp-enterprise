@@ -44,8 +44,7 @@ type ObjectProperty struct {
 
 // ObjectProperties contains metadata about an ABAP object.
 type ObjectProperties struct {
-	URI         string           `json:"uri"`
-	Name        string           `json:"name"`
+	Object      RefOutput        `json:"object"`
 	Description string           `json:"description,omitempty"`
 	Package     string           `json:"package,omitempty"`
 	Owner       string           `json:"owner,omitempty"`
@@ -53,7 +52,6 @@ type ObjectProperties struct {
 	Language    string           `json:"language,omitempty"`
 	System      string           `json:"system,omitempty"`
 	APIState    string           `json:"apiState,omitempty"`
-	ObjectType  string           `json:"objectType,omitempty"`
 	Properties  []ObjectProperty `json:"properties,omitempty"`
 }
 
@@ -108,10 +106,8 @@ func parseObjectProperties(data []byte) (*ObjectProperties, error) {
 	}
 
 	result := &ObjectProperties{
-		URI:         resp.URI,
-		Name:        resp.Name,
+		Object:      NewRefOutput(resp.Object.Type, resp.Name, resp.URI),
 		Description: resp.Object.Text,
-		ObjectType:  resp.Object.Type,
 	}
 
 	for _, p := range resp.Properties {
@@ -276,8 +272,15 @@ type ObjectRelation struct {
 
 // ObjectNetwork contains the dependency graph for an ABAP object.
 type ObjectNetwork struct {
-	Relations  []ObjectRelation  `json:"relations"`
-	References []ObjectReference `json:"references"`
+	Relations  []ObjectRelation   `json:"relations"`
+	References []ObjectNetworkRef `json:"references"`
+}
+
+// ObjectNetworkRef represents a reference in the object dependency network.
+type ObjectNetworkRef struct {
+	Object      RefOutput `json:"object"`
+	PackageName string    `json:"packageName,omitempty"`
+	Description string    `json:"description,omitempty"`
 }
 
 // GetObjectNetwork retrieves the dependency network (used objects) for an ABAP object.
@@ -345,12 +348,10 @@ func parseObjectNetwork(data []byte) (*ObjectNetwork, error) {
 		})
 	}
 	for _, ref := range resp.References {
-		result.References = append(result.References, ObjectReference{
-			URI:         ref.URI,
-			Type:        ref.Type,
-			Name:        ref.Name,
-			Description: ref.Description,
+		result.References = append(result.References, ObjectNetworkRef{
+			Object:      NewRefOutput(ref.Type, ref.Name, ref.URI),
 			PackageName: ref.PackageName,
+			Description: ref.Description,
 		})
 	}
 
@@ -361,10 +362,8 @@ func parseObjectNetwork(data []byte) (*ObjectNetwork, error) {
 
 // WhereUsedReference represents an object that references the searched target.
 type WhereUsedReference struct {
-	URI              string            `json:"uri"`
+	Object           RefOutput         `json:"object"`
 	ParentURI        string            `json:"parentUri,omitempty"`
-	Name             string            `json:"name"`
-	Type             string            `json:"type,omitempty"`
 	Description      string            `json:"description,omitempty"`
 	PackageName      string            `json:"packageName,omitempty"`
 	ObjectIdentifier string            `json:"objectIdentifier,omitempty"`
@@ -506,10 +505,8 @@ func parseWhereUsedResult(data []byte) (*WhereUsedResult, error) {
 
 	for _, obj := range resp.ReferencedObjects.Objects {
 		ref := WhereUsedReference{
-			URI:              obj.URI,
+			Object:           NewRefOutput(obj.AdtObject.Type, obj.AdtObject.Name, obj.URI),
 			ParentURI:        obj.ParentURI,
-			Name:             obj.AdtObject.Name,
-			Type:             obj.AdtObject.Type,
 			Description:      obj.AdtObject.Description,
 			PackageName:      obj.AdtObject.PackageRef.Name,
 			ObjectIdentifier: obj.ObjectIdentifier,

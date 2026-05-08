@@ -80,11 +80,11 @@ func TestParseUserTransports(t *testing.T) {
 	if obj.PGMID != "R3TR" {
 		t.Errorf("expected PGMID 'R3TR', got '%s'", obj.PGMID)
 	}
-	if obj.Type != "CLAS" {
-		t.Errorf("expected type 'CLAS', got '%s'", obj.Type)
+	if obj.Object.Type != "class" {
+		t.Errorf("expected type 'class', got '%s'", obj.Object.Type)
 	}
-	if obj.Name != "ZCL_TEST" {
-		t.Errorf("expected name 'ZCL_TEST', got '%s'", obj.Name)
+	if obj.Object.Name != "ZCL_TEST" {
+		t.Errorf("expected name 'ZCL_TEST', got '%s'", obj.Object.Name)
 	}
 
 	// Check second workbench request (released)
@@ -153,11 +153,11 @@ func TestParseTransportInfo(t *testing.T) {
 	if result.PGMID != "R3TR" {
 		t.Errorf("expected PGMID 'R3TR', got '%s'", result.PGMID)
 	}
-	if result.Object != "CLAS" {
-		t.Errorf("expected Object 'CLAS', got '%s'", result.Object)
+	if result.Object.Type != "class" {
+		t.Errorf("expected Object.Type 'class', got '%s'", result.Object.Type)
 	}
-	if result.ObjectName != "ZCL_TEST" {
-		t.Errorf("expected ObjectName 'ZCL_TEST', got '%s'", result.ObjectName)
+	if result.Object.Name != "ZCL_TEST" {
+		t.Errorf("expected Object.Name 'ZCL_TEST', got '%s'", result.Object.Name)
 	}
 	if result.Operation != "I" {
 		t.Errorf("expected Operation 'I', got '%s'", result.Operation)
@@ -260,9 +260,8 @@ func TestTransportTypes(t *testing.T) {
 
 	// Test TransportObject
 	obj := TransportObject{
+		Object:  NewRefOutput("CLAS", "ZCL_TEST", ""),
 		PGMID:   "R3TR",
-		Type:    "CLAS",
-		Name:    "ZCL_TEST",
 		ObjInfo: "Class ZCL_TEST",
 	}
 
@@ -272,9 +271,8 @@ func TestTransportTypes(t *testing.T) {
 
 	// Test TransportInfo
 	info := TransportInfo{
+		Object:       NewRefOutput("CLAS", "ZCL_TEST", ""),
 		PGMID:        "R3TR",
-		Object:       "CLAS",
-		ObjectName:   "ZCL_TEST",
 		Operation:    "I",
 		DevClass:     "$TMP",
 		Recording:    "X",

@@ -22,6 +22,11 @@ type ObjectReference struct {
 	Description string   `xml:"description,attr,omitempty" json:"description,omitempty"`
 }
 
+// ToRefOutput converts the XML-parsed ObjectReference to a unified RefOutput.
+func (r *ObjectReference) ToRefOutput() RefOutput {
+	return NewRefOutput(r.Type, r.Name, r.URI)
+}
+
 // Link represents a hyperlink in ADT responses.
 type Link struct {
 	XMLName xml.Name `xml:"link"`
@@ -59,6 +64,11 @@ type SearchResult struct {
 	PackageName    string `xml:"packageName,attr,omitempty"`
 	Description    string `xml:"description,attr,omitempty"`
 	ResponsiblePro string `xml:"responsiblePro,attr,omitempty"`
+}
+
+// ToRefOutput converts the XML-parsed SearchResult to a unified RefOutput.
+func (r *SearchResult) ToRefOutput() RefOutput {
+	return NewRefOutput(r.Type, r.Name, r.URI)
 }
 
 // SearchResults wraps search results from the ADT API.
@@ -122,10 +132,8 @@ type PackageContent struct {
 
 // PackageObject represents an object within a package.
 type PackageObject struct {
-	Type        string `json:"type"`
-	Name        string `json:"name"`
-	URI         string `json:"uri,omitempty"`
-	Description string `json:"description,omitempty"`
+	Object      RefOutput `json:"object"`
+	Description string    `json:"description,omitempty"`
 }
 
 // FunctionGroup represents a function group structure.

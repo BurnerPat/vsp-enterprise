@@ -178,7 +178,7 @@ WRITE: 'Hello, World!'.`
 		t.Fatalf("WriteSource failed: %v", err)
 	}
 
-	if result.ObjectURL == "" {
+	if result.Object.URI == "" {
 		t.Error("WriteSource should return object URL")
 	}
 }
@@ -213,8 +213,8 @@ WRITE: 'Updated!'.`
 	}
 
 	// Verify it's in update mode (even if workflow didn't complete due to mocks)
-	if result.ObjectType != "PROG" {
-		t.Errorf("Expected ObjectType 'PROG', got %q", result.ObjectType)
+	if result.Object.Type != "program" {
+		t.Errorf("Expected Object.Type 'program', got %q", result.Object.Type)
 	}
 }
 

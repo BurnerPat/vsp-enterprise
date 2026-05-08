@@ -34,10 +34,9 @@ type TransportTask struct {
 
 // TransportObject represents an object in a connection task
 type TransportObject struct {
-	PGMID   string `json:"pgmid"`
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	ObjInfo string `json:"objInfo,omitempty"`
+	Object  RefOutput `json:"object"`
+	PGMID   string    `json:"pgmid"`
+	ObjInfo string    `json:"objInfo,omitempty"`
 }
 
 // UserTransports represents connection requests for a user
@@ -48,9 +47,8 @@ type UserTransports struct {
 
 // TransportInfo represents information about an object's connection status
 type TransportInfo struct {
+	Object       RefOutput          `json:"object"`
 	PGMID        string             `json:"pgmid"`
-	Object       string             `json:"object"`
-	ObjectName   string             `json:"objectName"`
 	Operation    string             `json:"operation"`
 	DevClass     string             `json:"devClass"`
 	Recording    string             `json:"recording"`
@@ -65,6 +63,17 @@ const (
 )
 
 // --- Transport Operations ---
+
+// newTransportRefOutput creates a RefOutput for a transport object.
+// Prefers WBType (qualified ADT type like "CLAS/OC") for resolution,
+// falls back to shortCode (like "CLAS") if WBType is empty.
+func newTransportRefOutput(wbType, shortCode, name string) RefOutput {
+	typeID := wbType
+	if typeID == "" {
+		typeID = shortCode
+	}
+	return NewRefOutput(typeID, name, "")
+}
 
 // GetUserTransports retrieves all connection requests for a user.
 // Returns both workbench and customizing requests grouped by target system.
@@ -156,9 +165,8 @@ func parseUserTransports(data []byte) (*UserTransports, error) {
 				}
 				for _, o := range t.Objects {
 					task.Objects = append(task.Objects, TransportObject{
+						Object:  NewRefOutput(o.Type, o.Name, ""),
 						PGMID:   o.PGMID,
-						Type:    o.Type,
-						Name:    o.Name,
 						ObjInfo: o.ObjInfo,
 					})
 				}
@@ -256,12 +264,11 @@ func parseTransportInfo(data []byte) (*TransportInfo, error) {
 	}
 
 	return &TransportInfo{
-		PGMID:      resp.Values.Data.PGMID,
-		Object:     resp.Values.Data.Object,
-		ObjectName: resp.Values.Data.ObjectName,
-		Operation:  resp.Values.Data.Operation,
-		DevClass:   resp.Values.Data.DevClass,
-		Recording:  resp.Values.Data.Recording,
+		Object:    NewRefOutput(resp.Values.Data.Object, resp.Values.Data.ObjectName, ""),
+		PGMID:     resp.Values.Data.PGMID,
+		Operation: resp.Values.Data.Operation,
+		DevClass:  resp.Values.Data.DevClass,
+		Recording: resp.Values.Data.Recording,
 	}, nil
 }
 
@@ -400,12 +407,12 @@ type TransportTaskV2 struct {
 
 // TransportObjectV2 represents an object in a connection (extended version)
 type TransportObjectV2 struct {
-	PgmID    string `json:"pgmid"` // R3TR, LIMU, CORR
-	Type     string `json:"type"`  // PROG, CLAS, DEVC, etc.
-	Name     string `json:"name"`
-	WBType   string `json:"wbtype"` // PROG/P, CLAS/OC, etc.
-	Info     string `json:"info"`   // "Program", "Class", etc.
-	Position int    `json:"position"`
+	Object   RefOutput `json:"object"`
+	PgmID    string    `json:"pgmid"`   // R3TR, LIMU, CORR
+	Type     string    `json:"rawType"` // PROG, CLAS, DEVC, METH, etc. (SAP short code, used for logic)
+	WBType   string    `json:"wbtype"`  // PROG/P, CLAS/OC, etc. (raw ADT type)
+	Info     string    `json:"info"`    // "Program", "Class", etc.
+	Position int       `json:"position"`
 }
 
 // CreateTransportOptions for creating connection requests
@@ -684,9 +691,9 @@ func parseTransportDetail(data []byte) (*TransportDetails, error) {
 			fmt.Sscanf(obj.Position, "%d", &pos)
 		}
 		t.Objects = append(t.Objects, TransportObjectV2{
+			Object:   newTransportRefOutput(obj.WBType, obj.Type, obj.Name),
 			PgmID:    obj.PgmID,
 			Type:     obj.Type,
-			Name:     obj.Name,
 			WBType:   obj.WBType,
 			Info:     obj.ObjInfo,
 			Position: pos,
@@ -710,9 +717,9 @@ func parseTransportDetail(data []byte) (*TransportDetails, error) {
 				fmt.Sscanf(obj.Position, "%d", &pos)
 			}
 			tt.Objects = append(tt.Objects, TransportObjectV2{
+				Object:   newTransportRefOutput(obj.WBType, obj.Type, obj.Name),
 				PgmID:    obj.PgmID,
 				Type:     obj.Type,
-				Name:     obj.Name,
 				WBType:   obj.WBType,
 				Info:     obj.ObjInfo,
 				Position: pos,

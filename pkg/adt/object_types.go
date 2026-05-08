@@ -452,3 +452,29 @@ func SupportedTypeDescription() string {
 		"cds_view, table, data_element, domain, service_definition, behavior_definition, " +
 		"service_binding, transformation, message_class, view, package"
 }
+
+// --- Unified Response Serialization ---
+
+// RefOutput is the unified JSON-serializable representation of an ABAP object reference.
+// Used in all API response structs instead of raw type/name/URI string fields.
+type RefOutput struct {
+	Type string `json:"type"`          // Human-readable ID: "class", "program", etc.
+	Name string `json:"name"`          // Object name: "ZCL_FOO"
+	URI  string `json:"uri,omitempty"` // ADT URI if available
+}
+
+// NewRefOutput creates a RefOutput by resolving an ADT type string to a human-readable ID.
+// Accepts qualified ADT types ("CLAS/OC"), short codes ("CLAS"), or human-readable IDs ("class").
+// If the type is not recognized, it falls through to use the raw type string.
+func NewRefOutput(adtType, name, uri string) RefOutput {
+	humanType := adtType
+	if ot := ResolveObjectType(adtType); ot != nil {
+		humanType = ot.ID
+	}
+	return RefOutput{Type: humanType, Name: name, URI: uri}
+}
+
+// RefOutputFromRef creates a RefOutput from an existing ObjectRef.
+func RefOutputFromRef(ref *ObjectRef) RefOutput {
+	return RefOutput{Type: ref.Type.ID, Name: ref.Name, URI: ref.BaseURI()}
+}

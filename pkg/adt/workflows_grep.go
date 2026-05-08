@@ -22,9 +22,7 @@ type GrepMatch struct {
 // GrepObjectResult represents the result of grepping a single ABAP object.
 type GrepObjectResult struct {
 	Success    bool        `json:"success"`
-	ObjectURL  string      `json:"objectUrl"`
-	ObjectName string      `json:"objectName"`
-	ObjectType string      `json:"objectType,omitempty"`
+	Object     RefOutput   `json:"object"`
 	Matches    []GrepMatch `json:"matches"`
 	MatchCount int         `json:"matchCount"`
 	Message    string      `json:"message,omitempty"`
@@ -50,14 +48,14 @@ type GrepPackageResult struct {
 // Returns matches with line numbers and optional context lines.
 func (c *Client) GrepObject(ctx context.Context, objectURL, pattern string, caseInsensitive bool, contextLines int) (*GrepObjectResult, error) {
 	result := &GrepObjectResult{
-		ObjectURL: objectURL,
-		Matches:   []GrepMatch{},
+		Object:  RefOutput{URI: objectURL},
+		Matches: []GrepMatch{},
 	}
 
 	// Extract object name from URL
 	parts := strings.Split(objectURL, "/")
 	if len(parts) > 0 {
-		result.ObjectName = parts[len(parts)-1]
+		result.Object.Name = parts[len(parts)-1]
 	}
 
 	// Compile regex pattern
@@ -125,7 +123,7 @@ func (c *Client) GrepObject(ctx context.Context, objectURL, pattern string, case
 	if result.MatchCount == 0 {
 		result.Message = "No matches found"
 	} else {
-		result.Message = fmt.Sprintf("Found %d match(es) in %s", result.MatchCount, result.ObjectName)
+		result.Message = fmt.Sprintf("Found %d match(es) in %s", result.MatchCount, result.Object.Name)
 	}
 
 	return result, nil
@@ -219,24 +217,24 @@ func (c *Client) GrepPackage(ctx context.Context, packageName, pattern string, c
 	objectsSearched := 0
 	for _, obj := range packageContent.Objects {
 		// Apply object type filter
-		if len(typeFilter) > 0 && !typeFilter[obj.Type] {
+		if len(typeFilter) > 0 && !typeFilter[obj.Object.Type] {
 			continue
 		}
 
 		// Skip non-source objects (tables, structures, etc.)
-		if !isSourceObject(obj.Type) {
+		if !isSourceObject(obj.Object.Type) {
 			continue
 		}
 
 		// Grep this object
-		objResult, err := c.GrepObject(ctx, obj.URI, pattern, caseInsensitive, 0)
+		objResult, err := c.GrepObject(ctx, obj.Object.URI, pattern, caseInsensitive, 0)
 		if err != nil {
 			continue // Skip objects that fail
 		}
 
 		// Only include objects with matches
 		if objResult.MatchCount > 0 {
-			objResult.ObjectType = obj.Type
+			objResult.Object.Type = obj.Object.Type
 			result.Objects = append(result.Objects, *objResult)
 			result.TotalMatches += objResult.MatchCount
 

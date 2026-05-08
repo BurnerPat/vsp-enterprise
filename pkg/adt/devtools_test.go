@@ -47,8 +47,8 @@ func TestParseInactiveObjects(t *testing.T) {
 	if entry1.Object.Name != "ZCL_TEST" {
 		t.Errorf("expected name 'ZCL_TEST', got '%s'", entry1.Object.Name)
 	}
-	if entry1.Object.Type != "CLAS/OC" {
-		t.Errorf("expected type 'CLAS/OC', got '%s'", entry1.Object.Type)
+	if entry1.Object.Type != "class" {
+		t.Errorf("expected type 'class', got '%s'", entry1.Object.Type)
 	}
 	if entry1.Object.User != "DEVELOPER" {
 		t.Errorf("expected user 'DEVELOPER', got '%s'", entry1.Object.User)

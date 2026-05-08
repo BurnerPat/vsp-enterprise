@@ -149,9 +149,7 @@ type WriteSourceOptions struct {
 // WriteSourceResult represents the result of WriteSource operation
 type WriteSourceResult struct {
 	Success      bool                `json:"success"`
-	ObjectType   string              `json:"objectType"`
-	ObjectName   string              `json:"objectName"`
-	ObjectURL    string              `json:"objectUrl"`
+	Object       RefOutput           `json:"object"`
 	Mode         string              `json:"mode"`             // "created" or "updated"
 	Method       string              `json:"method,omitempty"` // Method name if method-level update
 	SyntaxErrors []SyntaxCheckResult `json:"syntaxErrors,omitempty"`
@@ -199,8 +197,7 @@ func (c *Client) WriteSource(ctx context.Context, ref *ObjectRef, source string,
 	name := ref.Name
 
 	result := &WriteSourceResult{
-		ObjectType: objectType,
-		ObjectName: name,
+		Object: RefOutputFromRef(ref),
 	}
 
 	// Validate object type
@@ -277,9 +274,8 @@ func (c *Client) writeSourceCreate(ctx context.Context, ref *ObjectRef, source s
 	name := ref.Name
 
 	result := &WriteSourceResult{
-		ObjectType: objectType,
-		ObjectName: name,
-		Mode:       "created",
+		Object: RefOutputFromRef(ref),
+		Mode:   "created",
 	}
 
 	// Validate required fields for create
@@ -301,7 +297,7 @@ func (c *Client) writeSourceCreate(ctx context.Context, ref *ObjectRef, source s
 			return result, nil
 		}
 		result.Success = progResult.Success
-		result.ObjectURL = progResult.ObjectURL
+		result.Object.URI = progResult.ObjectURL
 		result.SyntaxErrors = progResult.SyntaxErrors
 		result.Activation = progResult.Activation
 		result.Message = progResult.Message
@@ -315,7 +311,7 @@ func (c *Client) writeSourceCreate(ctx context.Context, ref *ObjectRef, source s
 				return result, nil
 			}
 			result.Success = classResult.Success
-			result.ObjectURL = classResult.ObjectURL
+			result.Object.URI = classResult.ObjectURL
 			result.Activation = classResult.Activation
 			result.TestResults = classResult.UnitTestResult
 			result.Message = classResult.Message
@@ -323,7 +319,7 @@ func (c *Client) writeSourceCreate(ctx context.Context, ref *ObjectRef, source s
 		} else {
 			// Create class without tests - use CreateObject + WriteClass workflow
 			objectURL := fmt.Sprintf("/sap/bc/adt/oo/classes/%s", url.PathEscape(name))
-			result.ObjectURL = objectURL
+			result.Object.URI = objectURL
 
 			// Create object
 			err := c.CreateObject(ctx, CreateObjectOptions{
@@ -354,7 +350,7 @@ func (c *Client) writeSourceCreate(ctx context.Context, ref *ObjectRef, source s
 
 	case "INTF":
 		objectURL := fmt.Sprintf("/sap/bc/adt/oo/interfaces/%s", url.PathEscape(name))
-		result.ObjectURL = objectURL
+		result.Object.URI = objectURL
 
 		// Create object
 		err := c.CreateObject(ctx, CreateObjectOptions{
@@ -449,7 +445,7 @@ func (c *Client) writeSourceCreate(ctx context.Context, ref *ObjectRef, source s
 			objType = ObjectTypeSRVD
 			objectURL = GetObjectURL(ObjectTypeSRVD, name, "")
 		}
-		result.ObjectURL = objectURL
+		result.Object.URI = objectURL
 		sourceURL := objectURL + "/source/main"
 
 		// Create object first
@@ -608,7 +604,7 @@ func (c *Client) writeSourceCreate(ctx context.Context, ref *ObjectRef, source s
 		}
 
 		objectURL := fmt.Sprintf("/sap/bc/adt/businessservices/bindings/%s", url.PathEscape(strings.ToLower(name)))
-		result.ObjectURL = objectURL
+		result.Object.URI = objectURL
 
 		// Create SRVB
 		err := c.CreateObject(ctx, CreateObjectOptions{
@@ -655,9 +651,8 @@ func (c *Client) writeSourceUpdate(ctx context.Context, ref *ObjectRef, source s
 	name := ref.Name
 
 	result := &WriteSourceResult{
-		ObjectType: objectType,
-		ObjectName: name,
-		Mode:       "updated",
+		Object: RefOutputFromRef(ref),
+		Mode:   "updated",
 	}
 
 	// Use existing Write* workflows
@@ -669,7 +664,7 @@ func (c *Client) writeSourceUpdate(ctx context.Context, ref *ObjectRef, source s
 			return result, nil
 		}
 		result.Success = progResult.Success
-		result.ObjectURL = progResult.ObjectURL
+		result.Object.URI = progResult.ObjectURL
 		result.SyntaxErrors = progResult.SyntaxErrors
 		result.Activation = progResult.Activation
 		result.Message = progResult.Message
@@ -684,7 +679,7 @@ func (c *Client) writeSourceUpdate(ctx context.Context, ref *ObjectRef, source s
 				return result, nil
 			}
 			result.Success = methodResult.Success
-			result.ObjectURL = methodResult.ObjectURL
+			result.Object.URI = methodResult.Object.URI
 			result.Method = methodResult.Method
 			result.SyntaxErrors = methodResult.SyntaxErrors
 			result.Activation = methodResult.Activation
@@ -698,7 +693,7 @@ func (c *Client) writeSourceUpdate(ctx context.Context, ref *ObjectRef, source s
 			return result, nil
 		}
 		result.Success = classResult.Success
-		result.ObjectURL = classResult.ObjectURL
+		result.Object.URI = classResult.ObjectURL
 		result.SyntaxErrors = classResult.SyntaxErrors
 		result.Activation = classResult.Activation
 		result.Message = classResult.Message
@@ -753,7 +748,7 @@ func (c *Client) writeSourceUpdate(ctx context.Context, ref *ObjectRef, source s
 		// Similar to WriteProgram workflow
 		objectURL := fmt.Sprintf("/sap/bc/adt/oo/interfaces/%s", url.PathEscape(name))
 		sourceURL := objectURL + "/source/main"
-		result.ObjectURL = objectURL
+		result.Object.URI = objectURL
 
 		// Syntax check
 		syntaxErrors, err := c.SyntaxCheck(ctx, objectURL, source)
@@ -827,7 +822,7 @@ func (c *Client) writeSourceUpdate(ctx context.Context, ref *ObjectRef, source s
 		case "SRVD":
 			objectURL = GetObjectURL(ObjectTypeSRVD, name, "")
 		}
-		result.ObjectURL = objectURL
+		result.Object.URI = objectURL
 		sourceURL := objectURL + "/source/main"
 
 		// Syntax check
@@ -900,17 +895,15 @@ func (c *Client) writeSourceUpdate(ctx context.Context, ref *ObjectRef, source s
 // writeClassMethodUpdate updates a single method in a class.
 // The source should be the METHOD...ENDMETHOD block.
 func (c *Client) writeClassMethodUpdate(ctx context.Context, className, methodName, methodSource, transport string) (*WriteSourceResult, error) {
-	result := &WriteSourceResult{
-		ObjectType: "CLAS",
-		ObjectName: className,
-		Method:     strings.ToUpper(methodName),
-		Mode:       "updated",
-	}
-
 	className = strings.ToUpper(className)
 	methodName = strings.ToUpper(methodName)
 	objectURL := fmt.Sprintf("/sap/bc/adt/oo/classes/%s", url.PathEscape(strings.ToLower(className)))
-	result.ObjectURL = objectURL
+
+	result := &WriteSourceResult{
+		Object: NewRefOutput("CLAS/OC", className, objectURL),
+		Method: methodName,
+		Mode:   "updated",
+	}
 
 	// Get method boundaries
 	methods, err := c.GetClassMethods(ctx, className)

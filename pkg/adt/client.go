@@ -689,9 +689,7 @@ func parsePackageNodeStructure(data []byte, packageName string) (*PackageContent
 			pkg.SubPackages = append(pkg.SubPackages, node.ObjectName)
 		} else {
 			pkg.Objects = append(pkg.Objects, PackageObject{
-				Type:        node.ObjectType,
-				Name:        node.ObjectName,
-				URI:         node.ObjectURI,
+				Object:      NewRefOutput(node.ObjectType, node.ObjectName, node.ObjectURI),
 				Description: node.Desc,
 			})
 		}

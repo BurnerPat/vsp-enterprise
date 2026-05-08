@@ -140,9 +140,7 @@ type ActivationResultMessage struct {
 
 // InactiveObject represents an inactive object.
 type InactiveObject struct {
-	URI       string `json:"uri"`
-	Type      string `json:"type"`
-	Name      string `json:"name"`
+	RefOutput
 	ParentURI string `json:"parentUri,omitempty"`
 	User      string `json:"user,omitempty"`
 	Deleted   bool   `json:"deleted,omitempty"`
@@ -254,9 +252,7 @@ func parseActivationResult(data []byte) (*ActivationResult, error) {
 		if entry.Object != nil {
 			result.Success = false
 			result.Inactive = append(result.Inactive, InactiveObject{
-				URI:       entry.Object.Ref.URI,
-				Type:      entry.Object.Ref.Type,
-				Name:      entry.Object.Ref.Name,
+				RefOutput: NewRefOutput(entry.Object.Ref.Type, entry.Object.Ref.Name, entry.Object.Ref.URI),
 				ParentURI: entry.Object.Ref.ParentURI,
 			})
 		}
@@ -318,9 +314,7 @@ func parseInactiveObjects(data []byte) ([]InactiveObjectRecord, error) {
 		record := InactiveObjectRecord{}
 		if e.Object != nil {
 			record.Object = &InactiveObject{
-				URI:       e.Object.Ref.URI,
-				Type:      e.Object.Ref.Type,
-				Name:      e.Object.Ref.Name,
+				RefOutput: NewRefOutput(e.Object.Ref.Type, e.Object.Ref.Name, e.Object.Ref.URI),
 				ParentURI: e.Object.Ref.ParentURI,
 				User:      e.Object.User,
 				Deleted:   e.Object.Deleted,
@@ -328,9 +322,7 @@ func parseInactiveObjects(data []byte) ([]InactiveObjectRecord, error) {
 		}
 		if e.Transport != nil {
 			record.Transport = &InactiveObject{
-				URI:       e.Transport.Ref.URI,
-				Type:      e.Transport.Ref.Type,
-				Name:      e.Transport.Ref.Name,
+				RefOutput: NewRefOutput(e.Transport.Ref.Type, e.Transport.Ref.Name, e.Transport.Ref.URI),
 				ParentURI: e.Transport.Ref.ParentURI,
 				User:      e.Transport.User,
 				Deleted:   e.Transport.Deleted,
@@ -354,16 +346,13 @@ type ActivatePackageResult struct {
 
 // ActivatedObject represents a successfully activated object.
 type ActivatedObject struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-	URI  string `json:"uri"`
+	Object RefOutput `json:"object"`
 }
 
 // ActivationFailed represents a failed activation.
 type ActivationFailed struct {
-	Name   string `json:"name"`
-	Type   string `json:"type"`
-	Reason string `json:"reason"`
+	Object RefOutput `json:"object"`
+	Reason string    `json:"reason"`
 }
 
 // objectTypePriority returns activation priority for object types.
@@ -440,15 +429,12 @@ func (c *Client) ActivatePackage(ctx context.Context, packageName string, maxObj
 		_, err := c.Activate(ctx, obj.URI, obj.Name)
 		if err != nil {
 			result.Failed = append(result.Failed, ActivationFailed{
-				Name:   obj.Name,
-				Type:   obj.Type,
+				Object: obj.RefOutput,
 				Reason: err.Error(),
 			})
 		} else {
 			result.Activated = append(result.Activated, ActivatedObject{
-				Name: obj.Name,
-				Type: obj.Type,
-				URI:  obj.URI,
+				Object: obj.RefOutput,
 			})
 		}
 	}

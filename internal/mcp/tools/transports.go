@@ -17,12 +17,10 @@ import (
 
 // transportObjectDiff holds the diff result for a single object (or class include) in a transport.
 type transportObjectDiff struct {
+	Object     adt.RefOutput      `json:"object"`
 	PgmID      string             `json:"pgmid"`
-	Type       string             `json:"type"`
-	Name       string             `json:"name"`
 	WBType     string             `json:"wbtype,omitempty"`
 	Info       string             `json:"info,omitempty"`
-	ObjectType string             `json:"objectType"`           // resolved ADT object type (PROG, CLAS, INTF, ...)
 	Include    string             `json:"include,omitempty"`    // class include if applicable
 	MethodName string             `json:"methodName,omitempty"` // specific method if LIMU/METH
 	Message    string             `json:"message,omitempty"`    // set when diff cannot be computed
@@ -153,7 +151,7 @@ func HandleGetTransportDiff(ctx context.Context, sys types.System, request mcp.C
 	var allObjects []adt.TransportObjectV2
 
 	addObject := func(obj adt.TransportObjectV2) {
-		key := objKey{obj.PgmID, obj.Type, obj.Name}
+		key := objKey{obj.PgmID, obj.Type, obj.Object.Name}
 		if !seen[key] {
 			seen[key] = true
 			allObjects = append(allObjects, obj)
@@ -202,12 +200,10 @@ func HandleGetTransportDiff(ctx context.Context, sys types.System, request mcp.C
 		src := q.Sources[0] // representative source object
 
 		objDiff := transportObjectDiff{
+			Object:     src.Object,
 			PgmID:      src.PgmID,
-			Type:       src.Type,
-			Name:       src.Name,
 			WBType:     src.WBType,
 			Info:       src.Info,
-			ObjectType: q.ObjectType,
 			Include:    q.Include,
 			MethodName: q.MethodName,
 		}
@@ -339,8 +335,8 @@ func mapTransportObjectToVersionQueries(obj adt.TransportObjectV2) []versionQuer
 
 	// LIMU/METH = individual class method
 	case obj.PgmID == "LIMU" && obj.Type == "METH":
-		className := extractClassName(obj.Name)
-		methodName := extractMethodName(obj.Name)
+		className := extractClassName(obj.Object.Name)
+		methodName := extractMethodName(obj.Object.Name)
 		if className == "" || methodName == "" {
 			return []versionQuery{{ObjectType: "", Sources: []adt.TransportObjectV2{obj}}}
 		}
@@ -382,28 +378,28 @@ func mapTransportObjectToVersionQueries(obj adt.TransportObjectV2) []versionQuer
 func mapR3TRObject(obj adt.TransportObjectV2) []versionQuery {
 	switch obj.Type {
 	case "PROG":
-		return []versionQuery{{ObjectType: "PROG", Name: obj.Name, Sources: []adt.TransportObjectV2{obj}}}
+		return []versionQuery{{ObjectType: "PROG", Name: obj.Object.Name, Sources: []adt.TransportObjectV2{obj}}}
 	case "CLAS":
 		// Full class: diff all five source includes (matching the ADT editor tabs)
 		return []versionQuery{
-			{ObjectType: "CLAS", Name: obj.Name, Include: "main", Sources: []adt.TransportObjectV2{obj}},
-			{ObjectType: "CLAS", Name: obj.Name, Include: "definitions", Sources: []adt.TransportObjectV2{obj}},
-			{ObjectType: "CLAS", Name: obj.Name, Include: "implementations", Sources: []adt.TransportObjectV2{obj}},
-			{ObjectType: "CLAS", Name: obj.Name, Include: "testclasses", Sources: []adt.TransportObjectV2{obj}},
-			{ObjectType: "CLAS", Name: obj.Name, Include: "macros", Sources: []adt.TransportObjectV2{obj}},
+			{ObjectType: "CLAS", Name: obj.Object.Name, Include: "main", Sources: []adt.TransportObjectV2{obj}},
+			{ObjectType: "CLAS", Name: obj.Object.Name, Include: "definitions", Sources: []adt.TransportObjectV2{obj}},
+			{ObjectType: "CLAS", Name: obj.Object.Name, Include: "implementations", Sources: []adt.TransportObjectV2{obj}},
+			{ObjectType: "CLAS", Name: obj.Object.Name, Include: "testclasses", Sources: []adt.TransportObjectV2{obj}},
+			{ObjectType: "CLAS", Name: obj.Object.Name, Include: "macros", Sources: []adt.TransportObjectV2{obj}},
 		}
 	case "INTF":
-		return []versionQuery{{ObjectType: "INTF", Name: obj.Name, Sources: []adt.TransportObjectV2{obj}}}
+		return []versionQuery{{ObjectType: "INTF", Name: obj.Object.Name, Sources: []adt.TransportObjectV2{obj}}}
 	case "DDLS":
-		return []versionQuery{{ObjectType: "DDLS", Name: obj.Name, Sources: []adt.TransportObjectV2{obj}}}
+		return []versionQuery{{ObjectType: "DDLS", Name: obj.Object.Name, Sources: []adt.TransportObjectV2{obj}}}
 	case "BDEF":
-		return []versionQuery{{ObjectType: "BDEF", Name: obj.Name, Sources: []adt.TransportObjectV2{obj}}}
+		return []versionQuery{{ObjectType: "BDEF", Name: obj.Object.Name, Sources: []adt.TransportObjectV2{obj}}}
 	case "SRVD":
-		return []versionQuery{{ObjectType: "SRVD", Name: obj.Name, Sources: []adt.TransportObjectV2{obj}}}
+		return []versionQuery{{ObjectType: "SRVD", Name: obj.Object.Name, Sources: []adt.TransportObjectV2{obj}}}
 	case "INCL":
-		return []versionQuery{{ObjectType: "INCL", Name: obj.Name, Sources: []adt.TransportObjectV2{obj}}}
+		return []versionQuery{{ObjectType: "INCL", Name: obj.Object.Name, Sources: []adt.TransportObjectV2{obj}}}
 	case "TABL":
-		return []versionQuery{{ObjectType: "TABL", Name: obj.Name, Sources: []adt.TransportObjectV2{obj}}}
+		return []versionQuery{{ObjectType: "TABL", Name: obj.Object.Name, Sources: []adt.TransportObjectV2{obj}}}
 	case "FUGR":
 		// Function group: cannot diff as a whole (individual function modules need parent)
 		return []versionQuery{{ObjectType: "", Sources: []adt.TransportObjectV2{obj}}}
