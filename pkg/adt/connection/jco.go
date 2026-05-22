@@ -159,11 +159,16 @@ func (c *JcoConnection) buildHeaders(req *Request) map[string]string {
 		headers[k] = v
 	}
 
-	switch c.config.SessionType {
-	case SessionStateful:
+	// Per-request Stateful flag overrides global session type (issue #88).
+	if req.Stateful {
 		headers["X-sap-adt-sessiontype"] = "stateful"
-	case SessionStateless:
-		headers["X-sap-adt-sessiontype"] = "stateless"
+	} else {
+		switch c.config.SessionType {
+		case SessionStateful:
+			headers["X-sap-adt-sessiontype"] = "stateful"
+		case SessionStateless:
+			headers["X-sap-adt-sessiontype"] = "stateless"
+		}
 	}
 
 	if cookie := c.GetSessionCookie(); cookie != "" {

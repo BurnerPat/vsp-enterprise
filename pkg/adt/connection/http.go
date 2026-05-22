@@ -245,10 +245,6 @@ func (c *HttpConnection) retryRequest(ctx context.Context, req *Request) (*AdtRe
 	c.applyHeaders(httpReq, req)
 	httpReq.Header.Set("X-CSRF-Token", c.GetCSRFToken())
 
-	if c.config.SessionType == SessionStateful {
-		httpReq.Header.Set("X-sap-adt-sessiontype", "stateful")
-	}
-
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("executing retry request: %w", err)
@@ -390,11 +386,16 @@ func (c *HttpConnection) applyHeaders(httpReq *http.Request, req *Request) {
 		httpReq.Header.Set(k, v)
 	}
 
-	switch c.config.SessionType {
-	case SessionStateful:
+	// Per-request Stateful flag overrides global session type (issue #88).
+	if req.Stateful {
 		httpReq.Header.Set("X-sap-adt-sessiontype", "stateful")
-	case SessionStateless:
-		httpReq.Header.Set("X-sap-adt-sessiontype", "stateless")
+	} else {
+		switch c.config.SessionType {
+		case SessionStateful:
+			httpReq.Header.Set("X-sap-adt-sessiontype", "stateful")
+		case SessionStateless:
+			httpReq.Header.Set("X-sap-adt-sessiontype", "stateless")
+		}
 	}
 }
 

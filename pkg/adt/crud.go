@@ -44,9 +44,10 @@ func (c *Client) LockObject(ctx context.Context, objectURL string, accessMode st
 	params.Set("accessMode", accessMode)
 
 	resp, err := c.sendRequest(ctx, objectURL, &connection.Request{
-		Method: http.MethodPost,
-		Query:  params,
-		Accept: "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result",
+		Method:   http.MethodPost,
+		Query:    params,
+		Accept:   "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result",
+		Stateful: true, // Lock handles are session-specific — force stateful (issue #88)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("locking object: %w", err)
@@ -96,8 +97,9 @@ func (c *Client) UnlockObject(ctx context.Context, objectURL string, lockHandle 
 	params.Set("lockHandle", lockHandle)
 
 	_, err := c.sendRequest(ctx, objectURL, &connection.Request{
-		Method: http.MethodPost,
-		Query:  params,
+		Method:   http.MethodPost,
+		Query:    params,
+		Stateful: true, // Must match lock session (issue #88)
 	})
 	if err != nil {
 		return fmt.Errorf("unlocking object: %w", err)
@@ -135,6 +137,7 @@ func (c *Client) UpdateSource(ctx context.Context, objectSourceURL string, sourc
 		Query:       params,
 		Body:        []byte(source),
 		ContentType: contentType,
+		Stateful:    true, // Must match lock session (issue #88)
 	})
 	if err != nil {
 		return fmt.Errorf("updating source: %w", err)
@@ -596,8 +599,9 @@ func (c *Client) DeleteObject(ctx context.Context, objectURL string, lockHandle 
 	}
 
 	_, err := c.sendRequest(ctx, objectURL, &connection.Request{
-		Method: http.MethodDelete,
-		Query:  params,
+		Method:   http.MethodDelete,
+		Query:    params,
+		Stateful: true, // Must match lock session (issue #88)
 	})
 	if err != nil {
 		return fmt.Errorf("deleting object: %w", err)
@@ -717,6 +721,7 @@ func (c *Client) CreateTestInclude(ctx context.Context, className string, lockHa
 		Query:       params,
 		Body:        []byte(body),
 		ContentType: "application/*",
+		Stateful:    true, // Must match lock session (issue #88)
 	})
 	if err != nil {
 		return fmt.Errorf("creating test include: %w", err)
@@ -755,6 +760,7 @@ func (c *Client) UpdateClassInclude(ctx context.Context, className string, inclu
 		Query:       params,
 		Body:        []byte(source),
 		ContentType: "text/plain; charset=utf-8",
+		Stateful:    true, // Must match lock session (issue #88)
 	})
 	if err != nil {
 		return fmt.Errorf("updating class include: %w", err)

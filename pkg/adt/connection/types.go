@@ -31,6 +31,13 @@ type Request struct {
 	// Accept header value. Defaults to "*/*".
 	Accept string
 
+	// Stateful forces the request to use a stateful session regardless of the
+	// global session type setting. This is required for lock-dependent operations
+	// (LockObject, UnlockObject, UpdateSource, DeleteObject, CreateTestInclude,
+	// UpdateClassInclude) because lock handles are session-specific on SAP.
+	// See upstream issue #88.
+	Stateful bool
+
 	// Headers holds additional request headers.
 	Headers map[string]string
 }
