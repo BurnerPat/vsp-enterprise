@@ -23,6 +23,12 @@ on:
 permissions:
   contents: write
 
+# Serialize release runs so two dispatches can't race to push/tag main
+# at the same time (which causes non-fast-forward push rejections).
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -119,10 +125,14 @@ jobs:
 
       # ------------------------------------------------------------------ #
       # 7. Tag and push
-      #    Push the commit first, then the tag so goreleaser finds it
+      #    Rebase onto the latest main first in case it moved since checkout
+      #    (e.g. a previous run's CHANGELOG commit), then push the commit
+      #    before the tag so goreleaser finds it.
       # ------------------------------------------------------------------ #
       - name: Tag and push
         run: |
+          git fetch origin main
+          git rebase origin/main
           git tag "${{ steps.version.outputs.version }}"
           git push origin HEAD:main
           git push origin "${{ steps.version.outputs.version }}"
