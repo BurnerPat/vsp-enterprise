@@ -4,203 +4,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> **Note**: This is the enterprise fork of [Vibing Steampunk](https://github.com/oisee/vibing-steampunk).
-> See [FORK.md](FORK.md) for information about the fork, what changed, and credits to the original creator, Alice Vinogradova.
-
-## [2.28.0] - 2026-03-18
-### Features
-
-- **Context Compression** (`pkg/ctxcomp`): New package that extracts dependencies from ABAP source and produces compressed "prologue" text containing only public API contracts. Classes are reduced to PUBLIC SECTION only (7-30x compression), interfaces pass through as-is, function modules extract signature blocks.
-- **GetSource `include_context` flag**: `GetSource` now appends dependency context by default — one MCP call returns source + compressed public API of all referenced objects. Set `include_context: false` for raw source only. `max_deps` parameter controls limit (default 20).
-- **GetContext MCP tool**: Standalone tool for dependency analysis — accepts source or fetches it, resolves contracts from SAP, returns formatted prologue. Added to focused mode whitelist (code intelligence group).
-- **LSP context push**: `vsp/context` notification sent on `didOpen` with compressed dependency prologue (best-effort, non-blocking).
-- 10 regex patterns for ABAP dependency extraction: TYPE REF TO, NEW, =>, ~, INHERITING FROM, INTERFACES, CALL FUNCTION, CAST, RAISING, ZCX_* exception references.
-- 37 unit tests in `pkg/ctxcomp` including tests against embedded ABAP files and real SAP A4H sources.
-
-
-## [2.27.0] - 2026-03-01
-### Features
-
-- Iterative activation with package filtering + 100 stars article ([`8d2c343`](https://github.com/oisee/vibing-steampunk/commit/8d2c343e50f79f48663418568deade412337cd03))
-
-
-
-## [2.26.0] - 2026-02-04
+## [1.0.0] - 2026-07-06
 ### Bug Fixes
 
-- PackageExists fails for local packages with $ in name ([`83e8626`](https://github.com/oisee/vibing-steampunk/commit/83e86269f56eb5a3d6983385de3ff5276083d31e))
-
-
-
-## [2.25.0] - 2026-02-03
-### Bug Fixes
-
-- Namespace URL encoding for all ADT operations ([`59b4b90`](https://github.com/oisee/vibing-steampunk/commit/59b4b9061497d86fb6e599e5b37382edee865a1e))
-
-
-### Features
-
-- Allow transportable package creation with --enable-transports ([`e483537`](https://github.com/oisee/vibing-steampunk/commit/e483537958dfd7243abfbce8be37214d0abe8ac2))
-- CreatePackage software_component + viper env var fix ([`c18309b`](https://github.com/oisee/vibing-steampunk/commit/c18309b0b9e14d90cd65e00eb2f77595a0d0f7cd))
-
-
-
-## [2.24.0] - 2026-02-03
-### Features
-
-- V2.23.0 - GitExport to disk, GetAbapHelp via WebSocket ([`ddf5c22`](https://github.com/oisee/vibing-steampunk/commit/ddf5c22f84ebdd9fbcfc5dcf771989487106af7f))
-- V2.24.0 - Transportable Edits Safety Feature ([`3a9b0b0`](https://github.com/oisee/vibing-steampunk/commit/3a9b0b0bea276e7ca9ae556a55cc710fd5a44831))
-
-
-
-## [2.23.0] - 2026-02-02
-### Features
-
-- Add granular tool visibility control via .vsp.json ([`f8fd717`](https://github.com/oisee/vibing-steampunk/commit/f8fd717c0acbd62590aec602e88efc618be13d77))
-- Add GetAbapHelp tool for ABAP keyword documentation (#10) ([`434ed5e`](https://github.com/oisee/vibing-steampunk/commit/434ed5e83240cf52f3be334930c5b8602071c0cf))
-- Add Level 2 GetAbapHelp - real docs from SAP system via ZADT_VSP ([`b78803d`](https://github.com/oisee/vibing-steampunk/commit/b78803d339f76b2d3b92de4276cabcec106dc30a))
-- GitExport saves ZIP to disk, GetAbapHelp uses amdpWSClient ([`7c01351`](https://github.com/oisee/vibing-steampunk/commit/7c01351a783ca7588424a65c2fa64e2c21bce794))
-
-
-
-## [2.22.0] - 2026-02-01
-### Bug Fixes
-
-- Transport API 406 error and EditSource transport support ([`c726bfe`](https://github.com/oisee/vibing-steampunk/commit/c726bfeb08d43357622853a4fa7d34d58a01469b))
-- Honor HTTP_PROXY/HTTPS_PROXY environment variables (#13) ([`a1af66f`](https://github.com/oisee/vibing-steampunk/commit/a1af66f83ad050a0799442c75645861c9a5ba680))
-
-
-### Features
-
-- Add MoveObject tool and refactor WebSocket code ([`2d3d40c`](https://github.com/oisee/vibing-steampunk/commit/2d3d40cb472d4f0193f62870a5fcd172b35380cf))
-- Add SAP_TERMINAL_ID config for SAP GUI breakpoint sharing ([`677e7ce`](https://github.com/oisee/vibing-steampunk/commit/677e7cee84d456f5eb2b6009a4c47d9afcd7af31))
-
-
-
-## [2.21.0] - 2026-01-06
-### Bug Fixes
-
-- WebSocket reconnection check in report handlers ([`52e17c9`](https://github.com/oisee/vibing-steampunk/commit/52e17c9d654607271bc923a47c863fff830ef0dd))
-- Improve error handling in GetSystemInfo and CSRF fetch ([`b9fb06b`](https://github.com/oisee/vibing-steampunk/commit/b9fb06b444a86c0057d26083d79176cee98a08eb))
-
-
-### Features
-
-- Add function module support to ImportFromFile ([`c7997c0`](https://github.com/oisee/vibing-steampunk/commit/c7997c07105f1a35ac45e2fa1967bac56479762f))
-- Add method-aware breakpoints with include resolution ([`54417f6`](https://github.com/oisee/vibing-steampunk/commit/54417f6e9cdb06052332f81d0475aadbd83ea31f))
-- Method-level source operations for GetSource, EditSource, WriteSource ([`1fa5065`](https://github.com/oisee/vibing-steampunk/commit/1fa5065390f191fe1eeb4183d0a491c468082186))
-
-
-
-## [2.20.0] - 2026-01-06
-### Bug Fixes
-
+- Add missing SaveToFile and RenameObject MCP tool registrations ([`67a5f1a`](https://github.com/oisee/vibing-steampunk/commit/67a5f1a061a0863cfff132f158039f93ac05cd4d))
+- Extract class name from filename for class includes ([`85fb919`](https://github.com/oisee/vibing-steampunk/commit/85fb919e58b12a00d875b6d592c4891c373b3169))
+- Properly detect 404 in DeployFromFile for class includes ([`d489743`](https://github.com/oisee/vibing-steampunk/commit/d489743dd965741466251447f47f54883c69f9d1))
+- Normalize line endings in EditSource (CRLF → LF) ([`fafbccf`](https://github.com/oisee/vibing-steampunk/commit/fafbccf304283dd44a698e26c987a3d8bd6214d7))
+- External debugger breakpoint XML format & unit test parsing ([`296b8f3`](https://github.com/oisee/vibing-steampunk/commit/296b8f31530810440db43eeb5609527bc9ec156c))
+- GetDumps Accept header & add WebSocket debugging ADR ([`2eb4a5e`](https://github.com/oisee/vibing-steampunk/commit/2eb4a5efd27241c866bc7a8c6234fa2f6471b7d5))
+- Correct unit test count 216 → 244 ([`c931533`](https://github.com/oisee/vibing-steampunk/commit/c93153344683b579f061766d9d5cbef557e79966))
+- Install tools upsert - proper package/object existence checks ([`4505237`](https://github.com/oisee/vibing-steampunk/commit/450523755f3f9ad47151b1d0887e3d0bc4ee5d38))
+- GetSystemInfo uses SQL fallback for reliability ([`3c454a6`](https://github.com/oisee/vibing-steampunk/commit/3c454a6a3fd3d9f9e08e30aa9cdc49eebf2d24ef))
+- WebSocket TLS for self-signed certificates (#1) ([`181f523`](https://github.com/oisee/vibing-steampunk/commit/181f52365c057a9aeb1c9184cf94ee4d34373b0e))
 - WebSocket client parameter order & mcp-to-vsp password sync ([`29abb0c`](https://github.com/oisee/vibing-steampunk/commit/29abb0ce7e564720e165d528428e0618273750e5))
 - Add .abapgit.xml to GitExport ZIP output ([`93dc5ef`](https://github.com/oisee/vibing-steampunk/commit/93dc5ef05426d6ebdfbb1e96a5301711e0b08327))
 - Use FULL folder logic for multi-package exports ([`dafd1f5`](https://github.com/oisee/vibing-steampunk/commit/dafd1f52c6f4d55f92742a4b48d839fafdbdea6c))
+- WebSocket reconnection check in report handlers ([`52e17c9`](https://github.com/oisee/vibing-steampunk/commit/52e17c9d654607271bc923a47c863fff830ef0dd))
+- Improve error handling in GetSystemInfo and CSRF fetch ([`b9fb06b`](https://github.com/oisee/vibing-steampunk/commit/b9fb06b444a86c0057d26083d79176cee98a08eb))
+- Transport API 406 error and EditSource transport support ([`c726bfe`](https://github.com/oisee/vibing-steampunk/commit/c726bfeb08d43357622853a4fa7d34d58a01469b))
+- Honor HTTP_PROXY/HTTPS_PROXY environment variables (#13) ([`a1af66f`](https://github.com/oisee/vibing-steampunk/commit/a1af66f83ad050a0799442c75645861c9a5ba680))
+- Namespace URL encoding for all ADT operations ([`59b4b90`](https://github.com/oisee/vibing-steampunk/commit/59b4b9061497d86fb6e599e5b37382edee865a1e))
+- PackageExists fails for local packages with $ in name ([`83e8626`](https://github.com/oisee/vibing-steampunk/commit/83e86269f56eb5a3d6983385de3ff5276083d31e))
+- Strip Secure flag from SAP cookies over plain HTTP ([`384ea69`](https://github.com/oisee/vibing-steampunk/commit/384ea699360676e5c150e3bd5e82081ad7ea343d))
+- Add missing `items` to DebuggerGetVariables array schema (#24) (#25) ([`9a7eebe`](https://github.com/oisee/vibing-steampunk/commit/9a7eebe9e31fe11abc03d0cfd799cb4dd7ee907b))
+- Auto-retry on 401 Unauthorized after idle timeout (#35) ([`d73460a`](https://github.com/oisee/vibing-steampunk/commit/d73460ade7035903fe638b4caf0500c64ef2a776))
+- CreatePackage safety check uses package name being created (#71) ([`2ef8c3e`](https://github.com/oisee/vibing-steampunk/commit/2ef8c3e067979337f99c8cc0e22eb4baa71c2638))
+- Install tools bypass SAP_ALLOWED_PACKAGES restrictions (#54) ([`512996c`](https://github.com/oisee/vibing-steampunk/commit/512996c12eda4fb041beb7877075f8e6953bcad1))
+- SyntaxCheck uses shorter object URI for long namespaced classes (#52) ([`6d1f00a`](https://github.com/oisee/vibing-steampunk/commit/6d1f00aad1d75c69a6f909190aa313fbef80e930))
+- CreateTransport uses S/4HANA 757 compatible endpoint and format (#70) ([`ca02f47`](https://github.com/oisee/vibing-steampunk/commit/ca02f47f656749aa7a002f639078cc6f278a1764))
+- Fix references to zadt_cl_tadir_move, now zcl_vsp_tadir_mov ([`751ab10`](https://github.com/oisee/vibing-steampunk/commit/751ab104659437a1ae7ca5b545d10383136ed62c))
+- Add --parent, --include, --method flags to CLI source command ([`7dc7a82`](https://github.com/oisee/vibing-steampunk/commit/7dc7a82959d464446110ea82463cc69999415c27))
+- **safety:** Refine transport operation checks for write permissions ([`89bd129`](https://github.com/oisee/vibing-steampunk/commit/89bd1292a9a0083f5c32de000aa1c744b1f5d761))
+- **adt:** Force stateful session for lock-dependent operations (issue #88) ([`e78d4ed`](https://github.com/oisee/vibing-steampunk/commit/e78d4ed853eceb368e3423ca99521aadef427bec))
+- **goreleaser:** Update changelog configuration to use git instead of git-cliff ([`07b539f`](https://github.com/oisee/vibing-steampunk/commit/07b539fcbf24a4f791ac11c1e2d1ad19356b4378))
+- **release:** Improve concurrency handling and rebase before tagging ([`e76309e`](https://github.com/oisee/vibing-steampunk/commit/e76309e295e549ef6250276e95ff4054ac3f6d41))
+- **goreleaser:** Update GitHub owner and repository name in release configuration ([`85caf37`](https://github.com/oisee/vibing-steampunk/commit/85caf371a3942f8c175778ee9de6a024b7564e15))
 
 
 ### Features
 
-- Make sync-embedded for exporting ZADT_VSP from SAP ([`ab47d27`](https://github.com/oisee/vibing-steampunk/commit/ab47d273b6c033e6cad98cc986eba877f4fc5f1b))
-- CLI subcommands with system profiles ([`cdab42c`](https://github.com/oisee/vibing-steampunk/commit/cdab42cb961d7bde5156e8a4e764daf5a94e20c8))
-- Vsp config init/show commands ([`bf90c25`](https://github.com/oisee/vibing-steampunk/commit/bf90c25b983caa4a7879112c887e65f7412467d1))
-- Vsp config mcp-to-vsp and vsp-to-mcp commands ([`717cd9a`](https://github.com/oisee/vibing-steampunk/commit/717cd9adb8909707c68a28cea1a1f8b954cd539c))
-- Cookie authentication support in CLI system profiles ([`d83080b`](https://github.com/oisee/vibing-steampunk/commit/d83080bbd466ad71cb97f1baae0b9b7f85049002))
-
-
-
-## [2.19.1] - 2026-01-06
-### Bug Fixes
-
-- WebSocket TLS for self-signed certificates (#1) ([`181f523`](https://github.com/oisee/vibing-steampunk/commit/181f52365c057a9aeb1c9184cf94ee4d34373b0e))
-
-
-### Features
-
-- Tool aliases and heading texts support ([`d29549a`](https://github.com/oisee/vibing-steampunk/commit/d29549a8ef29806639b9561d50ae1972435735e1))
-
-
-
-## [2.19.0] - 2026-01-05
-### Bug Fixes
-
-- GetSystemInfo uses SQL fallback for reliability ([`3c454a6`](https://github.com/oisee/vibing-steampunk/commit/3c454a6a3fd3d9f9e08e30aa9cdc49eebf2d24ef))
-
-
-### Features
-
-- Interactive CLI debugger (vsp debug) ([`f1358e9`](https://github.com/oisee/vibing-steampunk/commit/f1358e9773e4b3f07ae32287126a5ceb3786cc94))
-- Quick wins - GetMessages, ListDumps, ActivatePackage, X group ([`2706797`](https://github.com/oisee/vibing-steampunk/commit/27067971ef521c7337257d0d534570f812f65be4))
-- CreateTable tool + GetMessages fix ([`a71ec42`](https://github.com/oisee/vibing-steampunk/commit/a71ec427e0548afdc572d78887aaae5eefa822e3))
-- CompareSource, CloneObject, GetClassInfo tools ([`8550435`](https://github.com/oisee/vibing-steampunk/commit/8550435b6bb82f0e9822cbed3772791788daa800))
-- RunReportAsync and GetAsyncResult for background execution ([`56dc11a`](https://github.com/oisee/vibing-steampunk/commit/56dc11af633cec85d13ddee46c2b149708c375b5))
-
-
-
-## [2.18.0] - 2026-01-02
-### Features
-
-- WebSocket-based debugger tools via ZADT_VSP ([`c3a3780`](https://github.com/oisee/vibing-steampunk/commit/c3a3780006c80c8d380d52ed3cfe41b60d25684e))
-- Consolidate $ZADT_VSP package + lock cleanup fix ([`5e4530a`](https://github.com/oisee/vibing-steampunk/commit/5e4530a4f3ea6f88acb3bb7e132078c531c1c4a5))
-- Report execution tools + packageExists fix ([`3df8955`](https://github.com/oisee/vibing-steampunk/commit/3df8955f110fd870ef24c98c7681865cbb6a0baf))
-
-
-
-## [2.17.1] - 2025-12-24
-### Bug Fixes
-
-- Install tools upsert - proper package/object existence checks ([`4505237`](https://github.com/oisee/vibing-steampunk/commit/450523755f3f9ad47151b1d0887e3d0bc4ee5d38))
-
-
-### Features
-
-- InstallZADTVSP tool for one-command deployment ([`1ee4962`](https://github.com/oisee/vibing-steampunk/commit/1ee496222403301e7db6615158d96b362c20aa07))
-- InstallAbapGit tool + dependency embedding architecture ([`a3f1fa0`](https://github.com/oisee/vibing-steampunk/commit/a3f1fa09960c7f554be5a9f919474d6690636bc5))
-
-
-
-## [2.16.0] - 2025-12-23
-### Features
-
-- AbapGit WebSocket integration (Git domain) ([`a73d2a6`](https://github.com/oisee/vibing-steampunk/commit/a73d2a6c9a9e797413a77c6ce61e2c4a1a5dfa45))
-- Complete abapGit WebSocket integration (v2.16.0) ([`78e2c6d`](https://github.com/oisee/vibing-steampunk/commit/78e2c6d16733a01cce29e2c7b4a7641bd1aba389))
-
-
-
-## [2.15.1] - 2025-12-22
-### Bug Fixes
-
-- Correct unit test count 216 → 244 ([`c931533`](https://github.com/oisee/vibing-steampunk/commit/c93153344683b579f061766d9d5cbef557e79966))
-
-
-
-## [2.15.0] - 2025-12-21
-### Features
-
-- Variable History Recording (Phase 5.2) ([`29e192d`](https://github.com/oisee/vibing-steampunk/commit/29e192d4c4510cd0b66204495547cae38da28888))
-- Extended breakpoint types + Watchpoint Scripting (Phase 5.4) ([`3dd20cd`](https://github.com/oisee/vibing-steampunk/commit/3dd20cd7b506264808dcec50ec649e6ee6351298))
-- Force Replay - State Injection (Phase 5.5) - THE KILLER FEATURE ([`70fb43f`](https://github.com/oisee/vibing-steampunk/commit/70fb43fe85da3d46759b40ef44321701a044a63d))
-- Phase 5 TAS-Style Debugging Complete (v2.15.0) ([`19405b2`](https://github.com/oisee/vibing-steampunk/commit/19405b2a4a13210f8809748d263f80f0524e4a61))
-
-
-
-## [2.14.0] - 2025-12-21
-### Features
-
-- Lua scripting integration (Phase 5.1) ([`0e5c5c2`](https://github.com/oisee/vibing-steampunk/commit/0e5c5c2681fcca270d21a476139a387dfd73461a))
-
-
-
-## [2.13.0] - 2025-12-21
-### Bug Fixes
-
-- External debugger breakpoint XML format & unit test parsing ([`296b8f3`](https://github.com/oisee/vibing-steampunk/commit/296b8f31530810440db43eeb5609527bc9ec156c))
-- GetDumps Accept header & add WebSocket debugging ADR ([`2eb4a5e`](https://github.com/oisee/vibing-steampunk/commit/2eb4a5efd27241c866bc7a8c6234fa2f6471b7d5))
-
-
-### Features
-
+- **adt:** Implement workflows for writing and creating ABAP programs and classes ([`cdf3f98`](https://github.com/oisee/vibing-steampunk/commit/cdf3f98d401f2d571b93742c9e3755cd6027d9a7))
+- Add comprehensive research report on ABAP debugging and tracing capabilities ([`0a1bb1e`](https://github.com/oisee/vibing-steampunk/commit/0a1bb1ef3d633e11598dce065a80f69fb662a4e6))
+- Add roadmap section with ongoing and planned features for debugging and analysis tools ([`b6c08db`](https://github.com/oisee/vibing-steampunk/commit/b6c08db98cdccbba75b4c3bbc4252224c514ab24))
+- Add file-based deployment tools solving token limit problem ([`dc6b541`](https://github.com/oisee/vibing-steampunk/commit/dc6b541ae7e133169bb6fa741c38a0f63c787d43))
+- Enhance tool descriptions with usage examples and workflows ([`c52bd4f`](https://github.com/oisee/vibing-steampunk/commit/c52bd4fe2d4d0027281a8e89d3afbdf7555d272a))
+- **amdp:** Enhance breakpoint functionality and testing ([`76ca83b`](https://github.com/oisee/vibing-steampunk/commit/76ca83b539c1824f86b22f64abb29c6d5d78406e))
+- V2.12.0 - abapGit-compatible format & batch operations ([`c731e2e`](https://github.com/oisee/vibing-steampunk/commit/c731e2e8a13670bc0cc318a328d8b618978c8f0f))
+- Add CreatePackage tool to focused mode ([`7452c48`](https://github.com/oisee/vibing-steampunk/commit/7452c484151fbfb3f57ca8d1dc79a7790ffb471b))
+- Auto-reconnect on SAP session timeout ([`610bfeb`](https://github.com/oisee/vibing-steampunk/commit/610bfeb36e7680cbe977beee78707fc7dd634cd7))
+- V2.12.4 - Feature Detection & Safety Network ([`0d5693d`](https://github.com/oisee/vibing-steampunk/commit/0d5693d279e31e4f85c29d88584aa2b4300d9b04))
+- EditSource support for class includes (testclasses, locals) ([`3782380`](https://github.com/oisee/vibing-steampunk/commit/3782380101b3ba2edc155896c97ee580e40c786d))
 - ZADT-VSP APC handler with RFC domain (ABAP) ([`67e0024`](https://github.com/oisee/vibing-steampunk/commit/67e0024c750c4d6eae89c74067a7e5f8b0d16150))
 - ZADT_VSP APC WebSocket handler - RFC domain operational ([`c9109be`](https://github.com/oisee/vibing-steampunk/commit/c9109be2feb84a5bae21155e954997c4470dadfd))
 - WebSocket RFC Handler (ZADT_VSP) with embedded ABAP source ([`d36b1d6`](https://github.com/oisee/vibing-steampunk/commit/d36b1d6197154f38c97d33411c9ea3635f54e479))
@@ -208,99 +62,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full WebSocket debugging with TPDAPI integration (v2.0.0) ([`fa4ada8`](https://github.com/oisee/vibing-steampunk/commit/fa4ada8b49c3ea504bb824abfa49ebab8a335b86))
 - TPDAPI breakpoint integration verified working (v2.0.1) ([`64050c6`](https://github.com/oisee/vibing-steampunk/commit/64050c600b2a793f2082ca25b7b8b35a75f9afd3))
 - Add call graph traversal and RCA tools ([`d8e3742`](https://github.com/oisee/vibing-steampunk/commit/d8e3742e3544c665b4c70386647a3fa12d3c5140))
-
-
-
-## [2.12.6] - 2025-12-10
-### Features
-
-- EditSource support for class includes (testclasses, locals) ([`3782380`](https://github.com/oisee/vibing-steampunk/commit/3782380101b3ba2edc155896c97ee580e40c786d))
-
-
-
-## [2.12.5] - 2025-12-09
-### Bug Fixes
-
-- Normalize line endings in EditSource (CRLF → LF) ([`fafbccf`](https://github.com/oisee/vibing-steampunk/commit/fafbccf304283dd44a698e26c987a3d8bd6214d7))
-
-
-
-## [2.12.4] - 2025-12-09
-### Features
-
-- V2.12.4 - Feature Detection & Safety Network ([`0d5693d`](https://github.com/oisee/vibing-steampunk/commit/0d5693d279e31e4f85c29d88584aa2b4300d9b04))
-
-
-
-## [2.12.3] - 2025-12-08
-### Bug Fixes
-
-- Properly detect 404 in DeployFromFile for class includes ([`d489743`](https://github.com/oisee/vibing-steampunk/commit/d489743dd965741466251447f47f54883c69f9d1))
-
-
-### Features
-
-- Auto-reconnect on SAP session timeout ([`610bfeb`](https://github.com/oisee/vibing-steampunk/commit/610bfeb36e7680cbe977beee78707fc7dd634cd7))
-
-
-
-## [2.12.2] - 2025-12-08
-### Bug Fixes
-
-- Extract class name from filename for class includes ([`85fb919`](https://github.com/oisee/vibing-steampunk/commit/85fb919e58b12a00d875b6d592c4891c373b3169))
-
-
-
-## [2.12.1] - 2025-12-07
-### Features
-
-- Add CreatePackage tool to focused mode ([`7452c48`](https://github.com/oisee/vibing-steampunk/commit/7452c484151fbfb3f57ca8d1dc79a7790ffb471b))
-
-
-
-## [2.12.0] - 2025-12-07
-### Features
-
-- **amdp:** Enhance breakpoint functionality and testing ([`76ca83b`](https://github.com/oisee/vibing-steampunk/commit/76ca83b539c1824f86b22f64abb29c6d5d78406e))
-- V2.12.0 - abapGit-compatible format & batch operations ([`c731e2e`](https://github.com/oisee/vibing-steampunk/commit/c731e2e8a13670bc0cc318a328d8b618978c8f0f))
-
-
-
-## [1.5.0] - 2025-12-03
-### Features
-
-- Enhance tool descriptions with usage examples and workflows ([`c52bd4f`](https://github.com/oisee/vibing-steampunk/commit/c52bd4fe2d4d0027281a8e89d3afbdf7555d272a))
-
-
-
-## [1.4.1] - 2025-12-03
-### Bug Fixes
-
-- Add missing SaveToFile and RenameObject MCP tool registrations ([`67a5f1a`](https://github.com/oisee/vibing-steampunk/commit/67a5f1a061a0863cfff132f158039f93ac05cd4d))
-
-
-
-## [1.4.0] - 2025-12-02
-### Features
-
-- Add file-based deployment tools solving token limit problem ([`dc6b541`](https://github.com/oisee/vibing-steampunk/commit/dc6b541ae7e133169bb6fa741c38a0f63c787d43))
-
-
-
-## [1.3.0] - 2025-12-02
-### Features
-
-- Add comprehensive research report on ABAP debugging and tracing capabilities ([`0a1bb1e`](https://github.com/oisee/vibing-steampunk/commit/0a1bb1ef3d633e11598dce065a80f69fb662a4e6))
-- Add roadmap section with ongoing and planned features for debugging and analysis tools ([`b6c08db`](https://github.com/oisee/vibing-steampunk/commit/b6c08db98cdccbba75b4c3bbc4252224c514ab24))
-
-
-
-## [1.1.0] - 2025-12-02
-### Features
-
-- **adt:** Implement workflows for writing and creating ABAP programs and classes ([`cdf3f98`](https://github.com/oisee/vibing-steampunk/commit/cdf3f98d401f2d571b93742c9e3755cd6027d9a7))
-
-
+- Lua scripting integration (Phase 5.1) ([`0e5c5c2`](https://github.com/oisee/vibing-steampunk/commit/0e5c5c2681fcca270d21a476139a387dfd73461a))
+- Variable History Recording (Phase 5.2) ([`29e192d`](https://github.com/oisee/vibing-steampunk/commit/29e192d4c4510cd0b66204495547cae38da28888))
+- Extended breakpoint types + Watchpoint Scripting (Phase 5.4) ([`3dd20cd`](https://github.com/oisee/vibing-steampunk/commit/3dd20cd7b506264808dcec50ec649e6ee6351298))
+- Force Replay - State Injection (Phase 5.5) - THE KILLER FEATURE ([`70fb43f`](https://github.com/oisee/vibing-steampunk/commit/70fb43fe85da3d46759b40ef44321701a044a63d))
+- Phase 5 TAS-Style Debugging Complete (v2.15.0) ([`19405b2`](https://github.com/oisee/vibing-steampunk/commit/19405b2a4a13210f8809748d263f80f0524e4a61))
+- AbapGit WebSocket integration (Git domain) ([`a73d2a6`](https://github.com/oisee/vibing-steampunk/commit/a73d2a6c9a9e797413a77c6ce61e2c4a1a5dfa45))
+- Complete abapGit WebSocket integration (v2.16.0) ([`78e2c6d`](https://github.com/oisee/vibing-steampunk/commit/78e2c6d16733a01cce29e2c7b4a7641bd1aba389))
+- InstallZADTVSP tool for one-command deployment ([`1ee4962`](https://github.com/oisee/vibing-steampunk/commit/1ee496222403301e7db6615158d96b362c20aa07))
+- InstallAbapGit tool + dependency embedding architecture ([`a3f1fa0`](https://github.com/oisee/vibing-steampunk/commit/a3f1fa09960c7f554be5a9f919474d6690636bc5))
+- WebSocket-based debugger tools via ZADT_VSP ([`c3a3780`](https://github.com/oisee/vibing-steampunk/commit/c3a3780006c80c8d380d52ed3cfe41b60d25684e))
+- Consolidate $ZADT_VSP package + lock cleanup fix ([`5e4530a`](https://github.com/oisee/vibing-steampunk/commit/5e4530a4f3ea6f88acb3bb7e132078c531c1c4a5))
+- Report execution tools + packageExists fix ([`3df8955`](https://github.com/oisee/vibing-steampunk/commit/3df8955f110fd870ef24c98c7681865cbb6a0baf))
+- Interactive CLI debugger (vsp debug) ([`f1358e9`](https://github.com/oisee/vibing-steampunk/commit/f1358e9773e4b3f07ae32287126a5ceb3786cc94))
+- Quick wins - GetMessages, ListDumps, ActivatePackage, X group ([`2706797`](https://github.com/oisee/vibing-steampunk/commit/27067971ef521c7337257d0d534570f812f65be4))
+- CreateTable tool + GetMessages fix ([`a71ec42`](https://github.com/oisee/vibing-steampunk/commit/a71ec427e0548afdc572d78887aaae5eefa822e3))
+- CompareSource, CloneObject, GetClassInfo tools ([`8550435`](https://github.com/oisee/vibing-steampunk/commit/8550435b6bb82f0e9822cbed3772791788daa800))
+- RunReportAsync and GetAsyncResult for background execution ([`56dc11a`](https://github.com/oisee/vibing-steampunk/commit/56dc11af633cec85d13ddee46c2b149708c375b5))
+- Tool aliases and heading texts support ([`d29549a`](https://github.com/oisee/vibing-steampunk/commit/d29549a8ef29806639b9561d50ae1972435735e1))
+- Make sync-embedded for exporting ZADT_VSP from SAP ([`ab47d27`](https://github.com/oisee/vibing-steampunk/commit/ab47d273b6c033e6cad98cc986eba877f4fc5f1b))
+- CLI subcommands with system profiles ([`cdab42c`](https://github.com/oisee/vibing-steampunk/commit/cdab42cb961d7bde5156e8a4e764daf5a94e20c8))
+- Vsp config init/show commands ([`bf90c25`](https://github.com/oisee/vibing-steampunk/commit/bf90c25b983caa4a7879112c887e65f7412467d1))
+- Vsp config mcp-to-vsp and vsp-to-mcp commands ([`717cd9a`](https://github.com/oisee/vibing-steampunk/commit/717cd9adb8909707c68a28cea1a1f8b954cd539c))
+- Cookie authentication support in CLI system profiles ([`d83080b`](https://github.com/oisee/vibing-steampunk/commit/d83080bbd466ad71cb97f1baae0b9b7f85049002))
+- Add function module support to ImportFromFile ([`c7997c0`](https://github.com/oisee/vibing-steampunk/commit/c7997c07105f1a35ac45e2fa1967bac56479762f))
+- Add method-aware breakpoints with include resolution ([`54417f6`](https://github.com/oisee/vibing-steampunk/commit/54417f6e9cdb06052332f81d0475aadbd83ea31f))
+- Method-level source operations for GetSource, EditSource, WriteSource ([`1fa5065`](https://github.com/oisee/vibing-steampunk/commit/1fa5065390f191fe1eeb4183d0a491c468082186))
+- Add MoveObject tool and refactor WebSocket code ([`2d3d40c`](https://github.com/oisee/vibing-steampunk/commit/2d3d40cb472d4f0193f62870a5fcd172b35380cf))
+- Add SAP_TERMINAL_ID config for SAP GUI breakpoint sharing ([`677e7ce`](https://github.com/oisee/vibing-steampunk/commit/677e7cee84d456f5eb2b6009a4c47d9afcd7af31))
+- Add granular tool visibility control via .vsp.json ([`f8fd717`](https://github.com/oisee/vibing-steampunk/commit/f8fd717c0acbd62590aec602e88efc618be13d77))
+- Add GetAbapHelp tool for ABAP keyword documentation (#10) ([`434ed5e`](https://github.com/oisee/vibing-steampunk/commit/434ed5e83240cf52f3be334930c5b8602071c0cf))
+- Add Level 2 GetAbapHelp - real docs from SAP system via ZADT_VSP ([`b78803d`](https://github.com/oisee/vibing-steampunk/commit/b78803d339f76b2d3b92de4276cabcec106dc30a))
+- GitExport saves ZIP to disk, GetAbapHelp uses amdpWSClient ([`7c01351`](https://github.com/oisee/vibing-steampunk/commit/7c01351a783ca7588424a65c2fa64e2c21bce794))
+- V2.23.0 - GitExport to disk, GetAbapHelp via WebSocket ([`ddf5c22`](https://github.com/oisee/vibing-steampunk/commit/ddf5c22f84ebdd9fbcfc5dcf771989487106af7f))
+- V2.24.0 - Transportable Edits Safety Feature ([`3a9b0b0`](https://github.com/oisee/vibing-steampunk/commit/3a9b0b0bea276e7ca9ae556a55cc710fd5a44831))
+- Allow transportable package creation with --enable-transports ([`e483537`](https://github.com/oisee/vibing-steampunk/commit/e483537958dfd7243abfbce8be37214d0abe8ac2))
+- CreatePackage software_component + viper env var fix ([`c18309b`](https://github.com/oisee/vibing-steampunk/commit/c18309b0b9e14d90cd65e00eb2f77595a0d0f7cd))
+- Iterative activation with package filtering + 100 stars article ([`8d2c343`](https://github.com/oisee/vibing-steampunk/commit/8d2c343e50f79f48663418568deade412337cd03))
+- Go RFC mode with JCo sidecar integration and debugger improvements ([`bec9840`](https://github.com/oisee/vibing-steampunk/commit/bec98406c9588ec3873e4b1efd018ee34cd57490))
+- Add support for SAP UI Landscape configuration and SNC properties ([`ef6c15f`](https://github.com/oisee/vibing-steampunk/commit/ef6c15fbfbeb75954c6e5867da1944d6c74073e9))
+- Enhance argument passing in buildArgs for JCo properties and add user/client/lang options ([`9467da1`](https://github.com/oisee/vibing-steampunk/commit/9467da1e59094f56b19465e2675d6cf40f01d5dc))
+- Update jco-proxy.jar to latest version for improved functionality ([`c20ade7`](https://github.com/oisee/vibing-steampunk/commit/c20ade72b3d42b9ca3806f8ad67212ad8e196756))
+- Implement SNC library path resolution for Windows and non-Windows platforms ([`ab1dea1`](https://github.com/oisee/vibing-steampunk/commit/ab1dea16609108e879fa243b2da950c2b0ac51c5))
+- Add STDIO transport mode for sidecar communication and enhance configuration options ([`5713202`](https://github.com/oisee/vibing-steampunk/commit/5713202b7f2c2833be7b87df40f5605b0bfa6919))
+- ABAP LSP server with online diagnostics and go-to-definition ([`6b801df`](https://github.com/oisee/vibing-steampunk/commit/6b801df0f06fad76cb0fb0563e6f0c00c8796e36))
+- Add GetDependencyZIP function and tests for dependency retrieval (#60) ([`5317105`](https://github.com/oisee/vibing-steampunk/commit/531710515c939cf6e3dbe8d67a5a79e4a07e033a))
+- Context compression — GetSource auto-appends dependency contracts (v2.28.0) ([`9fde5d8`](https://github.com/oisee/vibing-steampunk/commit/9fde5d8801a43ac4c3660273a0b615f219bf0dcd))
+- Add ignore_warnings parameter to EditSource ([`7fbfbba`](https://github.com/oisee/vibing-steampunk/commit/7fbfbba8be6b80680f904f9158437dfac3d45492))
+- Strategic decomposition, one-tool mode, and CLI DevOps surface ([`def027a`](https://github.com/oisee/vibing-steampunk/commit/def027ac379b9d613801bd2cf78669ce2640fcd8))
+- Unify SAP_MODE with hyperfocused (one-tool) mode ([`5c942b9`](https://github.com/oisee/vibing-steampunk/commit/5c942b9358fbbf80f8d54ddb0fe0be4cb15de2e4))
+- Add Java JCo proxy sidecar for RFC connectivity ([`3a11911`](https://github.com/oisee/vibing-steampunk/commit/3a1191196cbc014fa0142a80fb79978daf9e2cff))
+- Enhance JCo connection management with properties mode support ([`7591a45`](https://github.com/oisee/vibing-steampunk/commit/7591a45111ec5975ec89d944e51f5fc9c68d9838))
+- Add STDIO transport for JCo sidecar proxy to handle JSON requests ([`9f8381c`](https://github.com/oisee/vibing-steampunk/commit/9f8381cb55aeb5cb725c415a8d7416804e6d5aa8))
+- Add support for disabling systems in configuration ([`683e600`](https://github.com/oisee/vibing-steampunk/commit/683e6003559d95bd7f76543a2865af6be84cc5ff))
+- Add session keep-alive functionality to prevent timeout during idle periods ([`cbe32d0`](https://github.com/oisee/vibing-steampunk/commit/cbe32d080d7f0dd6267e08390cec9eaeaaf11f22))
+- Another go at refactoring the mcp <-> router <-> server <-> tool architecture ([`47f9db5`](https://github.com/oisee/vibing-steampunk/commit/47f9db565719dd1317b319d708cb4093aac7b667))
+- **permissions:** Add hierarchical tool permission system ([`54f3352`](https://github.com/oisee/vibing-steampunk/commit/54f335255064ebdd6e57e0689f846248e08b2830))
+- Feat(logging): implement logging functions for info, warning, and error messages
+refactor(router): update system management to use pointers for tool definitions
+refactor(go.mod): remove indirect dependency for mergo and clean up requirements
+fix(server): adjust newSystemInstance function parameters for consistency
+test(router_test): enhance glob match tests for better coverage ([`387ff33`](https://github.com/oisee/vibing-steampunk/commit/387ff33e0667f8d99eba22cac560d4199c71c8ac))
+- **discovery:** Add meta-tools for system introspection and enhance permission error messages ([`bcde9a1`](https://github.com/oisee/vibing-steampunk/commit/bcde9a14062ab8dee885a54e37e5b67290601943))
+- **tools:** Centralize tool definitions and implement CLI command for listing tools ([`236ba34`](https://github.com/oisee/vibing-steampunk/commit/236ba34893e9c290be376f80716c496da52ad342))
+- **auth:** Default SAP username to current OS login name if not provided ([`05d9635`](https://github.com/oisee/vibing-steampunk/commit/05d963546ca46e7f6e89cb2f236c52d211bb01e0))
+- **system:** Enhance connection logic to handle HTTP 400 errors gracefully ([`576e443`](https://github.com/oisee/vibing-steampunk/commit/576e4433df9a8428c8a05254196309e72e08f72d))
+- **permissions:** Implement advanced role-based permission system with tests and examples ([`e504fd7`](https://github.com/oisee/vibing-steampunk/commit/e504fd742b6f4e895516def8ae36990088460c9e))
+- **discovery:** Add support for restricted tools in system introspection ([`1c473ae`](https://github.com/oisee/vibing-steampunk/commit/1c473ae816b4ce38cbf2386718db88c44b7edb6d))
+- **testserver:** Add standalone SAP ADT test server with fixture-based responses ([`78f1e95`](https://github.com/oisee/vibing-steampunk/commit/78f1e955fc638adac2db5895891f3ec2eee7a30a))
+- **testserver:** Changed hard-coded entpoints to pure fixture-based approach for easier testing ([`04697bb`](https://github.com/oisee/vibing-steampunk/commit/04697bb71b78d8508ee8da00c128c9e4ef8f5e67))
+- **testserver:** Refactor testserver structure and add multi-server support ([`ad057d4`](https://github.com/oisee/vibing-steampunk/commit/ad057d42885266a8ef37009bef84892416d5c00d))
+- **testserver:** Add build support and update ignore rules ([`b3531a7`](https://github.com/oisee/vibing-steampunk/commit/b3531a7cb6b53bdd431fd54c9cb667e6cd665e72))
+- **run-config:** Add run configurations for testserver and MCP Inspector ([`d9da1b0`](https://github.com/oisee/vibing-steampunk/commit/d9da1b05309e56feb44d73e9655e2c26c8722d3e))
+- **testserver:** Add comprehensive fixture files for ADT services ([`a79b3c3`](https://github.com/oisee/vibing-steampunk/commit/a79b3c3370ec962334611d05b06db77ed8d3e75a))
+- **testserver:** Add request/response logging middleware ([`47b791e`](https://github.com/oisee/vibing-steampunk/commit/47b791e3f741132bab7d81204302dd2d282bd3e2))
+- **auth:** Add support for browser authentication URL override ([`49f386f`](https://github.com/oisee/vibing-steampunk/commit/49f386f6a2d4a7de42de1780f298636832c28bdf))
+- **adt:** Add transport layer, source service, and testing framework ([`730b045`](https://github.com/oisee/vibing-steampunk/commit/730b045490de64fe0cd8de0197a1606ed65cc1be))
+- **tools:** Add ADT endpoint filtering for tool availability ([`1dbbf27`](https://github.com/oisee/vibing-steampunk/commit/1dbbf2746beb24b84efa4070d12284fba52cea80))
+- **tools:** Add ADT endpoint filtering for tool availability ([`387bb98`](https://github.com/oisee/vibing-steampunk/commit/387bb985ab4bf6a8cab48ff1a07866b4b7edc896))
+- **permissions:** Refactor tool permissions structure to include effective state ([`7efbd7c`](https://github.com/oisee/vibing-steampunk/commit/7efbd7c13ccace423097017c861102cb33cfc8d6))
+- **system:** Enhance Connect method to discover ADT endpoints for tool filtering ([`f84fdff`](https://github.com/oisee/vibing-steampunk/commit/f84fdffa256089e5d89e8f2c8ae17919c9fb4c23))
+- **versions:** Add version history tools and implement version retrieval functions ([`c2eaaf5`](https://github.com/oisee/vibing-steampunk/commit/c2eaaf5a1bb190c9b934fb90696d807b5ce66933))
+- **versions:** Integrate go-udiff for unified diff comparison of object versions ([`4bfa1b4`](https://github.com/oisee/vibing-steampunk/commit/4bfa1b41ff9154d60c06072f7c3df06c13447c17))
+- **crud:** Add endpoints for GetClassInfo tool in CRUD operations ([`910290a`](https://github.com/oisee/vibing-steampunk/commit/910290a3d9e464091d2107e90d05eca25914f49a))
+- **transports:** Add transport request tools and handlers for GetTransport and ListTransports ([`304061a`](https://github.com/oisee/vibing-steampunk/commit/304061a5fc20842510b19b4154923a2823bf8f94))
+- **auth:** Automatic session re-authentication for browser-based auth ([`f0b0f47`](https://github.com/oisee/vibing-steampunk/commit/f0b0f479f52aa6de55f8f1ee091875191c6fb1f3))
+- **transports:** Implement GetTransportDiff tool for git-style diffs in transport requests ([`ecb8a6f`](https://github.com/oisee/vibing-steampunk/commit/ecb8a6fc7977a72a071526d99955829ea217d708))
+- **transports:** Add support for TABL object type in transport and version tools ([`0279653`](https://github.com/oisee/vibing-steampunk/commit/02796533eed3922fca096ee0db15bc04fa28f146))
+- **sidecar:** Enhance orphan cleanup by excluding current process children (fixes darwin/linux bug) ([`3f562e5`](https://github.com/oisee/vibing-steampunk/commit/3f562e5d078c41e229ccca863888e0312284641a))
 
 
 
