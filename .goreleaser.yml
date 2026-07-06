@@ -61,11 +61,11 @@ changelog:
 
 release:
   github:
-    owner: oisee
-    name: vibing-steampunk
+    owner: BurnerPat
+    name: vsp-enterprise
   draft: false
   # Automatically mark as pre-release if version contains -rc, -beta, -alpha
   prerelease: auto
   name_template: "v{{ .Version }}"
   footer: |
-    **Full Changelog**: https://github.com/oisee/vibing-steampunk/blob/main/CHANGELOG.md
+    **Full Changelog**: https://github.com/BurnerPat/vsp-enterprise/blob/main/CHANGELOG.md
