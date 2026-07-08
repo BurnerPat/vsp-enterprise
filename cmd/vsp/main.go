@@ -173,7 +173,7 @@ func init() {
 	// SNC/SSO configuration (via SAP UI Landscape)
 	rootCmd.Flags().BoolVar(&singleSys.SNC, "snc", false, "Enable SNC single sign-on via JCo (requires --sysid)")
 	rootCmd.Flags().StringVar(&singleSys.SysID, "sysid", "", "SAP System ID for SNC logon (3-char SID, reads connection from SAP UI Landscape)")
-	rootCmd.Flags().StringVar(&singleSys.LandscapeFile, "landscape-file", "", "Path to SAP UI Landscape XML (auto-discovered if not set)")
+	rootCmd.Flags().StringVar(&cfg.LandscapeFile, "landscape-file", "", "Path to SAP UI Landscape XML (auto-discovered if not set)")
 
 	// Output options
 	rootCmd.Flags().BoolVarP(&cfg.Verbose, "verbose", "v", false, "Enable verbose output to stderr")
